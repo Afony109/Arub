@@ -1,6 +1,6 @@
 NETWORK: {
   chainId: 42161,              // ← КЛЮЧЕВОЙ ПАРАМЕТР
-  chainIdHex: '0xA4B1',
+  chainIdHex: 0xA4B1,
   chainIdDec: 42161,
 
   chainName: 'Arbitrum One',
