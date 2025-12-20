@@ -135,6 +135,29 @@ async function logWalletNetwork() {
   }
 }
 
+async function logNetworkState(tag = 'APP') {
+  const ws = window.walletState;
+
+  // Пытаемся взять chainId максимально надежно
+  let chainId = ws?.chainId;
+
+  if (!chainId && ws?.provider?.getNetwork) {
+    try {
+      const net = await ws.provider.getNetwork();
+      chainId = net?.chainId;
+    } catch (_) {}
+  }
+ await logNetworkState('APP');
+}
+
+const prevOnWalletConnected = window.onWalletConnected;
+
+window.onWalletConnected = async (address, meta) => {
+  try { prevOnWalletConnected?.(address, meta); } catch (_) {}
+  await logNetworkState('APP');
+};
+
+
 /**
  * Инициализация приложения
  */
