@@ -389,7 +389,6 @@ export function initTradingModule() {
     console.error('[TRADING] initReadOnly failed:', e);
   }
 
-  // Initial render based on current wallet state
   const ws = window.walletState || null;
 
   if (ws?.address && ws?.signer) {
@@ -407,7 +406,6 @@ export function initTradingModule() {
     console.log('[TRADING] no wallet -> locked UI rendered');
   }
 
-  // Bind global listeners only once
   if (!listenersBound) {
     listenersBound = true;
 
@@ -437,19 +435,23 @@ export function initTradingModule() {
       console.log('[TRADING] wallet disconnected -> locked UI rendered');
     });
   }
-import { parseTokenAmount, formatTokenAmount } from './ui.js';
+
+  console.log('[TRADING] initTradingModule: OK');
+  return true;
+}
+
 
 export async function buyTokens(usdtAmount) {
   let amountBN;
   try {
     amountBN = parseTokenAmount(usdtAmount, 6); // USDT = 6
   } catch (e) {
-    showNotification?.(e.message, 'error');
+    showNotification?.(e.message || 'Invalid amount', 'error');
     return;
   }
 
   return await buyWithUsdt(
-    formatTokenAmount(amountBN, 6, 6), // передаём обратно human-safe
+    formatTokenAmount(amountBN, 6, 6),
     {
       confirmations: 1,
       onStatus: (stage) => {
@@ -459,8 +461,4 @@ export async function buyTokens(usdtAmount) {
       }
     }
   );
-}
-
-  console.log('[TRADING] initTradingModule: OK');
-  return true;
 }
