@@ -424,6 +424,24 @@ export async function connectWallet(options = {}) {
       currentAddress = ethers.utils.getAddress(accounts[0]);
       await ensureNetwork();
     }
+      const provider = new ethers.providers.Web3Provider(eip1193Provider);
+const signer = provider.getSigner();
+const address = await signer.getAddress();
+
+// ОБЯЗАТЕЛЬНО получаем сеть
+const network = await provider.getNetwork();
+
+window.walletState = {
+  address,
+  signer,
+  provider,
+  chainId: network.chainId
+};
+
+console.log('[WALLET] connected', {
+  address,
+  chainId: network.chainId
+});
 
     else {
       throw new Error(`Unsupported wallet type: ${chosen.type}`);
