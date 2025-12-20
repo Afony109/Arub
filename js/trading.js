@@ -333,26 +333,6 @@ async function refreshBalances() {
 // -----------------------------
 // UI bindings (must be re-run after renderTradingUI)
 // -----------------------------
-function bindUi() {
-  // Do not use a global "bind once" here because UI is re-rendered.
-  // Instead, safely bind by replacing handlers each time.
-
-  const mb = el('maxBuyBtn');
-  if (mb) mb.onclick = () => setMaxBuy();
-
-  const ms = el('maxSellBtn');
-  if (ms) ms.onclick = () => setMaxSell();
-
-  const bb = el('buyBtn');
-  if (bb) bb.onclick = () => buyTokens();
-
-  const sb = el('sellBtn');
-  if (sb) sb.onclick = () => sellTokens();
-
-  // Enable buttons by default (they are disabled only in locked mode)
-  ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn'].forEach((id) => setDisabled(id, false));
-  bindTradingEvents(); //
-}
 
 // -----------------------------
 // Actions
@@ -381,33 +361,87 @@ function bindUi() {
   }
 }
 
- export async function buyTokens(usdtAmount) {
+ // trading.js
+
+export async function buyTokens(usdtAmount) {
   console.log('[TRADING] buyTokens start', {
     hasWalletState: !!window.walletState,
     address: window.walletState?.address,
     hasSigner: !!window.walletState?.signer,
     hasProvider: !!window.walletState?.provider,
+    input: usdtAmount,
   });
-   let amountBN;
-  try {
-    amountBN = parseTokenAmount(usdtAmount, 6); // USDT = 6
-  } catch (e) {
-    showNotification?.(e.message || 'Invalid amount', 'error');
+
+  // Guard: wallet must be connected with signer
+  if (!window.walletState?.signer) {
+    showNotification?.('Connect wallet first', 'error');
+    console.warn('[TRADING] buyTokens blocked: no signer');
     return;
   }
 
-  return await buyWithUsdt(
-    formatTokenAmount(amountBN, 6, 6),
-    {
+  let amountBN;
+  try {
+    // USDT = 6 decimals
+    amountBN = parseTokenAmount(usdtAmount, 6);
+  } catch (e) {
+    console.error('[TRADING] parseTokenAmount error:', e);
+    showNotification?.(e?.message || 'Invalid amount', 'error');
+    return;
+  }
+
+  // Guard: non-zero amount
+  if (!amountBN || amountBN.isZero?.() === true) {
+    showNotification?.('Enter amount greater than 0', 'error');
+    console.warn('[TRADING] buyTokens blocked: amount is zero');
+    return;
+  }
+
+  // IMPORTANT:
+  // Many buyWithUsdt implementations expect a STRING amount (e.g., "1.25")
+  // If yours expects BigNumber, replace `amountStr` with `amountBN`.
+  const amountStr = formatTokenAmount(amountBN, 6, 6);
+  console.log('[TRADING] buyTokens amount normalized', {
+    amountBN: amountBN.toString?.() || String(amountBN),
+    amountStr,
+  });
+
+  try {
+    return await buyWithUsdt(amountStr, {
       confirmations: 1,
       onStatus: (stage) => {
+        console.log('[TRADING] buyWithUsdt status:', stage);
+
         if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
         if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
         if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
-      }
-    }
-  );
+      },
+    });
+  } catch (e) {
+    console.error('[TRADING] buyWithUsdt error:', e);
+    showNotification?.(e?.message || 'Buy failed', 'error');
+    return;
+  }
 }
+
+function bindUi() {
+  const mb = el('maxBuyBtn');
+  if (mb) mb.onclick = () => setMaxBuy();
+
+  const ms = el('maxSellBtn');
+  if (ms) ms.onclick = () => setMaxSell();
+
+  const bb = el('buyBtn');
+  if (bb) bb.onclick = () => { /* будет в Правке 2 */ };
+
+  const sb = el('sellBtn');
+  if (sb) sb.onclick = () => sellTokens();
+
+  ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn'].forEach((id) => setDisabled(id, false));
+
+  // Если используете bindTradingEvents, то НЕ нужно одновременно bb.onclick и bindTradingEvents (см. ниже)
+  // bindTradingEvents();
+}
+
 
  export async function sellTokens() {
   try {
