@@ -1,17 +1,17 @@
-export const CONFIG = {
-  // Network
-  NETWORK: {
-    chainIdHex: '0xA4B1', // 42161
-    chainIdDec: 42161,
-    chainName: 'Arbitrum One',
-    nativeCurrency: {
-      name: 'Ether',
-      symbol: 'ETH',
-      decimals: 18
-    },
-    rpcUrls: ['https://arb1.arbitrum.io/rpc'],
-    blockExplorerUrls: ['https://arbiscan.io'],
+NETWORK: {
+  chainId: 42161,              // ← КЛЮЧЕВОЙ ПАРАМЕТР
+  chainIdHex: '0xA4B1',
+  chainIdDec: 42161,
+
+  chainName: 'Arbitrum One',
+  nativeCurrency: {
+    name: 'Ether',
+    symbol: 'ETH',
+    decimals: 18
   },
+  rpcUrls: ['https://arb1.arbitrum.io/rpc'],
+  blockExplorerUrls: ['https://arbiscan.io'],
+},
 
   // Core addresses
   USDT_ADDRESS: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
