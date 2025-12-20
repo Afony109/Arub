@@ -467,25 +467,20 @@ export async function buyTokens(usdtAmount) {
 
 
 function bindUi() {
-  const mb = el('maxBuyBtn');
-  if (mb) mb.onclick = () => setMaxBuy();
+ const bb = el('buyBtn');
+if (bb) {
+  bb.onclick = async () => {
+    try {
+      const amount = el('buyAmount')?.value ?? '';
+      console.log('[UI] Buy clicked, amount =', amount);
+      await buyTokens(amount);
+    } catch (e) {
+      console.error('[UI] buy click error:', e);
+      showNotification?.(e?.message || 'Buy failed', 'error');
+    }
+  };
+}
 
-  const ms = el('maxSellBtn');
-  if (ms) ms.onclick = () => setMaxSell();
-
-  const bb = el('buyBtn');
-  if (bb) {
-    bb.onclick = async () => {
-      try {
-        const amount = el('buyAmount')?.value ?? '';
-        console.log('[UI] Buy clicked, amount =', amount);
-        await buyTokens(amount);
-      } catch (e) {
-        console.error('[UI] buy click error:', e);
-        showNotification?.(e?.message || 'Buy failed', 'error');
-      }
-    };
-  }
 
   const sb = el('sellBtn');
   if (sb) sb.onclick = () => sellTokens();
