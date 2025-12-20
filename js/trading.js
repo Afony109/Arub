@@ -43,8 +43,6 @@ const user = {
   signer: null
 };
 
-showNotification?.('...', 'success');
-
 let DECIMALS_ARUB = 6; // fallback until read from token
 let DECIMALS_USDT = 6;  // fallback until read from USDT
 
@@ -382,8 +380,8 @@ export async function buyTokens(usdtAmount) {
     return;
   }
 
-  // Guard: correct network (Arbitrum One expected in your setup)
-  const expectedChainId = Number(window.CONFIG?.NETWORK?.chainId ?? 42161);
+  // Guard: correct network
+  const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
   if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
     showNotification?.(`Wrong network. Please switch to chainId ${expectedChainId}`, 'error');
     console.warn('[TRADING] buyTokens blocked: wrong chain', {
@@ -393,37 +391,32 @@ export async function buyTokens(usdtAmount) {
     return;
   }
 
-  // Parse amount (USDT = 6)
+  // Parse amount (USDT decimals from RW-sync, fallback 6)
+  const usdtDecimals = Number(DECIMALS_USDT ?? 6);
+
   let amountBN;
   try {
-    amountBN = parseTokenAmount(usdtAmount, 6);
+    amountBN = parseTokenAmount(usdtAmount, usdtDecimals);
   } catch (e) {
     console.error('[TRADING] parseTokenAmount error:', e);
     showNotification?.(e?.message || 'Invalid amount', 'error');
     return;
   }
 
-  // Guard: non-zero amount
   if (!amountBN || (amountBN.isZero?.() === true)) {
     showNotification?.('Enter amount greater than 0', 'error');
     console.warn('[TRADING] buyTokens blocked: amount is zero');
     return;
   }
 
-  // Normalize to string for buyWithUsdt
-  const amountStr = formatTokenAmount(amountBN, 6, 6);
+  const amountStr = formatTokenAmount(amountBN, usdtDecimals, usdtDecimals);
 
-  // Guard: on-chain USDT balance check (prevents "button does nothing" confusion)
+  // Optional balance check via usdtRW (do NOT block on RPC errors)
   try {
-    // ---- IMPORTANT: replace this section with how you access RW contracts in your project ----
-    // Option A: if you keep RW contracts in some state getter:
-    const s = (typeof getContracts === 'function') ? getContracts() : null; // <-- replace if needed
-    const usdt = s?.usdtContract || s?.rwUsdtContract || window.usdtContract || window.rwUsdtContract; // <-- adapt
-
-    if (usdt?.balanceOf) {
-      const balBN = await usdt.balanceOf(ws.address);
-      if (balBN?.lt?.(amountBN)) {
-        const balStr = formatTokenAmount(balBN, 6, 6);
+    if (usdtRW?.balanceOf) {
+      const balBN = await usdtRW.balanceOf(ws.address);
+      if (balBN.lt(amountBN)) {
+        const balStr = formatTokenAmount(balBN, usdtDecimals, usdtDecimals);
         showNotification?.(`Insufficient USDT balance. Available: ${balStr}`, 'error');
         console.warn('[TRADING] buyTokens blocked: insufficient balance', {
           amount: amountStr,
@@ -432,19 +425,17 @@ export async function buyTokens(usdtAmount) {
         return;
       }
     } else {
-      console.warn('[TRADING] USDT contract not available for balance check; skipping');
+      console.warn('[TRADING] usdtRW not ready; skipping USDT balance check');
     }
-    // -------------------------------------------------------------------
   } catch (e) {
-    console.error('[TRADING] balance check error:', e);
-    // Не блокируем покупку полностью, но предупреждаем
-    showNotification?.('Could not verify USDT balance. Try again.', 'error');
-    return;
+    console.error('[TRADING] USDT balance check error (non-blocking):', e);
+    // Do not return; let the contract/approve flow validate.
   }
 
   console.log('[TRADING] buyTokens amount normalized', {
     amountBN: amountBN.toString?.() || String(amountBN),
     amountStr,
+    usdtDecimals,
   });
 
   try {
@@ -466,14 +457,15 @@ export async function buyTokens(usdtAmount) {
 }
 
 
+
 function bindUi() {
- const bb = el('buyBtn');
+const bb = el('buyBtn');
 if (bb) {
   bb.onclick = async () => {
-    try {
-      const amount = el('buyAmount')?.value ?? '';
-      console.log('[UI] Buy clicked, amount =', amount);
-      await buyTokens(amount);
+    const amount = el('buyAmount')?.value ?? '';
+    await buyTokens(amount);
+  };
+}
     } catch (e) {
       console.error('[UI] buy click error:', e);
       showNotification?.(e?.message || 'Buy failed', 'error');
