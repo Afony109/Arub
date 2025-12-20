@@ -412,25 +412,26 @@ export async function buyTokens(usdtAmount) {
   const amountStr = formatTokenAmount(amountBN, usdtDecimals, usdtDecimals);
 
   // Optional balance check via usdtRW (do NOT block on RPC errors)
-  try {
-    if (usdtRW?.balanceOf) {
-      const balBN = await usdtRW.balanceOf(ws.address);
-      if (balBN.lt(amountBN)) {
-        const balStr = formatTokenAmount(balBN, usdtDecimals, usdtDecimals);
-        showNotification?.(`Insufficient USDT balance. Available: ${balStr}`, 'error');
-        console.warn('[TRADING] buyTokens blocked: insufficient balance', {
-          amount: amountStr,
-          balance: balStr,
-        });
-        return;
-      }
-    } else {
-      console.warn('[TRADING] usdtRW not ready; skipping USDT balance check');
+  // Optional balance check via usdtRW (do NOT block on RPC errors)
+try {
+  if (usdtRW?.balanceOf) {
+    const balBN = await usdtRW.balanceOf(ws.address);
+
+    if (balBN.lt(amountBN)) {
+      const balStr = formatTokenAmount(balBN, usdtDecimals, usdtDecimals);
+      showNotification?.(`Insufficient USDT balance. Available: ${balStr}`, 'error');
+      console.warn('[TRADING] buyTokens blocked: insufficient balance', {
+        amount: amountStr,
+        balance: balStr,
+      });
+      return;
     }
-  } catch (e) {
-    console.error('[TRADING] USDT balance check error (non-blocking):', e);
-    // Do not return; let the contract/approve flow validate.
+  } else {
+    console.warn('[TRADING] usdtRW not ready; skipping USDT balance check');
   }
+} catch (e) {
+  console.error('[TRADING] USDT balance check error (non-blocking):', e);
+}
 
   console.log('[TRADING] buyTokens amount normalized', {
     amountBN: amountBN.toString?.() || String(amountBN),
