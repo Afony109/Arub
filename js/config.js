@@ -1,31 +1,40 @@
 export const CONFIG = {
+  // -----------------------------
+  // UI
+  // -----------------------------
+  UI: {
+    NOTIFICATION_DURATION: 5000,
+  },
+
+  // -----------------------------
+  // Network
+  // -----------------------------
   NETWORK: {
     chainId: 42161,
     chainIdDec: 42161,
     chainIdHex: '0xA4B1',
 
     chainName: 'Arbitrum One',
+
     nativeCurrency: {
       name: 'Ether',
       symbol: 'ETH',
       decimals: 18,
     },
 
-  // RPC (both forms)
-  rpcUrls: ['https://arb1.arbitrum.io/rpc'],
-  rpcUrl: 'https://arb1.arbitrum.io/rpc', // alias for older code
+    rpcUrls: ['https://arb1.arbitrum.io/rpc'],
+    blockExplorerUrls: ['https://arbiscan.io'],
+  },
 
-  // Explorer (both forms)
-  blockExplorerUrls: ['https://arbiscan.io'],
-  blockExplorerUrl: 'https://arbiscan.io', // alias for older code
-},
-
-
+  // -----------------------------
   // Core addresses
+  // -----------------------------
   USDT_ADDRESS: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
   TOKEN_ADDRESS: '0x161296CD7F742220f727e1B4Ccc02cAEc71Ed2C6',
 
-  // Explicit contracts
+  // -----------------------------
+  // Other contracts
+  // -----------------------------
   ANTIRUB_ADDRESS: '0x18D1d662371AD5732Ef996A054bd7672ab626368',
   VAULT_ADDRESS: '0xE5dB8Bc105775EDa8A68B5B0aA17f91F492f102B',
   PRESALE_ADDRESS: '0x44960eDa62860Fb54C143f742122619c25a129d1',
@@ -33,7 +42,3 @@ export const CONFIG = {
 
   TX_CONFIRMATIONS: 1,
 };
-
-UI: {
-  NOTIFICATION_DURATION: 5000,
-},
