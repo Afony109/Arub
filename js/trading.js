@@ -45,8 +45,8 @@ const user = {
 
 showNotification?.('...', 'success');
 
-const DECIMALS_ARUB = 6;
-const DECIMALS_USDT = 6;
+let DECIMALS_ARUB = 6; // fallback until read from token
+let DECIMALS_USDT = 6;  // fallback until read from USDT
 
 export const PRESALE_ABI = [
   "function buy(uint256 usdtAmount) external",
@@ -211,6 +211,26 @@ function initReadOnly() {
 
   tokenRO = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, roProvider);
   usdtRO  = new ethers.Contract(CONFIG.USDT_ADDRESS,  ERC20_ABI, roProvider);
+
+  // Sync decimals asynchronously (do not block init)
+  (async () => {
+    try {
+      if (tokenRO?.decimals) DECIMALS_ARUB = await tokenRO.decimals();
+    } catch (e) {
+      console.warn('[TRADING] tokenRO.decimals() failed, using fallback', e);
+    }
+
+    try {
+      if (usdtRO?.decimals) DECIMALS_USDT = await usdtRO.decimals();
+    } catch (e) {
+      console.warn('[TRADING] usdtRO.decimals() failed, using fallback', e);
+    }
+
+    console.log('[TRADING] decimals synced (RO):', { DECIMALS_ARUB, DECIMALS_USDT });
+
+    // Optional: refresh UI/balances after decimals are known
+    try { refreshBalances?.(); } catch (_) {}
+  })();
 }
 
 function initWithSigner() {
@@ -221,6 +241,19 @@ function initWithSigner() {
 
   tokenRW = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, user.signer);
   usdtRW  = new ethers.Contract(CONFIG.USDT_ADDRESS,  ERC20_ABI, user.signer);
+
+  // Optional: keep decimals in sync even if RO failed
+  (async () => {
+    try {
+      if (tokenRW?.decimals) DECIMALS_ARUB = await tokenRW.decimals();
+    } catch (_) {}
+
+    try {
+      if (usdtRW?.decimals) DECIMALS_USDT = await usdtRW.decimals();
+    } catch (_) {}
+
+    console.log('[TRADING] decimals synced (RW):', { DECIMALS_ARUB, DECIMALS_USDT });
+  })();
 }
 
 // -----------------------------
