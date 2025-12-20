@@ -422,44 +422,41 @@ export async function connectWallet(options = {}) {
       if (!accounts?.[0]) throw new Error('No accounts returned');
 
       currentAddress = ethers.utils.getAddress(accounts[0]);
-      await ensureNetwork();
-    }
-      const provider = new ethers.providers.Web3Provider(eip1193Provider);
-const signer = provider.getSigner();
-const address = await signer.getAddress();
+          await ensureNetwork();
+  } else {
+    throw new Error(`Unsupported wallet type: ${chosen.type}`);
+  }
 
-// ОБЯЗАТЕЛЬНО получаем сеть
-const network = await provider.getNetwork();
+  // ВАЖНО: после того как selectedEip1193 определён и сеть обеспечена
+  ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+  signer = ethersProvider.getSigner();
 
-window.walletState = {
-  address,
-  signer,
-  provider,
-  chainId: network.chainId
-};
+  // Получаем chainId и фиксируем walletState (чтобы не было undefined)
+  const network = await ethersProvider.getNetwork();
 
-console.log('[WALLET] connected', {
-  address,
-  chainId: network.chainId
-});
+  window.walletState = {
+    address: currentAddress,
+    signer,
+    provider: ethersProvider,
+    chainId: network.chainId
+  };
 
-    else {
-      throw new Error(`Unsupported wallet type: ${chosen.type}`);
-    }
+  console.log('[WALLET] connected', {
+    address: currentAddress,
+    chainId: network.chainId
+  });
 
-    ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
-    signer = ethersProvider.getSigner();
+  publishGlobals();
 
-    publishGlobals();
+  showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
 
-    showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
+  if (typeof window.onWalletConnected === 'function') {
+    window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
+  }
+  dispatchConnected();
 
-    if (typeof window.onWalletConnected === 'function') {
-      window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
-    }
-    dispatchConnected();
+  return currentAddress;
 
-    return currentAddress;
   } catch (err) {
     console.error('[WALLET] connectWallet error:', err);
     showNotification?.(err?.message || 'Wallet connect failed', 'error');
