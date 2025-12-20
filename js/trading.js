@@ -43,6 +43,8 @@ const user = {
   signer: null
 };
 
+showNotification?.('...', 'success');
+
 const DECIMALS_ARUB = 6;
 const DECIMALS_USDT = 6;
 
