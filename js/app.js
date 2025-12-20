@@ -119,6 +119,21 @@ function setupGlobalEventListeners() {
   });
 }
 
+async function logWalletNetwork() {
+  try {
+    const ws = window.walletState;
+    if (!ws?.provider) {
+      console.warn('[APP] walletState.provider missing');
+      return;
+    }
+    const net = await ws.provider.getNetwork();
+    console.log('[APP] Network:', net?.name);
+    console.log('[APP] Chain ID:', net?.chainId);
+  } catch (e) {
+    console.error('[APP] logWalletNetwork error:', e);
+  }
+}
+
 /**
  * Инициализация приложения
  */
