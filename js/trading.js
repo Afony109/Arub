@@ -203,6 +203,61 @@ function hardUnlock() {
 // -----------------------------
 // Contracts init
 // -----------------------------
+function bindTradingEvents() {
+  // BUY
+  const buyBtn = document.getElementById('buyBtn');
+  if (buyBtn) {
+    const fresh = buyBtn.cloneNode(true);
+    buyBtn.parentNode.replaceChild(fresh, buyBtn);
+
+    fresh.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[TRADING] buyBtn click');
+      await buyTokens();
+    });
+  }
+
+  // SELL
+  const sellBtn = document.getElementById('sellBtn');
+  if (sellBtn) {
+    const fresh = sellBtn.cloneNode(true);
+    sellBtn.parentNode.replaceChild(fresh, sellBtn);
+
+    fresh.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[TRADING] sellBtn click');
+      await sellTokens();
+    });
+  }
+
+  // MAX buttons
+  const maxBuyBtn = document.getElementById('maxBuyBtn');
+  if (maxBuyBtn) {
+    const fresh = maxBuyBtn.cloneNode(true);
+    maxBuyBtn.parentNode.replaceChild(fresh, maxBuyBtn);
+
+    fresh.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setMaxBuy();
+    });
+  }
+
+  const maxSellBtn = document.getElementById('maxSellBtn');
+  if (maxSellBtn) {
+    const fresh = maxSellBtn.cloneNode(true);
+    maxSellBtn.parentNode.replaceChild(fresh, maxSellBtn);
+
+    fresh.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setMaxSell();
+    });
+  }
+}
+
 function initReadOnly() {
   const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
   if (!rpc) throw new Error('CONFIG.NETWORK.rpcUrls[0] missing');
@@ -296,6 +351,7 @@ function bindUi() {
 
   // Enable buttons by default (they are disabled only in locked mode)
   ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn'].forEach((id) => setDisabled(id, false));
+  bindTradingEvents(); //
 }
 
 // -----------------------------
