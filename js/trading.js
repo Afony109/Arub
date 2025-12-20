@@ -467,7 +467,7 @@ if (bb) {
     await buyTokens(amount);
   };
 }
-    } catch (e) {
+     catch (e) {
       console.error('[UI] buy click error:', e);
       showNotification?.(e?.message || 'Buy failed', 'error');
     }
