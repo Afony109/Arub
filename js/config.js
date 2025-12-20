@@ -1,16 +1,15 @@
-NETWORK: {
-  // IDs (both numeric and hex for compatibility across modules)
-  chainId: 42161,
-  chainIdDec: 42161,
-  chainIdHex: '0xA4B1',
+export const CONFIG = {
+  NETWORK: {
+    chainId: 42161,
+    chainIdDec: 42161,
+    chainIdHex: '0xA4B1',
 
-  chainName: 'Arbitrum One',
-
-  nativeCurrency: {
-    name: 'Ether',
-    symbol: 'ETH',
-    decimals: 18,
-  },
+    chainName: 'Arbitrum One',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18,
+    },
 
   // RPC (both forms)
   rpcUrls: ['https://arb1.arbitrum.io/rpc'],
