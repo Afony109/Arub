@@ -290,16 +290,39 @@ function bindUi() {
   }
 }
 
-   export async function buyTokens(usdtAmount) {
-  return await buyWithUsdt(usdtAmount, {
+  export async function buyTokens(usdtAmount) {
+  // Normalize user input (string/number) and validate
+  const raw = String(usdtAmount ?? '').trim().replace(',', '.');
+
+  if (!raw) {
+    showNotification?.('Enter USDT amount', 'warning');
+    return;
+  }
+
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    showNotification?.('Invalid USDT amount', 'error');
+    return;
+  }
+
+  // Optional: limit decimals to 6 (USDT), to avoid parseUnits edge cases
+  // (Not strictly required, but prevents "too many decimal places")
+  const parts = raw.split('.');
+  const safe = (parts.length === 2)
+    ? `${parts[0]}.${parts[1].slice(0, 6)}`
+    : raw;
+
+  return await buyWithUsdt(safe, {
     confirmations: 1,
     onStatus: (stage, payload) => {
-      if (stage === 'approve_submitted') showNotification('Approving USDT...', 'success');
-      if (stage === 'buy_submitted') showNotification('Submitting buy tx...', 'success');
-      if (stage === 'buy_confirmed') showNotification('Purchase successful', 'success');
+      if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
+      if (stage === 'approve_confirmed') showNotification?.('USDT approved', 'success');
+      if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
+      if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
     }
   });
 }
+
 
   export async function sellTokens() {
   try {
