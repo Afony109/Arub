@@ -1,0 +1,204 @@
+/* ===================================
+   Base Styles & Layout
+   =================================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    /* ВАЖНО: красим сам корень документа, чтобы нигде не было белого */
+    background: #050816;
+    background-image: linear-gradient(135deg, #1a1f3a 0%, #0f1628 100%);
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    /* фон уже на html, здесь делаем прозрачным, чтобы не конфликтовать */
+    background: transparent;
+    color: #e0e6ed;
+    overflow-x: hidden;
+    line-height: 1.6;
+}
+
+/* Animated Background */
+/* Изменён с position: fixed на absolute — фиксит белые вспышки при скролле */
+.bg-animated {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;       /* достаточно на высоту экрана */
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(180deg, #4a90e2 0%, rgba(74, 144, 226, 0.2) 50%, rgba(96, 165, 250, 0.1) 100%);
+    opacity: 0.08;
+}
+
+/* Ukraine Banner */
+.ukraine-banner {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    background: linear-gradient(90deg, var(--ukraine-blue) 0%, var(--ukraine-blue) 50%, var(--ukraine-yellow) 50%, var(--ukraine-yellow) 100%);
+    padding: 15px 20px;
+    text-align: center;
+    z-index: 2000;
+    box-shadow: var(--shadow-sm);
+}
+
+.ukraine-banner-text {
+    color: white;
+    font-weight: 700;
+    font-size: 1.2em;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    letter-spacing: 0.5px;
+}
+
+.ukraine-flag {
+    font-size: 1.8em;
+    animation: wave 2s ease-in-out infinite;
+}
+
+@keyframes wave {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+}
+
+/* Navigation */
+nav {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    padding-left: calc((100vw - 1200px) / 2 + 20px);
+    padding-right: calc((100vw - 1200px) / 2 + 20px);
+    padding-top: 20px;
+    padding-bottom: 20px;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    z-index: 1000;
+    background: rgba(15,22,40,0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.logo-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, var(--ukraine-blue), var(--ukraine-yellow));
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8em;
+    font-weight: bold;
+    box-shadow: var(--shadow-md);
+}
+
+/* убиваем старый градиент, который перекрывал цвета */
+.logo-text {
+    background: none !important;
+    -webkit-background-clip: initial !important;
+    -webkit-text-fill-color: initial !important;
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+}
+
+/* ANTI — синий */
+.logo-text-top {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--ukraine-blue); /* синий */
+    letter-spacing: 0.06em;
+}
+
+/* RUB — жёлтый */
+.logo-text-bottom {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: var(--ukraine-yellow); /* жёлтый */
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.nav-right {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+    margin-left: auto;
+    padding-right: 0;
+}
+
+/* Hero Section */
+.hero {
+    padding: 180px var(--spacing-2xl) 100px;
+    text-align: center;
+    position: relative;
+}
+
+.hero-title {
+    font-size: 4em;
+    font-weight: 800;
+    margin-bottom: var(--spacing-lg);
+    background: linear-gradient(45deg, var(--ukraine-blue), var(--ukraine-yellow));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.2;
+}
+
+.hero-subtitle {
+    font-size: 1.5em;
+    color: var(--gray);
+    margin-bottom: var(--spacing-2xl);
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.hero-buttons {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* Sections */
+.stats-section {
+    padding: var(--spacing-2xl) var(--spacing-2xl);
+    background: rgba(0,87,183,0.05);
+    border-top: 1px solid rgba(0,87,183,0.2);
+    border-bottom: 1px solid rgba(0,87,183,0.2);
+}
+
+.staking-section {
+    padding: 100px var(--spacing-2xl);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.section-title {
+    text-align: center;
+    font-size: 3em;
+    margin-bottom: var(--spacing-2xl);
+    background: linear-gradient(45deg, var(--ukraine-blue), var(--ukraine-yellow));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
