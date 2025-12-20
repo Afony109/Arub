@@ -444,6 +444,29 @@ export function initTradingModule() {
       console.log('[TRADING] wallet disconnected -> locked UI rendered');
     });
   }
+import { parseTokenAmount, formatTokenAmount } from './ui.js';
+
+export async function buyTokens(usdtAmount) {
+  let amountBN;
+  try {
+    amountBN = parseTokenAmount(usdtAmount, 6); // USDT = 6
+  } catch (e) {
+    showNotification?.(e.message, 'error');
+    return;
+  }
+
+  return await buyWithUsdt(
+    formatTokenAmount(amountBN, 6, 6), // передаём обратно human-safe
+    {
+      confirmations: 1,
+      onStatus: (stage) => {
+        if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
+        if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
+        if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
+      }
+    }
+  );
+}
 
   console.log('[TRADING] initTradingModule: OK');
   return true;
