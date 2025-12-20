@@ -41,6 +41,36 @@ export function formatTokenAmount(value, decimals = 6, maxFrac = 6) {
   return ff ? `${i}.${ff}` : i;
 }
 
+/**
+ * Format value as USD string
+ * @param {number|string|BigNumber} value
+ * @param {number} decimals - token decimals (default 6)
+ */
+export function formatUSD(value, decimals = 6) {
+  let n;
+
+  try {
+    // If BigNumber — convert first
+    if (value?._isBigNumber) {
+      n = Number(ethers.utils.formatUnits(value, decimals));
+    } else {
+      n = Number(value);
+    }
+  } catch (_) {
+    n = 0;
+  }
+
+  if (!Number.isFinite(n)) n = 0;
+
+  return n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+
 export function parseTokenAmount(raw, decimals = 6) {
   if (raw == null) throw new Error('Amount is empty');
 
