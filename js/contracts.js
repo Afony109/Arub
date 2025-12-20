@@ -22,7 +22,6 @@ console.log('[CONTRACTS] contracts.js loaded, build:', Date.now());
   VAULT_ADDRESS: '0xE5dB8Bc105775EDa8A68B5B0aA17f91F492f102B',
   PRESALE_ADDRESS: '0x44960eDa62860Fb54C143f742122619c25a129d1',
   ORACLE_ADDRESS: '0xC15fFAA8D6835e3238c9B73428edb6A56cb3AF89',
-};
 
 // -----------------------------
 // State
