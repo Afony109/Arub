@@ -448,6 +448,24 @@ export async function connectWallet(options = {}) {
 
   publishGlobals();
 
+    // Fix: ensure chainId is present in walletState
+let chainId = null;
+try {
+  const hex = await selectedEip1193.request({ method: 'eth_chainId' });
+  chainId = parseInt(hex, 16);
+} catch (_) {
+  const net = await ethersProvider.getNetwork();
+  chainId = net?.chainId ?? null;
+}
+
+window.walletState = {
+  ...(window.walletState || {}),
+  chainId
+};
+
+console.log('[WALLET] chainId pinned to walletState:', window.walletState.chainId);
+
+
   showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
 
   if (typeof window.onWalletConnected === 'function') {
