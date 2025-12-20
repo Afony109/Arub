@@ -33,3 +33,7 @@ export const CONFIG = {
 
   TX_CONFIRMATIONS: 1,
 };
+
+UI: {
+  NOTIFICATION_DURATION: 5000,
+},
