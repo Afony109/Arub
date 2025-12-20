@@ -58,6 +58,34 @@ export function parseTokenAmount(raw, decimals = 6) {
   return ethers.utils.parseUnits(safe, decimals);
 }
 
+export async function copyToClipboard(text) {
+  const s = String(text ?? '');
+
+  // Modern API (secure contexts)
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(s);
+    return true;
+  }
+
+  // Fallback
+  const ta = document.createElement('textarea');
+  ta.value = s;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+
+  try {
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    document.body.removeChild(ta);
+    throw e;
+  }
+}
+
 // -----------------------------
 // Loading helper
 // -----------------------------
