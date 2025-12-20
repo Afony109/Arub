@@ -363,8 +363,6 @@ async function refreshBalances() {
 
  // trading.js
 
-// trading.js
-
 export async function buyTokens(usdtAmount) {
   console.log('[TRADING] buyTokens start', {
     hasWalletState: !!window.walletState,
