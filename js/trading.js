@@ -423,7 +423,7 @@ export function initTradingModule() {
       console.log('[TRADING] wallet disconnected -> locked UI rendered');
     });
   }
-
+} 
  
 
 
