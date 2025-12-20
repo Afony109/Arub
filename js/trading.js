@@ -288,26 +288,15 @@ function bindUi() {
   }
 }
 
-   export async function buyTokens() {
-   try {
-    if (!user.signer) throw new Error('Wallet not connected');
-
-    const raw = getInputValue('buyAmount');
-    if (!raw) throw new Error('Enter USDT amount');
-
-    // validate
-    ethers.utils.parseUnits(raw, DECIMALS_USDT);
-
-    // TODO: wire your real buy contract call
-    throw new Error('BUY flow is not wired: provide your buy contract ABI + method');
-
-  } catch (err) {
-    console.group('[TRADING] Buy error');
-    console.log(err);
-    console.groupEnd();
-    showNotification?.(err?.message || 'Buy failed', 'error');
-    throw err;
-  }
+   export async function buyTokens(usdtAmount) {
+  return await buyWithUsdt(usdtAmount, {
+    confirmations: 1,
+    onStatus: (stage, payload) => {
+      if (stage === 'approve_submitted') showNotification('Approving USDT...', 'success');
+      if (stage === 'buy_submitted') showNotification('Submitting buy tx...', 'success');
+      if (stage === 'buy_confirmed') showNotification('Purchase successful', 'success');
+    }
+  });
 }
 
   export async function sellTokens() {
