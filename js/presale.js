@@ -152,3 +152,50 @@ export async function buyWithUsdt(usdtAmountHuman, opts = {}) {
 
   return receipt;
 }
+// -----------------------------
+// Quote helpers for UI
+// -----------------------------
+let roProvider = null;
+let roToken = null;
+let tokenDecimals = null;
+
+function getReadOnlyProvider() {
+  if (roProvider) return roProvider;
+  const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
+  if (!rpc) throw new Error('CONFIG.NETWORK.rpcUrls[0] missing');
+  roProvider = new ethers.providers.JsonRpcProvider(rpc);
+  return roProvider;
+}
+
+async function getTokenDecimals() {
+  if (tokenDecimals != null) return tokenDecimals;
+
+  if (!CONFIG?.TOKEN_ADDRESS) throw new Error('CONFIG.TOKEN_ADDRESS missing');
+  roToken = roToken || new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, getReadOnlyProvider());
+
+  try {
+    tokenDecimals = await roToken.decimals();
+  } catch (_) {
+    tokenDecimals = 18; // fallback
+  }
+  return tokenDecimals;
+}
+
+/**
+ * Returns formatted quote string, e.g. "123.4567 ARUB"
+ * - maxFrac controls UI display only (no rounding on-chain).
+ */
+export async function quoteArubFormatted(usdtAmountHuman, maxFrac = 6) {
+  const bn = await quoteArubForUsdt(usdtAmountHuman); // BigNumber
+  const dec = await getTokenDecimals();
+  const full = ethers.utils.formatUnits(bn, dec);
+
+  // Trim to maxFrac for UI
+  if (!Number.isFinite(maxFrac) || maxFrac < 0) return `${full} ARUB`;
+
+  const [i, f = ''] = String(full).split('.');
+  const f2 = f.slice(0, maxFrac);
+  const trimmed = f2.length ? `${i}.${f2}` : i;
+
+  return `${trimmed} ARUB`;
+}
