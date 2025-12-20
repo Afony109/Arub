@@ -1,17 +1,26 @@
 NETWORK: {
-  chainId: 42161,              // ← КЛЮЧЕВОЙ ПАРАМЕТР
-  chainIdHex: 0xA4B1,
+  // IDs (both numeric and hex for compatibility across modules)
+  chainId: 42161,
   chainIdDec: 42161,
+  chainIdHex: '0xA4B1',
 
   chainName: 'Arbitrum One',
+
   nativeCurrency: {
     name: 'Ether',
     symbol: 'ETH',
-    decimals: 18
+    decimals: 18,
   },
+
+  // RPC (both forms)
   rpcUrls: ['https://arb1.arbitrum.io/rpc'],
+  rpcUrl: 'https://arb1.arbitrum.io/rpc', // alias for older code
+
+  // Explorer (both forms)
   blockExplorerUrls: ['https://arbiscan.io'],
+  blockExplorerUrl: 'https://arbiscan.io', // alias for older code
 },
+
 
   // Core addresses
   USDT_ADDRESS: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
