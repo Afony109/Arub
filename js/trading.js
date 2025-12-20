@@ -363,25 +363,41 @@ async function refreshBalances() {
 
  // trading.js
 
+// trading.js
+
 export async function buyTokens(usdtAmount) {
   console.log('[TRADING] buyTokens start', {
     hasWalletState: !!window.walletState,
     address: window.walletState?.address,
     hasSigner: !!window.walletState?.signer,
     hasProvider: !!window.walletState?.provider,
+    chainId: window.walletState?.chainId,
     input: usdtAmount,
   });
 
+  const ws = window.walletState;
+
   // Guard: wallet must be connected with signer
-  if (!window.walletState?.signer) {
+  if (!ws?.signer || !ws?.address) {
     showNotification?.('Connect wallet first', 'error');
-    console.warn('[TRADING] buyTokens blocked: no signer');
+    console.warn('[TRADING] buyTokens blocked: no signer/address');
     return;
   }
 
+  // Guard: correct network (Arbitrum One expected in your setup)
+  const expectedChainId = Number(window.CONFIG?.NETWORK?.chainId ?? 42161);
+  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
+    showNotification?.(`Wrong network. Please switch to chainId ${expectedChainId}`, 'error');
+    console.warn('[TRADING] buyTokens blocked: wrong chain', {
+      got: ws.chainId,
+      expected: expectedChainId
+    });
+    return;
+  }
+
+  // Parse amount (USDT = 6)
   let amountBN;
   try {
-    // USDT = 6 decimals
     amountBN = parseTokenAmount(usdtAmount, 6);
   } catch (e) {
     console.error('[TRADING] parseTokenAmount error:', e);
@@ -390,16 +406,44 @@ export async function buyTokens(usdtAmount) {
   }
 
   // Guard: non-zero amount
-  if (!amountBN || amountBN.isZero?.() === true) {
+  if (!amountBN || (amountBN.isZero?.() === true)) {
     showNotification?.('Enter amount greater than 0', 'error');
     console.warn('[TRADING] buyTokens blocked: amount is zero');
     return;
   }
 
-  // IMPORTANT:
-  // Many buyWithUsdt implementations expect a STRING amount (e.g., "1.25")
-  // If yours expects BigNumber, replace `amountStr` with `amountBN`.
+  // Normalize to string for buyWithUsdt
   const amountStr = formatTokenAmount(amountBN, 6, 6);
+
+  // Guard: on-chain USDT balance check (prevents "button does nothing" confusion)
+  try {
+    // ---- IMPORTANT: replace this section with how you access RW contracts in your project ----
+    // Option A: if you keep RW contracts in some state getter:
+    const s = (typeof getContracts === 'function') ? getContracts() : null; // <-- replace if needed
+    const usdt = s?.usdtContract || s?.rwUsdtContract || window.usdtContract || window.rwUsdtContract; // <-- adapt
+
+    if (usdt?.balanceOf) {
+      const balBN = await usdt.balanceOf(ws.address);
+      if (balBN?.lt?.(amountBN)) {
+        const balStr = formatTokenAmount(balBN, 6, 6);
+        showNotification?.(`Insufficient USDT balance. Available: ${balStr}`, 'error');
+        console.warn('[TRADING] buyTokens blocked: insufficient balance', {
+          amount: amountStr,
+          balance: balStr,
+        });
+        return;
+      }
+    } else {
+      console.warn('[TRADING] USDT contract not available for balance check; skipping');
+    }
+    // -------------------------------------------------------------------
+  } catch (e) {
+    console.error('[TRADING] balance check error:', e);
+    // Не блокируем покупку полностью, но предупреждаем
+    showNotification?.('Could not verify USDT balance. Try again.', 'error');
+    return;
+  }
+
   console.log('[TRADING] buyTokens amount normalized', {
     amountBN: amountBN.toString?.() || String(amountBN),
     amountStr,
@@ -422,6 +466,7 @@ export async function buyTokens(usdtAmount) {
     return;
   }
 }
+
 
 function bindUi() {
   const mb = el('maxBuyBtn');
