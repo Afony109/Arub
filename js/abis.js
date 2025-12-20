@@ -103,3 +103,10 @@ export const VAULT_ABI = [
   'event Deposit(address indexed user, uint256 arubAmount, uint256 shares)',
   'event Withdraw(address indexed user, uint256 shares, uint256 arubAmount)',
 ];
+
+// Presale (custom)
+export const PRESALE_ABI = [
+  "function buy(uint256 usdtAmount) external",
+  "function paused() view returns (bool)",
+  "function getTokenAmount(uint256 usdtAmount) view returns (uint256)"
+];
