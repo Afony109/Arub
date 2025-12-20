@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 import { ERC20_ABI, PRESALE_ABI } from './abis.js';
 import { getSigner, isWalletConnected } from './wallet.js';
 
+// writeable contracts (with signer)
 let usdtContract = null;
 let presaleContract = null;
 
@@ -10,7 +11,7 @@ export function getContracts() {
   return {
     usdtContract,
     presaleContract,
-    isInitialized: !!(usdtContract && presaleContract),
+    isInitialized: Boolean(usdtContract && presaleContract),
   };
 }
 
