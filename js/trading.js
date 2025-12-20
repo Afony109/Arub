@@ -382,7 +382,13 @@ function bindUi() {
 }
 
  export async function buyTokens(usdtAmount) {
-  let amountBN;
+  console.log('[TRADING] buyTokens start', {
+    hasWalletState: !!window.walletState,
+    address: window.walletState?.address,
+    hasSigner: !!window.walletState?.signer,
+    hasProvider: !!window.walletState?.provider,
+  });
+   let amountBN;
   try {
     amountBN = parseTokenAmount(usdtAmount, 6); // USDT = 6
   } catch (e) {
