@@ -4,6 +4,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 
 // -----------------------------
 // Notifications
@@ -35,6 +36,12 @@ export function showNotification(message, type = 'info', duration) {
   }, safeDuration);
 }
 
+export function formatTokenAmount(value, decimals = 6, maxFrac = 6) {
+  const s = ethers.utils.formatUnits(value ?? 0, decimals);
+  const [i, f = ''] = String(s).split('.');
+  const ff = f.slice(0, maxFrac);
+  return ff ? `${i}.${ff}` : i;
+}
 // -----------------------------
 // Loading helper
 // -----------------------------
