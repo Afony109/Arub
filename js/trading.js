@@ -325,39 +325,27 @@ function bindUi() {
   }
 }
 
-  export async function buyTokens(usdtAmount) {
-  // Normalize user input (string/number) and validate
-  const raw = String(usdtAmount ?? '').trim().replace(',', '.');
-
-  if (!raw) {
-    showNotification?.('Enter USDT amount', 'warning');
+ export async function buyTokens(usdtAmount) {
+  let amountBN;
+  try {
+    amountBN = parseTokenAmount(usdtAmount, 6); // USDT = 6
+  } catch (e) {
+    showNotification?.(e.message || 'Invalid amount', 'error');
     return;
   }
 
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) {
-    showNotification?.('Invalid USDT amount', 'error');
-    return;
-  }
-
-  // Optional: limit decimals to 6 (USDT), to avoid parseUnits edge cases
-  // (Not strictly required, but prevents "too many decimal places")
-  const parts = raw.split('.');
-  const safe = (parts.length === 2)
-    ? `${parts[0]}.${parts[1].slice(0, 6)}`
-    : raw;
-
-  return await buyWithUsdt(safe, {
-    confirmations: 1,
-    onStatus: (stage, payload) => {
-      if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
-      if (stage === 'approve_confirmed') showNotification?.('USDT approved', 'success');
-      if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
-      if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
+  return await buyWithUsdt(
+    formatTokenAmount(amountBN, 6, 6),
+    {
+      confirmations: 1,
+      onStatus: (stage) => {
+        if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
+        if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
+        if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
+      }
     }
-  });
+  );
 }
-
 
  export async function sellTokens() {
   try {
@@ -436,29 +424,6 @@ export function initTradingModule() {
     });
   }
 
-  console.log('[TRADING] initTradingModule: OK');
-  return true;
-}
+ 
 
 
-export async function buyTokens(usdtAmount) {
-  let amountBN;
-  try {
-    amountBN = parseTokenAmount(usdtAmount, 6); // USDT = 6
-  } catch (e) {
-    showNotification?.(e.message || 'Invalid amount', 'error');
-    return;
-  }
-
-  return await buyWithUsdt(
-    formatTokenAmount(amountBN, 6, 6),
-    {
-      confirmations: 1,
-      onStatus: (stage) => {
-        if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
-        if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
-        if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
-      }
-    }
-  );
-}
