@@ -460,24 +460,32 @@ try {
 
 
 function bindUi() {
-const bb = el('buyBtn');
-if (bb) {
-  bb.onclick = async () => {
-    const amount = el('buyAmount')?.value ?? '';
-    await buyTokens(amount);
-  };
-}
-     catch (e) {
-      console.error('[UI] buy click error:', e);
-      showNotification?.(e?.message || 'Buy failed', 'error');
-    }
-  };
-}
-
-
+  const bb = el('buyBtn');
+  if (bb) {
+    bb.onclick = async () => {
+      try {
+        const amount = el('buyAmount')?.value ?? '';
+        await buyTokens(amount);
+      } catch (e) {
+        console.error('[UI] buy click error:', e);
+        showNotification?.(e?.message || 'Buy failed', 'error');
+      }
+    };
+  }
+  
   const sb = el('sellBtn');
-  if (sb) sb.onclick = () => sellTokens();
-
+  if (sb) {
+    sb.onclick = async () => {
+      try {
+        await sellTokens();
+      } catch (e) {
+        console.error('[UI] sell click error:', e);
+        showNotification?.(e?.message || 'Sell failed', 'error');
+      }
+    };
+  }
+  
+  // Отключение кнопок если кошелёк не подключен
   const connected = !!window.walletState?.signer;
   ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn']
     .forEach((id) => setDisabled(id, !connected));
