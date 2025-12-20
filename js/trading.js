@@ -474,17 +474,26 @@ function bindUi() {
   if (ms) ms.onclick = () => setMaxSell();
 
   const bb = el('buyBtn');
-  if (bb) bb.onclick = () => { /* будет в Правке 2 */ };
+  if (bb) {
+    bb.onclick = async () => {
+      try {
+        const amount = el('buyAmount')?.value ?? '';
+        console.log('[UI] Buy clicked, amount =', amount);
+        await buyTokens(amount);
+      } catch (e) {
+        console.error('[UI] buy click error:', e);
+        showNotification?.(e?.message || 'Buy failed', 'error');
+      }
+    };
+  }
 
   const sb = el('sellBtn');
   if (sb) sb.onclick = () => sellTokens();
 
-  ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn'].forEach((id) => setDisabled(id, false));
-
-  // Если используете bindTradingEvents, то НЕ нужно одновременно bb.onclick и bindTradingEvents (см. ниже)
-  // bindTradingEvents();
+  const connected = !!window.walletState?.signer;
+  ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn']
+    .forEach((id) => setDisabled(id, !connected));
 }
-
 
  export async function sellTokens() {
   try {
