@@ -20,6 +20,8 @@ import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.es
 import { CONFIG } from './config.js';
 import { showNotification, formatTokenAmount } from './ui.js';
 import { ERC20_ABI } from './abis.js';
+import { buyWithUsdt } from './presale.js';
+
 
 console.log('[TRADING] trading.js loaded, build:', Date.now());
 
