@@ -11,6 +11,10 @@ import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from 
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
 
+const rateBN = await getArubPrice();
+const price = Number(ethers.utils.formatUnits(rateBN, 6)); // 1e6 scale
+// price теперь число (например 1.234567)
+
 /**
  * Обновление глобальной статистики (Vault-only)
  * - ARUB price
