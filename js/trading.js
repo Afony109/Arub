@@ -359,25 +359,18 @@ function bindUi() {
 }
 
 
-  export async function sellTokens() {
+ export async function sellTokens() {
   try {
     if (!user.signer) throw new Error('Wallet not connected');
 
     const raw = getInputValue('sellAmount');
-    if (!raw) throw new Error('Enter ARUB amount');
+    const amountBN = parseTokenAmount(raw, 6); // ROOP = 6
 
-    // validate
-    ethers.utils.parseUnits(raw, DECIMALS_ARUB);
-
-    // TODO: wire your real sell contract call
+    // TODO: реальный sell-контракт
     throw new Error('SELL flow is not wired: provide your sell contract ABI + method');
-
-  } catch (err) {
-    console.group('[TRADING] Sell error');
-    console.log(err);
-    console.groupEnd();
-    showNotification?.(err?.message || 'Sell failed', 'error');
-    throw err;
+  } catch (e) {
+    showNotification?.(e.message || 'Sell failed', 'error');
+    throw e;
   }
 }
 
