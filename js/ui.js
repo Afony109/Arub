@@ -14,18 +14,28 @@ import { CONFIG } from './config.js';
  * @param {string} type - 'success', 'error', 'info', or 'warning'
  * @param {number} duration - Duration in milliseconds
  */
-export function showNotification(message, type = 'info', duration = CONFIG.UI.NOTIFICATION_DURATION) {
+export function showNotification(message, type = 'info', duration) {
     // Remove existing notification if any
     const existing = document.querySelector('.notification');
-    if (existing) {
-        existing.remove();
-    }
+    if (existing) existing.remove();
+
+    // Safe duration: argument -> CONFIG.UI.NOTIFICATION_DURATION -> fallback
+    const safeDuration =
+        (Number.isFinite(duration) ? duration : (CONFIG?.UI?.NOTIFICATION_DURATION ?? 5000));
 
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
 
     document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(400px)';
+
+        setTimeout(() => notification.remove(), 300);
+    }, safeDuration);
+}
 
     // Auto-remove after duration
     setTimeout(() => {
