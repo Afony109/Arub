@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Main Application Entry Point (Vault-only)
  * Initializes modules and manages global state
  * Staking/Faucet removed.
@@ -12,9 +12,10 @@ import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from 
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
 
-const rateBN = await getArubPrice();
-const price = Number(ethers.utils.formatUnits(rateBN, 6)); // 1e6 scale
-// price теперь число (например 1.234567)
+// Address used by wallet dropdown actions
+let selectedAddress = null;
+
+
 
 /**
  * Обновление глобальной статистики (Vault-only)
@@ -178,12 +179,26 @@ logNetworkState('APP').catch((e) => console.warn('[APP] logNetworkState init fai
 const prevOnWalletConnected = window.onWalletConnected;
 
 window.onWalletConnected = async (address, meta) => {
+  // keep dropdown address in sync
+  selectedAddress = address ?? window.walletState?.address ?? null;
+
   try {
     prevOnWalletConnected?.(address, meta);
   } catch (_) {}
 
   await logNetworkState('APP');
 };
+
+const prevOnWalletDisconnected = window.onWalletDisconnected;
+
+window.onWalletDisconnected = async () => {
+  selectedAddress = null;
+
+  try {
+    prevOnWalletDisconnected?.();
+  } catch (_) {}
+};
+
 
 /**
  * Инициализация приложения
@@ -224,7 +239,14 @@ async function initApp() {
   } catch (error) {
     console.error('[APP] ❌ Initialization error:', error);
     showNotification('❌ Помилка ініціалізації додатку', 'error');
-    console.log([] walletState chainId:, chainId ?? '(unknown)');
+
+    const chainId =
+      window.walletState?.chainId ??
+      window.walletState?.provider?.network?.chainId ??
+      '(unknown)';
+
+    console.log('[APP] walletState chainId:', chainId);
+  }
 }
 /**
  * Глобальные функции для HTML-обработчиков (Vault-only)
