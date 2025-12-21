@@ -51,22 +51,33 @@ const user = {
   chainId: null
 };
 
-const PRESALE_ABI_MIN = [
-  "function buyWithUSDT(uint256 amount, bool withBonus) external",
-  "function unlockDeposit() external",
-  "function redeemForUSDT(uint256 arubAmount) external",
-  "function claimDebt() external",
-  "function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)",
-  "function getMySellFeeBps() view returns (uint256)",
-  "function debtUsdtEquivalent(address) view returns (uint256)"
+const ERC20_ABI_MIN = [
+  'function decimals() view returns (uint8)',
+  'function balanceOf(address) view returns (uint256)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function transfer(address to, uint256 amount) returns (bool)',
+  'event Transfer(address indexed from, address indexed to, uint256 value)',
 ];
 
-const ERC20_ABI_MIN = [
-  "function decimals() view returns (uint8)",
-  "function balanceOf(address) view returns (uint256)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function approve(address spender, uint256 amount) returns (bool)"
+const PRESALE_ABI_MIN = [
+  'function buyWithUSDT(uint256 amount, bool withBonus) external',
+  'function unlockDeposit() external',
+  'function redeemForUSDT(uint256 arubAmount) external',
+  'function claimDebt() external',
+  'function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)',
+  'function debtUsdtEquivalent(address) view returns (uint256)',
 ];
+
+function pickEthersMessage(e) {
+  return (
+    e?.reason ||
+    e?.data?.message ||
+    e?.error?.message ||
+    e?.message ||
+    'Transaction failed'
+  );
+}
 
 // Prevent overlapping apply cycles
 let applySeq = 0;
@@ -481,36 +492,18 @@ function explainEthersError(e) {
   };
 }
 
-function pickBestErrorMessage(e) {
-  const x = explainEthersError(e);
 
-  if (x.isUserRejected) return 'Transaction rejected in wallet';
-  return (
-    x.reason ||
-    x.shortMessage ||
-    x.dataMessage ||
-    x.bodyMessage ||
-    x.errorMessage ||
-    x.message ||
-    'Buy failed'
-  );
-}
-
-
-const ERC20_ABI_MIN = [
-  "function decimals() view returns (uint8)",
-  "function balanceOf(address) view returns (uint256)",
-  "function transfer(address to, uint256 amount) returns (bool)",
-  "event Transfer(address indexed from, address indexed to, uint256 value)"
-];
-
-export async function buyTokens(usdtAmount) {
+// Покупка ARUB за USDT через presale
+// withBonus=false => ARUB выдаётся сразу
+// withBonus=true  => ARUB лочится на 90 дней, разблокировка через unlockDeposit()
+export async function buyTokens(usdtAmount, withBonus = false) {
   const ws = window.walletState;
 
   console.log('[TRADING] buyTokens start', {
     address: ws?.address,
     chainId: ws?.chainId,
     input: usdtAmount,
+    withBonus,
   });
 
   if (!ws?.signer || !ws?.address) {
@@ -524,12 +517,10 @@ export async function buyTokens(usdtAmount) {
     return;
   }
 
-  // USDT = 6 decimals (у тебя в проекте так)
-  const usdtDecimals = 6;
-
+  // USDT = 6
   let amountBN;
   try {
-    amountBN = parseTokenAmount(usdtAmount, usdtDecimals);
+    amountBN = parseTokenAmount(usdtAmount, 6);
   } catch (e) {
     showNotification?.(e?.message || 'Invalid amount', 'error');
     return;
@@ -540,47 +531,155 @@ export async function buyTokens(usdtAmount) {
     return;
   }
 
+  const usdt = new ethers.Contract(USDT_ADDRESS, ERC20_ABI_MIN, ws.signer);
+  const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
+
   try {
-    const usdt = new ethers.Contract(CONFIG.USDT_ADDRESS, ERC20_ABI_MIN, ws.signer);
+    // 1) allowance/approve
+    const allowance = await usdt.allowance(ws.address, PRESALE_ADDRESS);
+    if (allowance.lt(amountBN)) {
+      showNotification?.('Approving USDT...', 'success');
+      const txA = await usdt.approve(PRESALE_ADDRESS, amountBN);
+      await txA.wait(1);
+    }
 
-    showNotification?.('Sending USDT...', 'success');
+    // 2) buy
+    showNotification?.(
+      withBonus ? 'Buying with discount (90d lock)...' : 'Buying ARUB...',
+      'success'
+    );
 
-    const tx = await usdt.transfer(CONFIG.VAULT_ADDRESS, amountBN);
+    const tx = await presale.buyWithUSDT(amountBN, withBonus);
     await tx.wait(1);
 
-    showNotification?.('Purchase successful', 'success');
-    console.log('[TRADING] USDT transfer tx:', tx.hash);
+    showNotification?.(
+      withBonus
+        ? 'Payment received. ARUB locked for 90 days.'
+        : 'Purchase successful. ARUB credited.',
+      'success'
+    );
 
+    // опционально обновить UI
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await loadMyLockInfo?.(); } catch (_) {}
+
+    console.log('[TRADING] buy tx:', tx.hash);
     return tx;
   } catch (e) {
-    console.error('[TRADING] buyTokens transfer error:', e);
-
-    const msg =
-      e?.reason ||
-      e?.data?.message ||
-      e?.error?.message ||
-      e?.message ||
-      'Transaction failed';
-
-    showNotification?.(msg, 'error');
+    console.error('[TRADING] buyTokens error:', e);
+    showNotification?.(pickEthersMessage(e), 'error');
     return;
   }
 }
 
-
+// Продажа (redeem) ARUB -> USDT через presale.
+// ВАЖНО: если у пользователя активен lock (покупка со скидкой), контракт будет revert.
 export async function sellTokens(arubAmount) {
+  const ws = window.walletState;
+
+  console.log('[TRADING] sellTokens start', {
+    address: ws?.address,
+    chainId: ws?.chainId,
+    input: arubAmount,
+  });
+
+  if (!ws?.signer || !ws?.address) {
+    showNotification?.('Connect wallet first', 'error');
+    return;
+  }
+
+  const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
+  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
+    showNotification?.('Wrong network. Please switch to Arbitrum', 'error');
+    return;
+  }
+
+  // ARUB = 6 (в вашем проекте)
+  let amountBN;
   try {
-    if (!user.signer) throw new Error('Wallet not connected');
-
-    const raw = String(arubAmount ?? getInputValue('sellAmount'));
-    const amountBN = parseTokenAmount(raw, DECIMALS_ARUB); // ARUB = 6 (default)
-
-    // TODO: реальный sell-контракт
-    console.log('[TRADING] sellTokens prepared amount:', amountBN.toString());
-    throw new Error('SELL flow is not wired: provide your sell contract ABI + method');
+    amountBN = parseTokenAmount(arubAmount, 6);
   } catch (e) {
-    showNotification?.(e?.message || 'Sell failed', 'error');
-    throw e;
+    showNotification?.(e?.message || 'Invalid amount', 'error');
+    return;
+  }
+
+  if (amountBN.isZero?.() === true) {
+    showNotification?.('Enter amount greater than 0', 'error');
+    return;
+  }
+
+  const arub = new ethers.Contract(ARUB_TOKEN_ADDRESS, ERC20_ABI_MIN, ws.signer);
+  const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
+
+  try {
+    // approve ARUB (redeem uses transferFrom in presale.sol)
+    const allowance = await arub.allowance(ws.address, PRESALE_ADDRESS);
+    if (allowance.lt(amountBN)) {
+      showNotification?.('Approving ARUB...', 'success');
+      const txA = await arub.approve(PRESALE_ADDRESS, amountBN);
+      await txA.wait(1);
+    }
+
+    showNotification?.('Redeeming for USDT...', 'success');
+    const tx = await presale.redeemForUSDT(amountBN);
+    await tx.wait(1);
+
+    showNotification?.('Redeem successful.', 'success');
+
+    try { await refreshBalances?.(); } catch (_) {}
+    console.log('[TRADING] redeem tx:', tx.hash);
+    return tx;
+  } catch (e) {
+    console.error('[TRADING] sellTokens error:', e);
+    showNotification?.(pickEthersMessage(e), 'error');
+    return;
+  }
+}
+
+// Разблокировка ARUB после 90 дней (только для discounted режима)
+export async function unlockDeposit() {
+  const ws = window.walletState;
+  if (!ws?.signer) {
+    showNotification?.('Connect wallet first', 'error');
+    return;
+  }
+
+  const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
+
+  try {
+    showNotification?.('Unlocking deposit...', 'success');
+    const tx = await presale.unlockDeposit();
+    await tx.wait(1);
+    showNotification?.('ARUB unlocked and transferred.', 'success');
+
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await loadMyLockInfo?.(); } catch (_) {}
+    return tx;
+  } catch (e) {
+    console.error('[TRADING] unlockDeposit error:', e);
+    showNotification?.(pickEthersMessage(e), 'error');
+    return;
+  }
+}
+
+// Данные лока для UI
+export async function loadMyLockInfo() {
+  const ws = window.walletState;
+  if (!ws?.provider || !ws?.address) return null;
+
+  const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.provider);
+
+  try {
+    const [principalLocked, bonusLocked, unlockTime, remaining] = await presaleRO.getMyLockedInfo();
+    return {
+      principalLocked,
+      bonusLocked,
+      unlockTime: Number(unlockTime?.toString?.() || unlockTime),
+      remaining: Number(remaining?.toString?.() || remaining),
+    };
+  } catch (e) {
+    console.warn('[TRADING] loadMyLockInfo failed:', e?.message || e);
+    return null;
   }
 }
 
