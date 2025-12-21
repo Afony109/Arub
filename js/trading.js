@@ -432,6 +432,54 @@ export async function setMaxSell() {
   if (inp) inp.value = v;
 }
 
+function parseRpcErrorBody(body) {
+  try {
+    const j = JSON.parse(body);
+    // Geth/Erigon style: { error: { message, code, data } }
+    if (j?.error?.message) return j.error.message;
+    // Sometimes: { message: ... }
+    if (j?.message) return j.message;
+  } catch (_) {}
+  return null;
+}
+
+function explainEthersError(e) {
+  const bodyMsg = e?.error?.body ? parseRpcErrorBody(e.error.body) : null;
+
+  return {
+    name: e?.name,
+    code: e?.code,
+    reason: e?.reason,
+    message: e?.message,
+    shortMessage: e?.shortMessage,
+    // nested
+    errorMessage: e?.error?.message,
+    dataMessage: e?.data?.message,
+    bodyMessage: bodyMsg,
+    // common MetaMask/user reject
+    isUserRejected:
+      e?.code === 4001 ||
+      e?.code === 'ACTION_REJECTED' ||
+      /user rejected|user denied|rejected/i.test(e?.message || e?.error?.message || ''),
+  };
+}
+
+function pickBestErrorMessage(e) {
+  const x = explainEthersError(e);
+
+  if (x.isUserRejected) return 'Transaction rejected in wallet';
+  return (
+    x.reason ||
+    x.shortMessage ||
+    x.dataMessage ||
+    x.bodyMessage ||
+    x.errorMessage ||
+    x.message ||
+    'Buy failed'
+  );
+}
+
+
 export async function buyTokens(usdtAmount) {
   console.log('[TRADING] buyTokens start', {
     walletState: {
@@ -502,10 +550,13 @@ confirmations: 1,
         if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
       }
     });
-  } catch (e) {
-    console.error('[TRADING] buyWithUsdt error:', e);
-    showNotification?.(e?.message || 'Buy failed', 'error');
-    return;
+ } catch (e) {
+  const info = explainEthersError(e);
+  console.error('[TRADING] buyWithUsdt error:', info, e);
+
+  showNotification?.(pickBestErrorMessage(e), 'error');
+  return;
+
   }
 }
 
