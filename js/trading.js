@@ -486,9 +486,9 @@ export async function buyTokens(usdtAmount) {
       address: window.walletState?.address,
       hasSigner: !!window.walletState?.signer,
       hasProvider: !!window.walletState?.provider,
-      chainId: window.walletState?.chainId
+      chainId: window.walletState?.chainId,
     },
-    input: usdtAmount
+    input: usdtAmount,
   });
 
   const ws = window.walletState;
@@ -533,32 +533,47 @@ export async function buyTokens(usdtAmount) {
       }
     }
   } catch (e) {
-    console.error('[TRADING] USDT balance check error (non-blocking):', e);
+    console.warn('[TRADING] balance check failed (non-blocking):', e?.message || e, e);
+    // не выходим — продолжаем попытку покупки
   }
 
   try {
     return await buyWithUsdt(amountStr, {
-      
-    signer: ws.signer,
-    provider: ws.provider,
-    address: ws.address,
-confirmations: 1,
+      confirmations: 1,
       onStatus: (stage) => {
         console.log('[TRADING] buyWithUsdt status:', stage);
         if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
         if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
         if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
-      }
+      },
     });
- } catch (e) {
-  const info = explainEthersError(e);
-  console.error('[TRADING] buyWithUsdt error:', info, e);
+  } catch (e) {
+    // Максимально информативный вывод (без зависимости от внешних функций)
+    const msg =
+      e?.reason ||
+      e?.shortMessage ||
+      e?.data?.message ||
+      e?.error?.message ||
+      (typeof e?.message === 'string' ? e.message : '') ||
+      'Buy failed';
 
-  showNotification?.(pickBestErrorMessage(e), 'error');
-  return;
+    console.error('[TRADING] buyWithUsdt error (raw):', e);
+    console.error('[TRADING] buyWithUsdt error details:', {
+      name: e?.name,
+      code: e?.code,
+      reason: e?.reason,
+      message: e?.message,
+      shortMessage: e?.shortMessage,
+      dataMessage: e?.data?.message,
+      errorMessage: e?.error?.message,
+      errorBody: e?.error?.body,
+    });
 
+    showNotification?.(msg, 'error');
+    return;
   }
 }
+
 
 export async function sellTokens(arubAmount) {
   try {
