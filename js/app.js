@@ -234,8 +234,12 @@ async function initApp() {
     setInterval(() => updateGlobalStats(), interval);
 
     console.log('[APP] ✅ Application ready!');
-    console.log('[APP] Network:', CONFIG.NETWORK?.name);
-    console.log('[APP] Chain ID:', CONFIG.NETWORK?.chainIdDecimal);
+
+    // Network info (be tolerant to CONFIG field names)
+    const netName = CONFIG?.NETWORK?.name || CONFIG?.NETWORK?.chainName || CONFIG?.NETWORK?.chainIdName || 'Arbitrum One';
+    const chainId = Number(CONFIG?.NETWORK?.chainIdDecimal ?? CONFIG?.NETWORK?.chainId ?? 42161);
+    console.log('[APP] Network:', netName);
+    console.log('[APP] Chain ID:', chainId);
   } catch (error) {
     console.error('[APP] ❌ Initialization error:', error);
     showNotification('❌ Помилка ініціалізації додатку', 'error');
