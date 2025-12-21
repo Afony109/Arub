@@ -157,25 +157,33 @@ async function logWalletNetwork() {
 async function logNetworkState(tag = 'APP') {
   const ws = window.walletState;
 
-  // Пытаемся взять chainId максимально надежно
+  // Берём chainId максимально надёжно
   let chainId = ws?.chainId;
 
   if (!chainId && ws?.provider?.getNetwork) {
     try {
       const net = await ws.provider.getNetwork();
       chainId = net?.chainId;
-    } catch (_) {  console.log([] walletState chainId:, chainId ?? '(unknown)');
+    } catch (e) {
+      console.warn(`[${tag}] getNetwork() failed:`, e);
+    }
+  }
+
+  console.log(`[${tag}] walletState chainId:`, chainId ?? '(unknown)');
 }
- await logNetworkState('APP');
-}
+
+// Один раз: при загрузке (если хочешь)
+logNetworkState('APP').catch((e) => console.warn('[APP] logNetworkState init failed:', e));
 
 const prevOnWalletConnected = window.onWalletConnected;
 
 window.onWalletConnected = async (address, meta) => {
-  try { prevOnWalletConnected?.(address, meta); } catch (_) {}
+  try {
+    prevOnWalletConnected?.(address, meta);
+  } catch (_) {}
+
   await logNetworkState('APP');
 };
-
 
 /**
  * Инициализация приложения
