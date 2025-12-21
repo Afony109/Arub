@@ -480,74 +480,75 @@ function pickBestErrorMessage(e) {
 }
 
 
+const ERC20_ABI_MIN = [
+  "function decimals() view returns (uint8)",
+  "function balanceOf(address) view returns (uint256)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "event Transfer(address indexed from, address indexed to, uint256 value)"
+];
+
 export async function buyTokens(usdtAmount) {
+  const ws = window.walletState;
+
   console.log('[TRADING] buyTokens start', {
-    address: window.walletState?.address,
-    chainId: window.walletState?.chainId,
+    address: ws?.address,
+    chainId: ws?.chainId,
     input: usdtAmount,
   });
 
-  const ws = window.walletState;
   if (!ws?.signer || !ws?.address) {
     showNotification?.('Connect wallet first', 'error');
     return;
   }
 
-  // network guard
   const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
-  if (ws.chainId && Number(ws.chainId) !== expectedChainId) {
-    showNotification?.(`Wrong network. Please switch to Arbitrum`, 'error');
+  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
+    showNotification?.('Wrong network. Please switch to Arbitrum', 'error');
     return;
   }
 
+  // USDT = 6 decimals (у тебя в проекте так)
   const usdtDecimals = 6;
-  let amountBN;
 
+  let amountBN;
   try {
     amountBN = parseTokenAmount(usdtAmount, usdtDecimals);
-  } catch {
-    showNotification?.('Invalid amount', 'error');
+  } catch (e) {
+    showNotification?.(e?.message || 'Invalid amount', 'error');
     return;
   }
 
-  if (amountBN.isZero()) {
+  if (amountBN.isZero?.() === true) {
     showNotification?.('Enter amount greater than 0', 'error');
     return;
   }
 
   try {
-    const usdt = new ethers.Contract(
-      CONFIG.USDT_ADDRESS,
-      ERC20_ABI,
-      ws.signer
-    );
+    const usdt = new ethers.Contract(CONFIG.USDT_ADDRESS, ERC20_ABI_MIN, ws.signer);
 
     showNotification?.('Sending USDT...', 'success');
 
-    const tx = await usdt.transfer(
-      CONFIG.VAULT_ADDRESS,
-      amountBN
-    );
-
+    const tx = await usdt.transfer(CONFIG.VAULT_ADDRESS, amountBN);
     await tx.wait(1);
 
     showNotification?.('Purchase successful', 'success');
+    console.log('[TRADING] USDT transfer tx:', tx.hash);
 
-    console.log('[TRADING] USDT transferred to vault:', tx.hash);
     return tx;
   } catch (e) {
     console.error('[TRADING] buyTokens transfer error:', e);
 
     const msg =
       e?.reason ||
+      e?.data?.message ||
       e?.error?.message ||
       e?.message ||
       'Transaction failed';
 
     showNotification?.(msg, 'error');
+    return;
   }
 }
-
 
 
 export async function sellTokens(arubAmount) {
