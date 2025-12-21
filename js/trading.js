@@ -1,4 +1,4 @@
-﻿/**
+/**
  * trading.js — Event-driven trading UI module (race-free)
  *
  * Key principles:
@@ -21,7 +21,15 @@ import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.es
 import { CONFIG } from './config.js';
 import { showNotification, formatTokenAmount } from './ui.js';
 import { ERC20_ABI } from './abis.js';
-import { buyWithUsdt } from './presale.js';
+
+// -----------------------------
+// Addresses (presale + token proxies)
+// -----------------------------
+// Keep defaults here as a safety net; prefer setting these in config.js.
+const PRESALE_ADDRESS = CONFIG?.PRESALE_ADDRESS || '0x44960eDa62860Fb54C143f742122619c25a129d1';
+const ARUB_TOKEN_ADDRESS = CONFIG?.ARUB_TOKEN_ADDRESS || CONFIG?.TOKEN_ADDRESS || '0x161296CD7F742220f727e1B4Ccc02cAEc71Ed2C6';
+const USDT_ADDRESS = CONFIG?.USDT_ADDRESS || '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
+
 
 console.log('[TRADING] trading.js loaded, build:', Date.now());
 
@@ -85,6 +93,108 @@ let applySeq = 0;
 // -----------------------------
 // DOM helpers
 // -----------------------------
+
+// -----------------------------
+// Buy mode + lock UI helpers
+// -----------------------------
+function getBuyMode() {
+  const v = document.querySelector('input[name="buyMode"]:checked')?.value;
+  return v === 'discount' ? 'discount' : 'instant';
+}
+
+function formatJerusalemDate(unixSeconds) {
+  const n = Number(unixSeconds || 0);
+  if (!n) return '—';
+  const d = new Date(n * 1000);
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(d);
+}
+
+function formatRemaining(seconds) {
+  const s = Math.max(0, Math.floor(Number(seconds || 0)));
+  const days = Math.floor(s / 86400);
+  const hours = Math.floor((s % 86400) / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+let lockRefreshTimer = null;
+
+async function refreshLockPanel() {
+  const panel = el('lockPanel');
+  if (!panel) return;
+
+  // hide if not connected
+  if (!user.address) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const info = await loadMyLockInfo();
+  if (!info) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const principal = info.principalLocked;
+  const bonus = info.bonusLocked;
+
+  const hasLock =
+    (principal?.gt && principal.gt(0)) ||
+    (bonus?.gt && bonus.gt(0));
+
+  if (!hasLock) {
+    panel.style.display = 'none';
+    // allow sell if no lock
+    setDisabled('sellBtn', false);
+    return;
+  }
+
+  panel.style.display = '';
+
+  setText('lockedPrincipal', formatTokenAmount(principal, 6, 6));
+  setText('lockedBonus', formatTokenAmount(bonus, 6, 6));
+  setText('unlockDate', formatJerusalemDate(info.unlockTime));
+  setText('unlockRemaining', formatRemaining(info.remaining));
+
+  const canUnlock = Number(info.remaining) <= 0 && Number(info.unlockTime) > 0;
+
+  const unlockBtn = el('unlockBtn');
+  if (unlockBtn) {
+    unlockBtn.style.display = canUnlock ? '' : 'none';
+    unlockBtn.onclick = async () => {
+      await unlockDeposit();
+      await refreshBalances();
+    await refreshLockPanel();
+    startLockAutoRefresh();
+      await refreshLockPanel();
+    };
+  }
+
+  // Contract prohibits redeem while lock active; avoid user-facing revert.
+  setDisabled('sellBtn', !canUnlock);
+}
+
+function startLockAutoRefresh() {
+  if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+  lockRefreshTimer = setInterval(() => {
+    refreshLockPanel().catch(() => {});
+  }, 30_000);
+}
+
+function stopLockAutoRefresh() {
+  if (lockRefreshTimer) clearInterval(lockRefreshTimer);
+  lockRefreshTimer = null;
+}
+
 function el(id) { return document.getElementById(id); }
 
 function setText(id, v) {
@@ -145,7 +255,18 @@ function renderTradingUI() {
       <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
         <h3 style="margin:0 0 10px 0;">Купівля</h3>
 
-        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+        
+        <div style="display:flex; flex-direction:column; gap:6px; margin:8px 0 10px 0; font-size:14px; opacity:0.95;">
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="buyMode" value="instant" checked>
+            <span>Buy ARUB (Instant)</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="buyMode" value="discount">
+            <span>Buy ARUB (Discount, 90 days lock)</span>
+          </label>
+        </div>
+<div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
           <input id="buyAmount" type="number" inputmode="decimal" placeholder="USDT amount"
                  style="flex:1; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
           <button id="maxBuyBtn" type="button"
@@ -161,6 +282,15 @@ function renderTradingUI() {
 
         <div style="margin-top:10px; font-size:14px; opacity:0.9;">
           USDT balance: <span id="usdtBalance">—</span>
+        </div>
+
+        <div id="lockPanel" style="display:none; margin-top:12px; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.18); font-size:14px;">
+          <div style="font-weight:600; margin-bottom:6px;">Lock status</div>
+          <div>Locked principal: <span id="lockedPrincipal">—</span> ARUB</div>
+          <div>Locked bonus: <span id="lockedBonus">—</span> ARUB</div>
+          <div>Unlock date: <span id="unlockDate">—</span></div>
+          <div>Remaining: <span id="unlockRemaining">—</span></div>
+          <button id="unlockBtn" type="button" style="display:none; margin-top:10px; width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer;">Unlock</button>
         </div>
       </div>
 
@@ -243,7 +373,7 @@ function initReadOnly() {
   if (!rpc) throw new Error('CONFIG.NETWORK.rpcUrls[0] missing');
 
   const roProvider = new ethers.providers.JsonRpcProvider(rpc);
-  tokenRO = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, roProvider);
+  tokenRO = new ethers.Contract(CONFIG?.TOKEN_ADDRESS, ERC20_ABI, roProvider);
   usdtRO  = new ethers.Contract(CONFIG.USDT_ADDRESS,  ERC20_ABI, roProvider);
 
   // Sync decimals asynchronously
@@ -265,7 +395,7 @@ function initWithSigner() {
 
   if (!user.signer) return;
 
-  tokenRW = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, user.signer);
+  tokenRW = new ethers.Contract(CONFIG?.TOKEN_ADDRESS, ERC20_ABI, user.signer);
   usdtRW  = new ethers.Contract(CONFIG.USDT_ADDRESS,  ERC20_ABI, user.signer);
 
   (async () => {
@@ -314,7 +444,8 @@ function bindUiOncePerRender() {
     buyBtn.onclick = async () => {
       try {
         const amount = el('buyAmount')?.value ?? '';
-        await buyTokens(amount);
+        const withBonus = getBuyMode() === 'discount';
+        await buyTokens(amount, withBonus);
       } catch (e) {
         console.error('[UI] buy click error:', e);
         showNotification?.(e?.message || 'Buy failed', 'error');
@@ -398,6 +529,7 @@ async function applyWalletState(reason = 'unknown') {
     usdtRW = null;
 
     renderLocked();
+    stopLockAutoRefresh();
     return;
   }
 
@@ -413,6 +545,8 @@ async function applyWalletState(reason = 'unknown') {
   // If signer isn't ready yet, keep controls disabled and wait a bit more
   if (!hasSigner) {
     setControlsEnabled(false);
+    // Hide lock panel until we have a stable provider/address
+    try { const lp = el('lockPanel'); if (lp) lp.style.display = 'none'; } catch (_) {}
 
     const ws2 = await awaitWalletReady({ requireSigner: true });
     if (seq !== applySeq) return;
@@ -431,6 +565,8 @@ async function applyWalletState(reason = 'unknown') {
   if (readyForTrading) {
     initWithSigner();
     await refreshBalances();
+    await refreshLockPanel();
+    startLockAutoRefresh();
   }
 
   console.log('[TRADING] applyWalletState:', {
@@ -469,6 +605,14 @@ function parseRpcErrorBody(body) {
     if (j?.message) return j.message;
   } catch (_) {}
   return null;
+}
+
+function isUserRejectedTx(e) {
+  return (
+    e?.code === 4001 ||
+    e?.code === 'ACTION_REJECTED' ||
+    /user rejected|user denied|rejected/i.test((e?.message || '') + ' ' + (e?.error?.message || ''))
+  );
 }
 
 function explainEthersError(e) {
@@ -567,6 +711,10 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     return tx;
   } catch (e) {
     console.error('[TRADING] buyTokens error:', e);
+    if (isUserRejectedTx(e)) {
+      showNotification?.('Transaction rejected in wallet', 'error');
+      return;
+    }
     showNotification?.(pickEthersMessage(e), 'error');
     return;
   }
@@ -631,6 +779,10 @@ export async function sellTokens(arubAmount) {
     return tx;
   } catch (e) {
     console.error('[TRADING] sellTokens error:', e);
+    if (isUserRejectedTx(e)) {
+      showNotification?.('Transaction rejected in wallet', 'error');
+      return;
+    }
     showNotification?.(pickEthersMessage(e), 'error');
     return;
   }
@@ -657,6 +809,10 @@ export async function unlockDeposit() {
     return tx;
   } catch (e) {
     console.error('[TRADING] unlockDeposit error:', e);
+    if (isUserRejectedTx(e)) {
+      showNotification?.('Transaction rejected in wallet', 'error');
+      return;
+    }
     showNotification?.(pickEthersMessage(e), 'error');
     return;
   }
@@ -667,7 +823,9 @@ export async function loadMyLockInfo() {
   const ws = window.walletState;
   if (!ws?.provider || !ws?.address) return null;
 
-  const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.provider);
+  const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
+  const roProvider = rpc ? new ethers.providers.JsonRpcProvider(rpc) : ws.provider;
+  const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, roProvider);
 
   try {
     const [principalLocked, bonusLocked, unlockTime, remaining] = await presaleRO.getMyLockedInfo();
