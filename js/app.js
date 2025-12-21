@@ -38,16 +38,13 @@ async function updateGlobalStats() {
       if (el) el.textContent = val;
     };
 
-    // 1) ARUB price
     setText('arubPriceValue', Number.isFinite(arubPrice) ? arubPrice.toFixed(2) : '—');
 
-    // 2) Total supply (если где-то показывается)
     const supplyEl = document.getElementById('totalSupplyArub');
     if (supplyEl) {
       supplyEl.textContent = formatTokenAmount(totalSupply) + ' ARUB';
     }
 
-    // 3) Если в верстке остались staking-поля — заполняем "—"
     [
       'dashHeroStakers', 'dashHeroTvl', 'totalTvl', 'currentApy', 'totalStakers',
       'globalTvl', 'globalApy', 'globalStakers', 'globalArubPrice'
@@ -67,7 +64,6 @@ async function updateGlobalStats() {
       if (el) el.textContent = '—';
     });
 
-    // безопасно: не используем необъявленный chainId
     const chainId =
       window.walletState?.chainId ??
       window.walletState?.provider?.network?.chainId ??
@@ -77,14 +73,6 @@ async function updateGlobalStats() {
   }
 }
 
-    // мягкий фолбек
-    const ids = ['arubPriceValue', 'totalSupplyArub', 'dashHeroStakers', 'dashHeroTvl', 'totalTvl', 'currentApy', 'totalStakers'];
-    ids.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = '—';
-    });
-    console.log('[APP] walletState:', window.walletState, 'chainId:', chainId ?? '(unknown)');
-}
 /**
  * Анимации при скролле (если блоки есть на странице)
  */
