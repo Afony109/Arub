@@ -51,6 +51,23 @@ const user = {
   chainId: null
 };
 
+const PRESALE_ABI_MIN = [
+  "function buyWithUSDT(uint256 amount, bool withBonus) external",
+  "function unlockDeposit() external",
+  "function redeemForUSDT(uint256 arubAmount) external",
+  "function claimDebt() external",
+  "function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)",
+  "function getMySellFeeBps() view returns (uint256)",
+  "function debtUsdtEquivalent(address) view returns (uint256)"
+];
+
+const ERC20_ABI_MIN = [
+  "function decimals() view returns (uint8)",
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)"
+];
+
 // Prevent overlapping apply cycles
 let applySeq = 0;
 
