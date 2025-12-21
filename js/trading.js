@@ -1,19 +1,20 @@
 /**
- * trading.js — Trading UI module (fix: locked placeholder replaced by real UI)
+ * trading.js — Event-driven trading UI module (race-free)
+ *
+ * Key principles:
+ * - UI state is driven ONLY by wallet events + initial sync.
+ * - render/bind never disables UI based on instantaneous reads.
+ * - A small readiness barrier awaits a consistent walletState after events.
  *
  * Assumptions:
- * - ARUB (token) decimals = 6
- * - USDT decimals = 6
- * - CONFIG.TOKEN_ADDRESS and CONFIG.USDT_ADDRESS exist
- * - wallet.js dispatches events:
+ * - ARUB decimals default = 6
+ * - USDT decimals default = 6
+ * - wallet.js sets window.walletState = { provider, signer, address, chainId, ... }
+ * - wallet.js dispatches:
  *    - wallet:connected (CustomEvent detail: { address })
  *    - wallet:disconnected (Event)
- *
- * This module:
- * - Renders LOCK placeholder when wallet is not connected
- * - Renders Trading UI when wallet is connected
- * - Refreshes balances via read-only provider
- * - Ensures UI is clickable/enabled
+ *   Optionally compat:
+ *    - walletConnected / walletDisconnected / walletChanged
  */
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
@@ -22,35 +23,36 @@ import { showNotification, formatTokenAmount } from './ui.js';
 import { ERC20_ABI } from './abis.js';
 import { buyWithUsdt } from './presale.js';
 
-
 console.log('[TRADING] trading.js loaded, build:', Date.now());
 
 // -----------------------------
-// State
+// Module state
 // -----------------------------
 let inited = false;
 let listenersBound = false;
 
+// Read-only contracts
 let tokenRO = null;
 let usdtRO = null;
 
+// Read-write contracts
 let tokenRW = null;
 let usdtRW = null;
 
+// Decimals (fallbacks)
+let DECIMALS_ARUB = 6;
+let DECIMALS_USDT = 6;
+
+// User connection snapshot used by this module
 const user = {
   address: null,
   provider: null,
-  signer: null
+  signer: null,
+  chainId: null
 };
 
-let DECIMALS_ARUB = 6; // fallback until read from token
-let DECIMALS_USDT = 6;  // fallback until read from USDT
-
-export const PRESALE_ABI = [
-  "function buy(uint256 usdtAmount) external",
-  "function getTokenAmount(uint256 usdtAmount) view returns (uint256)",
-  "function paused() view returns (bool)"
-];
+// Prevent overlapping apply cycles
+let applySeq = 0;
 
 // -----------------------------
 // DOM helpers
@@ -73,12 +75,22 @@ function getInputValue(id) {
 }
 
 function getTradingRoot() {
-  // Your page uses: <section id="trading"> ... <div id="tradingInterface">
   return el('trading') || el('tradingInterface') || null;
 }
 
 function getTradingHost() {
   return el('tradingInterface');
+}
+
+function setControlsEnabled(enabled) {
+  ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn', 'buyAmount', 'sellAmount']
+    .forEach((id) => {
+      const node = el(id);
+      if (!node) return;
+      if ('disabled' in node) node.disabled = !enabled;
+      node.style.pointerEvents = enabled ? 'auto' : 'none';
+      node.style.opacity = enabled ? '' : '0.75';
+    });
 }
 
 // -----------------------------
@@ -129,7 +141,7 @@ function renderTradingUI() {
 
         <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
           <input id="sellAmount" type="number" inputmode="decimal" placeholder="ARUB amount"
-                 style="flex:1; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
+                 style="flex:1; padding:12px; border-radius:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
           <button id="maxSellBtn" type="button"
                   style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
             MAX
@@ -148,8 +160,7 @@ function renderTradingUI() {
     </div>
   `;
 
-  // After re-render, bind handlers again
-  bindUi();
+  bindUiOncePerRender();
   hardUnlock();
 }
 
@@ -164,7 +175,6 @@ function hardUnlock() {
   root.style.filter = 'none';
   root.style.opacity = '';
 
-  // Enable all controls within trading section
   const controls = root.querySelectorAll('button, input, select, textarea');
   controls.forEach((c) => {
     try { c.disabled = false; } catch (_) {}
@@ -174,7 +184,6 @@ function hardUnlock() {
     c.style.pointerEvents = 'auto';
   });
 
-  // Hide any “lock overlays” inside trading section if present
   const candidates = root.querySelectorAll([
     '#tradingLock',
     '#tradingLocked',
@@ -201,88 +210,24 @@ function hardUnlock() {
 // -----------------------------
 // Contracts init
 // -----------------------------
-function bindTradingEvents() {
-  // BUY
-  const buyBtn = document.getElementById('buyBtn');
-  if (buyBtn) {
-    const fresh = buyBtn.cloneNode(true);
-    buyBtn.parentNode.replaceChild(fresh, buyBtn);
-
-    fresh.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('[TRADING] buyBtn click');
-      await buyTokens();
-    });
-  }
-
-  // SELL
-  const sellBtn = document.getElementById('sellBtn');
-  if (sellBtn) {
-    const fresh = sellBtn.cloneNode(true);
-    sellBtn.parentNode.replaceChild(fresh, sellBtn);
-
-    fresh.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('[TRADING] sellBtn click');
-      await sellTokens();
-    });
-  }
-
-  // MAX buttons
-  const maxBuyBtn = document.getElementById('maxBuyBtn');
-  if (maxBuyBtn) {
-    const fresh = maxBuyBtn.cloneNode(true);
-    maxBuyBtn.parentNode.replaceChild(fresh, maxBuyBtn);
-
-    fresh.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setMaxBuy();
-    });
-  }
-
-  const maxSellBtn = document.getElementById('maxSellBtn');
-  if (maxSellBtn) {
-    const fresh = maxSellBtn.cloneNode(true);
-    maxSellBtn.parentNode.replaceChild(fresh, maxSellBtn);
-
-    fresh.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setMaxSell();
-    });
-  }
-}
-
 function initReadOnly() {
   const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
   if (!rpc) throw new Error('CONFIG.NETWORK.rpcUrls[0] missing');
 
   const roProvider = new ethers.providers.JsonRpcProvider(rpc);
-
   tokenRO = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, roProvider);
   usdtRO  = new ethers.Contract(CONFIG.USDT_ADDRESS,  ERC20_ABI, roProvider);
 
-  // Sync decimals asynchronously (do not block init)
+  // Sync decimals asynchronously
   (async () => {
-    try {
-      if (tokenRO?.decimals) DECIMALS_ARUB = await tokenRO.decimals();
-    } catch (e) {
-      console.warn('[TRADING] tokenRO.decimals() failed, using fallback', e);
-    }
+    try { if (tokenRO?.decimals) DECIMALS_ARUB = Number(await tokenRO.decimals()); }
+    catch (e) { console.warn('[TRADING] tokenRO.decimals() failed, using fallback', e); }
 
-    try {
-      if (usdtRO?.decimals) DECIMALS_USDT = await usdtRO.decimals();
-    } catch (e) {
-      console.warn('[TRADING] usdtRO.decimals() failed, using fallback', e);
-    }
+    try { if (usdtRO?.decimals) DECIMALS_USDT = Number(await usdtRO.decimals()); }
+    catch (e) { console.warn('[TRADING] usdtRO.decimals() failed, using fallback', e); }
 
     console.log('[TRADING] decimals synced (RO):', { DECIMALS_ARUB, DECIMALS_USDT });
-
-    // Optional: refresh UI/balances after decimals are known
-    try { refreshBalances?.(); } catch (_) {}
+    try { await refreshBalances(); } catch (_) {}
   })();
 }
 
@@ -295,16 +240,9 @@ function initWithSigner() {
   tokenRW = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, user.signer);
   usdtRW  = new ethers.Contract(CONFIG.USDT_ADDRESS,  ERC20_ABI, user.signer);
 
-  // Optional: keep decimals in sync even if RO failed
   (async () => {
-    try {
-      if (tokenRW?.decimals) DECIMALS_ARUB = await tokenRW.decimals();
-    } catch (_) {}
-
-    try {
-      if (usdtRW?.decimals) DECIMALS_USDT = await usdtRW.decimals();
-    } catch (_) {}
-
+    try { if (tokenRW?.decimals) DECIMALS_ARUB = Number(await tokenRW.decimals()); } catch (_) {}
+    try { if (usdtRW?.decimals) DECIMALS_USDT = Number(await usdtRW.decimals()); } catch (_) {}
     console.log('[TRADING] decimals synced (RW):', { DECIMALS_ARUB, DECIMALS_USDT });
   })();
 }
@@ -329,140 +267,23 @@ async function refreshBalances() {
 }
 
 // -----------------------------
-// UI bindings (must be re-run after renderTradingUI)
+// Amount helpers
 // -----------------------------
+function parseTokenAmount(value, decimals) {
+  const v = String(value ?? '').trim();
+  if (!v || v === '.' || v === ',') throw new Error('Enter amount');
+  const normalized = v.replace(',', '.');
+  return ethers.utils.parseUnits(normalized, Number(decimals));
+}
 
 // -----------------------------
-// Actions
+// UI bindings (per render; no wallet logic here)
 // -----------------------------
-  export async function setMaxBuy() {
-  try {
-    if (!user.address || !usdtRO) throw new Error('Wallet not connected');
-    const bal = await usdtRO.balanceOf(user.address);
-    const v = ethers.utils.formatUnits(bal, DECIMALS_USDT);
-    const inp = el('buyAmount');
-    if (inp) inp.value = v;
-  } catch (e) {
-    showNotification?.(e?.message || 'Cannot set max buy', 'error');
-  }
-}
-
- export async function setMaxSell() {
-  try {
-    if (!user.address || !tokenRO) throw new Error('Wallet not connected');
-    const bal = await tokenRO.balanceOf(user.address);
-    const v = ethers.utils.formatUnits(bal, DECIMALS_ARUB);
-    const inp = el('sellAmount');
-    if (inp) inp.value = v;
-  } catch (e) {
-    showNotification?.(e?.message || 'Cannot set max sell', 'error');
-  }
-}
-
- // trading.js
-
-export async function buyTokens(usdtAmount) {
-  console.log('[TRADING] buyTokens start', {
-    hasWalletState: !!window.walletState,
-    address: window.walletState?.address,
-    hasSigner: !!window.walletState?.signer,
-    hasProvider: !!window.walletState?.provider,
-    chainId: window.walletState?.chainId,
-    input: usdtAmount,
-  });
-
-  const ws = window.walletState;
-
-  // Guard: wallet must be connected with signer
-  if (!ws?.signer || !ws?.address) {
-    showNotification?.('Connect wallet first', 'error');
-    console.warn('[TRADING] buyTokens blocked: no signer/address');
-    return;
-  }
-
-  // Guard: correct network
-  const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
-  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
-    showNotification?.(`Wrong network. Please switch to chainId ${expectedChainId}`, 'error');
-    console.warn('[TRADING] buyTokens blocked: wrong chain', {
-      got: ws.chainId,
-      expected: expectedChainId
-    });
-    return;
-  }
-
-  // Parse amount (USDT decimals from RW-sync, fallback 6)
-  const usdtDecimals = Number(DECIMALS_USDT ?? 6);
-
-  let amountBN;
-  try {
-    amountBN = parseTokenAmount(usdtAmount, usdtDecimals);
-  } catch (e) {
-    console.error('[TRADING] parseTokenAmount error:', e);
-    showNotification?.(e?.message || 'Invalid amount', 'error');
-    return;
-  }
-
-  if (!amountBN || (amountBN.isZero?.() === true)) {
-    showNotification?.('Enter amount greater than 0', 'error');
-    console.warn('[TRADING] buyTokens blocked: amount is zero');
-    return;
-  }
-
-  const amountStr = formatTokenAmount(amountBN, usdtDecimals, usdtDecimals);
-
-  // Optional balance check via usdtRW (do NOT block on RPC errors)
-  // Optional balance check via usdtRW (do NOT block on RPC errors)
-try {
-  if (usdtRW?.balanceOf) {
-    const balBN = await usdtRW.balanceOf(ws.address);
-
-    if (balBN.lt(amountBN)) {
-      const balStr = formatTokenAmount(balBN, usdtDecimals, usdtDecimals);
-      showNotification?.(`Insufficient USDT balance. Available: ${balStr}`, 'error');
-      console.warn('[TRADING] buyTokens blocked: insufficient balance', {
-        amount: amountStr,
-        balance: balStr,
-      });
-      return;
-    }
-  } else {
-    console.warn('[TRADING] usdtRW not ready; skipping USDT balance check');
-  }
-} catch (e) {
-  console.error('[TRADING] USDT balance check error (non-blocking):', e);
-}
-
-  console.log('[TRADING] buyTokens amount normalized', {
-    amountBN: amountBN.toString?.() || String(amountBN),
-    amountStr,
-    usdtDecimals,
-  });
-
-  try {
-    return await buyWithUsdt(amountStr, {
-      confirmations: 1,
-      onStatus: (stage) => {
-        console.log('[TRADING] buyWithUsdt status:', stage);
-
-        if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
-        if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
-        if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
-      },
-    });
-  } catch (e) {
-    console.error('[TRADING] buyWithUsdt error:', e);
-    showNotification?.(e?.message || 'Buy failed', 'error');
-    return;
-  }
-}
-
-
-
-function bindUi() {
-  const bb = el('buyBtn');
-  if (bb) {
-    bb.onclick = async () => {
+function bindUiOncePerRender() {
+  // BUY
+  const buyBtn = el('buyBtn');
+  if (buyBtn) {
+    buyBtn.onclick = async () => {
       try {
         const amount = el('buyAmount')?.value ?? '';
         await buyTokens(amount);
@@ -472,42 +293,236 @@ function bindUi() {
       }
     };
   }
-  
-  const sb = el('sellBtn');
-  if (sb) {
-    sb.onclick = async () => {
+
+  // SELL
+  const sellBtn = el('sellBtn');
+  if (sellBtn) {
+    sellBtn.onclick = async () => {
       try {
-        await sellTokens();
+        const amount = el('sellAmount')?.value ?? '';
+        await sellTokens(amount);
       } catch (e) {
         console.error('[UI] sell click error:', e);
         showNotification?.(e?.message || 'Sell failed', 'error');
       }
     };
   }
-  
-  // Отключение кнопок если кошелёк не подключен
-  const connected = !!window.walletState?.signer;
-  ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn']
-    .forEach((id) => setDisabled(id, !connected));
+
+  // MAX buttons
+  const maxBuyBtn = el('maxBuyBtn');
+  if (maxBuyBtn) {
+    maxBuyBtn.onclick = async () => {
+      try { await setMaxBuy(); }
+      catch (e) { showNotification?.(e?.message || 'Cannot set max buy', 'error'); }
+    };
+  }
+
+  const maxSellBtn = el('maxSellBtn');
+  if (maxSellBtn) {
+    maxSellBtn.onclick = async () => {
+      try { await setMaxSell(); }
+      catch (e) { showNotification?.(e?.message || 'Cannot set max sell', 'error'); }
+    };
+  }
 }
 
- export async function sellTokens() {
+// -----------------------------
+// Wallet readiness barrier (prevents race conditions)
+// -----------------------------
+async function awaitWalletReady({ requireSigner = true, timeoutMs = 1200, stepMs = 50 } = {}) {
+  const started = Date.now();
+
+  while (Date.now() - started < timeoutMs) {
+    const ws = window.walletState;
+    const okAddress = !!ws?.address;
+    const okSigner = !requireSigner || !!ws?.signer;
+    if (okAddress && okSigner) return ws;
+
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+
+  return window.walletState || null;
+}
+
+// -----------------------------
+// Core event-driven state apply
+// -----------------------------
+async function applyWalletState(reason = 'unknown') {
+  const seq = ++applySeq;
+
+  // Snapshot after (small) readiness wait to avoid “event fired, signer not yet set”
+  const ws = await awaitWalletReady({ requireSigner: false });
+
+  // If another apply started, abort this one
+  if (seq !== applySeq) return;
+
+  const hasAddress = !!ws?.address;
+  const hasSigner = !!ws?.signer;
+
+  if (!hasAddress) {
+    // Disconnected
+    user.address = null;
+    user.provider = null;
+    user.signer = null;
+    user.chainId = null;
+
+    tokenRW = null;
+    usdtRW = null;
+
+    renderLocked();
+    return;
+  }
+
+  // Connected (address known). For trading we need signer to enable actions.
+  user.address = ws.address;
+  user.provider = ws.provider || null;
+  user.signer = ws.signer || null;
+  user.chainId = ws.chainId ?? null;
+
+  // Render UI (always) and then enable/disable based on signer readiness
+  renderTradingUI();
+
+  // If signer isn't ready yet, keep controls disabled and wait a bit more
+  if (!hasSigner) {
+    setControlsEnabled(false);
+
+    const ws2 = await awaitWalletReady({ requireSigner: true });
+    if (seq !== applySeq) return;
+
+    if (ws2?.signer) {
+      user.signer = ws2.signer;
+      user.provider = ws2.provider || user.provider;
+      user.chainId = ws2.chainId ?? user.chainId;
+    }
+  }
+
+  // Now decide final enablement
+  const readyForTrading = !!user.signer;
+  setControlsEnabled(readyForTrading);
+
+  if (readyForTrading) {
+    initWithSigner();
+    await refreshBalances();
+  }
+
+  console.log('[TRADING] applyWalletState:', {
+    reason,
+    address: user.address,
+    hasSigner: !!user.signer,
+    chainId: user.chainId
+  });
+}
+
+// -----------------------------
+// Actions
+// -----------------------------
+export async function setMaxBuy() {
+  if (!user.address || !usdtRO) throw new Error('Wallet not connected');
+  const bal = await usdtRO.balanceOf(user.address);
+  const v = ethers.utils.formatUnits(bal, DECIMALS_USDT);
+  const inp = el('buyAmount');
+  if (inp) inp.value = v;
+}
+
+export async function setMaxSell() {
+  if (!user.address || !tokenRO) throw new Error('Wallet not connected');
+  const bal = await tokenRO.balanceOf(user.address);
+  const v = ethers.utils.formatUnits(bal, DECIMALS_ARUB);
+  const inp = el('sellAmount');
+  if (inp) inp.value = v;
+}
+
+export async function buyTokens(usdtAmount) {
+  console.log('[TRADING] buyTokens start', {
+    walletState: {
+      address: window.walletState?.address,
+      hasSigner: !!window.walletState?.signer,
+      hasProvider: !!window.walletState?.provider,
+      chainId: window.walletState?.chainId
+    },
+    input: usdtAmount
+  });
+
+  const ws = window.walletState;
+
+  if (!ws?.signer || !ws?.address) {
+    showNotification?.('Connect wallet first', 'error');
+    return;
+  }
+
+  // network guard (soft; if chainId missing we do not block)
+  const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
+  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
+    showNotification?.(`Wrong network. Please switch to chainId ${expectedChainId}`, 'error');
+    return;
+  }
+
+  const usdtDecimals = Number(DECIMALS_USDT ?? 6);
+
+  let amountBN;
+  try {
+    amountBN = parseTokenAmount(usdtAmount, usdtDecimals);
+  } catch (e) {
+    showNotification?.(e?.message || 'Invalid amount', 'error');
+    return;
+  }
+
+  if (amountBN.isZero?.() === true) {
+    showNotification?.('Enter amount greater than 0', 'error');
+    return;
+  }
+
+  const amountStr = formatTokenAmount(amountBN, usdtDecimals, usdtDecimals);
+
+  // Optional balance check (non-blocking)
+  try {
+    if (usdtRW?.balanceOf) {
+      const balBN = await usdtRW.balanceOf(ws.address);
+      if (balBN.lt(amountBN)) {
+        const balStr = formatTokenAmount(balBN, usdtDecimals, usdtDecimals);
+        showNotification?.(`Insufficient USDT balance. Available: ${balStr}`, 'error');
+        return;
+      }
+    }
+  } catch (e) {
+    console.error('[TRADING] USDT balance check error (non-blocking):', e);
+  }
+
+  try {
+    return await buyWithUsdt(amountStr, {
+      confirmations: 1,
+      onStatus: (stage) => {
+        console.log('[TRADING] buyWithUsdt status:', stage);
+        if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
+        if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
+        if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
+      }
+    });
+  } catch (e) {
+    console.error('[TRADING] buyWithUsdt error:', e);
+    showNotification?.(e?.message || 'Buy failed', 'error');
+    return;
+  }
+}
+
+export async function sellTokens(arubAmount) {
   try {
     if (!user.signer) throw new Error('Wallet not connected');
 
-    const raw = getInputValue('sellAmount');
-    const amountBN = parseTokenAmount(raw, 6); // ROOP = 6
+    const raw = String(arubAmount ?? getInputValue('sellAmount'));
+    const amountBN = parseTokenAmount(raw, DECIMALS_ARUB); // ARUB = 6 (default)
 
     // TODO: реальный sell-контракт
+    console.log('[TRADING] sellTokens prepared amount:', amountBN.toString());
     throw new Error('SELL flow is not wired: provide your sell contract ABI + method');
   } catch (e) {
-    showNotification?.(e.message || 'Sell failed', 'error');
+    showNotification?.(e?.message || 'Sell failed', 'error');
     throw e;
   }
 }
 
 // -----------------------------
-// Public init
+// Public init (event-driven)
 // -----------------------------
 export function initTradingModule() {
   if (inited) return true;
@@ -521,53 +536,38 @@ export function initTradingModule() {
     console.error('[TRADING] initReadOnly failed:', e);
   }
 
-  const ws = window.walletState || null;
-
-  if (ws?.address && ws?.signer) {
-    user.address = ws.address;
-    user.provider = ws.provider || null;
-    user.signer = ws.signer || null;
-
-    initWithSigner();
-    renderTradingUI();
-    refreshBalances();
-
-    console.log('[TRADING] wallet already connected -> UI rendered');
-  } else {
-    renderLocked();
-    console.log('[TRADING] no wallet -> locked UI rendered');
-  }
+  // Initial render based on current state (no assumptions; apply handles both)
+  applyWalletState('init').catch((e) => console.error('[TRADING] applyWalletState(init) error:', e));
 
   if (!listenersBound) {
     listenersBound = true;
 
-    window.addEventListener('wallet:connected', (ev) => {
-      const addr = ev?.detail?.address || window.walletState?.address || null;
-
-      user.address = addr;
-      user.provider = window.walletState?.provider || null;
-      user.signer = window.walletState?.signer || null;
-
-      initWithSigner();
-      renderTradingUI();
-      refreshBalances();
-
-      console.log('[TRADING] wallet connected -> UI rendered/unlocked');
+    // Primary events
+    window.addEventListener('wallet:connected', () => {
+      applyWalletState('wallet:connected').catch((e) => console.error('[TRADING] apply wallet:connected error:', e));
     });
 
     window.addEventListener('wallet:disconnected', () => {
-      user.address = null;
-      user.provider = null;
-      user.signer = null;
+      // invalidate in-flight apply cycles and render locked immediately
+      applySeq++;
+      applyWalletState('wallet:disconnected').catch((e) => console.error('[TRADING] apply wallet:disconnected error:', e));
+    });
 
-      tokenRW = null;
-      usdtRW = null;
+    // Compat events (if wallet.js emits them)
+    window.addEventListener('walletConnected', () => {
+      applyWalletState('walletConnected').catch((e) => console.error('[TRADING] apply walletConnected error:', e));
+    });
 
-      renderLocked();
-      console.log('[TRADING] wallet disconnected -> locked UI rendered');
+    window.addEventListener('walletDisconnected', () => {
+      applySeq++;
+      applyWalletState('walletDisconnected').catch((e) => console.error('[TRADING] apply walletDisconnected error:', e));
+    });
+
+    // Generic “something changed” event: accountsChanged/chainChanged mapped by wallet.js
+    window.addEventListener('walletChanged', () => {
+      applyWalletState('walletChanged').catch((e) => console.error('[TRADING] apply walletChanged error:', e));
     });
   }
-} 
- 
 
-
+  return true;
+}
