@@ -1,4 +1,4 @@
-/**
+﻿/**
  * wallet.js — Multi-wallet connection layer (EIP-6963 + WalletConnect) — HARDENED
  * Fixes:
  *  - Prevents double eth_requestAccounts calls (-32002 "already pending")
@@ -36,6 +36,7 @@ let ethersProvider = null;
 let signer = null;
 let currentAddress = null;
 
+let currentChainId = null;
 // Prevent double connect
 let isConnecting = false;
 
@@ -453,9 +454,11 @@ let chainId = null;
 try {
   const hex = await selectedEip1193.request({ method: 'eth_chainId' });
   chainId = parseInt(hex, 16);
+currentChainId = chainId;
 } catch (_) {
   const net = await ethersProvider.getNetwork();
   chainId = net?.chainId ?? null;
+currentChainId = chainId;
 }
 
 window.walletState = {
@@ -549,3 +552,4 @@ export async function addTokenToWallet(symbol) {
     throw err;
   }
 }
+

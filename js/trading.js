@@ -1,4 +1,4 @@
-/**
+﻿/**
  * trading.js — Event-driven trading UI module (race-free)
  *
  * Key principles:
@@ -490,7 +490,11 @@ export async function buyTokens(usdtAmount) {
 
   try {
     return await buyWithUsdt(amountStr, {
-      confirmations: 1,
+      
+    signer: ws.signer,
+    provider: ws.provider,
+    address: ws.address,
+confirmations: 1,
       onStatus: (stage) => {
         console.log('[TRADING] buyWithUsdt status:', stage);
         if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
@@ -571,3 +575,4 @@ export function initTradingModule() {
 
   return true;
 }
+

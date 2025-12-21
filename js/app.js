@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Main Application Entry Point (Vault-only)
  * Initializes modules and manages global state
  * Staking/Faucet removed.
@@ -61,9 +61,8 @@ async function updateGlobalStats() {
       const el = document.getElementById(id);
       if (el) el.textContent = '—';
     });
-  }
+    console.log([] walletState chainId:, chainId ?? '(unknown)');
 }
-
 /**
  * Анимации при скролле (если блоки есть на странице)
  */
@@ -132,9 +131,8 @@ async function logWalletNetwork() {
     console.log('[APP] Chain ID:', net?.chainId);
   } catch (e) {
     console.error('[APP] logWalletNetwork error:', e);
-  }
+    console.log([] walletState chainId:, chainId ?? '(unknown)');
 }
-
 async function logNetworkState(tag = 'APP') {
   const ws = window.walletState;
 
@@ -145,8 +143,8 @@ async function logNetworkState(tag = 'APP') {
     try {
       const net = await ws.provider.getNetwork();
       chainId = net?.chainId;
-    } catch (_) {}
-  }
+    } catch (_) {  console.log([] walletState chainId:, chainId ?? '(unknown)');
+}
  await logNetworkState('APP');
 }
 
@@ -197,9 +195,8 @@ async function initApp() {
   } catch (error) {
     console.error('[APP] ❌ Initialization error:', error);
     showNotification('❌ Помилка ініціалізації додатку', 'error');
-  }
+    console.log([] walletState chainId:, chainId ?? '(unknown)');
 }
-
 /**
  * Глобальные функции для HTML-обработчиков (Vault-only)
  */
@@ -274,3 +271,4 @@ export { initApp };
 
 window.connectWallet = connectWallet;
 window.disconnectWallet = disconnectWallet;
+
