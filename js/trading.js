@@ -482,97 +482,72 @@ function pickBestErrorMessage(e) {
 
 export async function buyTokens(usdtAmount) {
   console.log('[TRADING] buyTokens start', {
-    walletState: {
-      address: window.walletState?.address,
-      hasSigner: !!window.walletState?.signer,
-      hasProvider: !!window.walletState?.provider,
-      chainId: window.walletState?.chainId,
-    },
+    address: window.walletState?.address,
+    chainId: window.walletState?.chainId,
     input: usdtAmount,
   });
 
   const ws = window.walletState;
-
   if (!ws?.signer || !ws?.address) {
     showNotification?.('Connect wallet first', 'error');
     return;
   }
 
-  // network guard (soft; if chainId missing we do not block)
+  // network guard
   const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
-  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
-    showNotification?.(`Wrong network. Please switch to chainId ${expectedChainId}`, 'error');
+  if (ws.chainId && Number(ws.chainId) !== expectedChainId) {
+    showNotification?.(`Wrong network. Please switch to Arbitrum`, 'error');
     return;
   }
 
-  const usdtDecimals = Number(DECIMALS_USDT ?? 6);
-
+  const usdtDecimals = 6;
   let amountBN;
+
   try {
     amountBN = parseTokenAmount(usdtAmount, usdtDecimals);
-  } catch (e) {
-    showNotification?.(e?.message || 'Invalid amount', 'error');
+  } catch {
+    showNotification?.('Invalid amount', 'error');
     return;
   }
 
-  if (amountBN.isZero?.() === true) {
+  if (amountBN.isZero()) {
     showNotification?.('Enter amount greater than 0', 'error');
     return;
   }
 
-  const amountStr = formatTokenAmount(amountBN, usdtDecimals, usdtDecimals);
-
-  // Optional balance check (non-blocking)
   try {
-    if (usdtRW?.balanceOf) {
-      const balBN = await usdtRW.balanceOf(ws.address);
-      if (balBN.lt(amountBN)) {
-        const balStr = formatTokenAmount(balBN, usdtDecimals, usdtDecimals);
-        showNotification?.(`Insufficient USDT balance. Available: ${balStr}`, 'error');
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn('[TRADING] balance check failed (non-blocking):', e?.message || e, e);
-    // не выходим — продолжаем попытку покупки
-  }
+    const usdt = new ethers.Contract(
+      CONFIG.USDT_ADDRESS,
+      ERC20_ABI,
+      ws.signer
+    );
 
-  try {
-    return await buyWithUsdt(amountStr, {
-      confirmations: 1,
-      onStatus: (stage) => {
-        console.log('[TRADING] buyWithUsdt status:', stage);
-        if (stage === 'approve_submitted') showNotification?.('Approving USDT...', 'success');
-        if (stage === 'buy_submitted') showNotification?.('Submitting buy tx...', 'success');
-        if (stage === 'buy_confirmed') showNotification?.('Purchase successful', 'success');
-      },
-    });
+    showNotification?.('Sending USDT...', 'success');
+
+    const tx = await usdt.transfer(
+      CONFIG.VAULT_ADDRESS,
+      amountBN
+    );
+
+    await tx.wait(1);
+
+    showNotification?.('Purchase successful', 'success');
+
+    console.log('[TRADING] USDT transferred to vault:', tx.hash);
+    return tx;
   } catch (e) {
-    // Максимально информативный вывод (без зависимости от внешних функций)
+    console.error('[TRADING] buyTokens transfer error:', e);
+
     const msg =
       e?.reason ||
-      e?.shortMessage ||
-      e?.data?.message ||
       e?.error?.message ||
-      (typeof e?.message === 'string' ? e.message : '') ||
-      'Buy failed';
-
-    console.error('[TRADING] buyWithUsdt error (raw):', e);
-    console.error('[TRADING] buyWithUsdt error details:', {
-      name: e?.name,
-      code: e?.code,
-      reason: e?.reason,
-      message: e?.message,
-      shortMessage: e?.shortMessage,
-      dataMessage: e?.data?.message,
-      errorMessage: e?.error?.message,
-      errorBody: e?.error?.body,
-    });
+      e?.message ||
+      'Transaction failed';
 
     showNotification?.(msg, 'error');
-    return;
   }
 }
+
 
 
 export async function sellTokens(arubAmount) {
