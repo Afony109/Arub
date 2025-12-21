@@ -15,6 +15,19 @@ import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contr
 // Address used by wallet dropdown actions
 let selectedAddress = null;
 
+const { price, isFallback, isStale, updatedAtSec } = await getArubPrice();
+
+setText('arubPriceValue', formatPrice(price, 6)); // ты хотел убирать нули, но до 6 знаков
+
+// (опционально) небольшая метка статуса рядом с ценой
+// например: "stale" или "cached"
+const status = isFallback ? 'cached' : (isStale ? 'stale' : '');
+setText('arubPriceStatus', status);
+
+// лог — всегда сырьё и статус
+console.log('[APP] Oracle price:', { price, isFallback, isStale, updatedAtSec });
+
+
 
 
 /**
