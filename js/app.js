@@ -48,12 +48,34 @@ async function updateGlobalStats() {
     }
 
     // 3) Если в верстке остались staking-поля — заполняем "—"
-    ['dashHeroStakers', 'dashHeroTvl', 'totalTvl', 'currentApy', 'totalStakers', 'globalTvl', 'globalApy', 'globalStakers', 'globalArubPrice']
-      .forEach((id) => setText(id, '—'));
+    [
+      'dashHeroStakers', 'dashHeroTvl', 'totalTvl', 'currentApy', 'totalStakers',
+      'globalTvl', 'globalApy', 'globalStakers', 'globalArubPrice'
+    ].forEach((id) => setText(id, '—'));
 
     console.log('[APP] ✅ Stats updated (vault-only)');
   } catch (error) {
     console.error('[APP] ❌ Error updating stats (vault-only):', error);
+
+    const ids = [
+      'arubPriceValue', 'totalSupplyArub', 'dashHeroStakers',
+      'dashHeroTvl', 'totalTvl', 'currentApy', 'totalStakers'
+    ];
+
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '—';
+    });
+
+    // безопасно: не используем необъявленный chainId
+    const chainId =
+      window.walletState?.chainId ??
+      window.walletState?.provider?.network?.chainId ??
+      '(unknown)';
+
+    console.log('[APP] walletState chainId:', chainId);
+  }
+}
 
     // мягкий фолбек
     const ids = ['arubPriceValue', 'totalSupplyArub', 'dashHeroStakers', 'dashHeroTvl', 'totalTvl', 'currentApy', 'totalStakers'];
@@ -61,7 +83,7 @@ async function updateGlobalStats() {
       const el = document.getElementById(id);
       if (el) el.textContent = '—';
     });
-    console.log([] walletState chainId:, chainId ?? '(unknown)');
+    console.log('[APP] walletState:', window.walletState, 'chainId:', chainId ?? '(unknown)');
 }
 /**
  * Анимации при скролле (если блоки есть на странице)
