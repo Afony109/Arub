@@ -297,77 +297,38 @@ async function initApp() {
  */
 async function connectWalletUI() {
   try {
+    // Пытаемся подключиться без параметров (если ваш wallet.js умеет auto-connect)
     await connectWallet();
     return;
   } catch (e) {
-    if (e?.message !== 'WALLET_SELECTION_REQUIRED') throw e;
+    const msg = (e && (e.message || e.reason)) ? String(e.message || e.reason) : String(e);
+
+    // Если это не "не выбран кошелёк" — пробрасываем наверх
+    if (msg !== 'WALLET_SELECTION_REQUIRED') throw e;
 
     const wallets = await getAvailableWalletsAsync(250);
 
-    if (!wallets?.length) {
+    if (!Array.isArray(wallets) || wallets.length === 0) {
       showNotification?.('No wallets found', 'error');
       return;
     }
 
-    // TEMP: prompt selector (replace with your modal later)
-    const menu = wallets.map((w, i) => `${i}: ${w.name} [${w.type}]`).join('\n');
-    const pick = prompt(`Выберите кошелек:\n${menu}`, '0');
-    const idx = Number(pick);
+    const menu = wallets
+      .map((w, i) => `${i}: ${w.name} [${w.type}]`)
+      .join('\n');
 
-    if (!Number.isInteger(idx) || idx < 0 || idx >= wallets.length) return;
+    const pick = prompt(`Выберите кошелек:\n${menu}`, '0');
+    if (pick === null) return; // Cancel -> ничего не делаем
+
+    const idx = Number(pick.trim());
+    if (!Number.isFinite(idx) || !Number.isInteger(idx) || idx < 0 || idx >= wallets.length) {
+      showNotification?.('Неверный выбор кошелька', 'error');
+      return;
+    }
 
     await connectWallet(wallets[idx]);
   }
 }
-
-window.buyTokens = buyTokens;
-window.sellTokens = sellTokens;
-window.setMaxBuy = setMaxBuy;
-window.setMaxSell = setMaxSell;
-
-window.scrollToSection = (sectionId) => {
-  const element = document.getElementById(sectionId);
-  if (element) element.scrollIntoView({ behavior: 'smooth' });
-};
-
-
-/**
- * Глобальные функции для HTML-обработчиков (Vault-only)
- */
-
-// Wallet connect (с селектором)
-window.connectWalletUI = connectWalletUI;
-
-// Wallet utils
-window.addTokenToWallet = addTokenToWallet;
-window.addArubToMetaMask = () => addTokenToWallet('ARUB');
-window.addUsdtToMetaMask = () => addTokenToWallet('USDT');
-window.copyTokenAddress = () =>
-  copyToClipboard(CONFIG.TOKEN_ADDRESS, '✅ Адресу токена скопійовано!');
-
-// Trading
-window.buyTokens = buyTokens;
-window.sellTokens = sellTokens;
-window.setMaxBuy = setMaxBuy;
-window.setMaxSell = setMaxSell;
-
-// UI helpers
-window.scrollToSection = (sectionId) => {
-  const element = document.getElementById(sectionId);
-  if (element) element.scrollIntoView({ behavior: 'smooth' });
-};
-
-
-// Старт
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp);
-} else {
-  initApp();
-}
-
-console.log('[APP] Version: 2.0.0 (Vault-only)');
-console.log('[APP] Build: ' + new Date().toISOString());
-
 
 
 
