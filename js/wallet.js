@@ -263,29 +263,6 @@ function setupEip6963Discovery() {
 // ------------------------------------------------------------
 // Wallet list helpers (wait for async EIP-6963 announcements)
 // ------------------------------------------------------------
-export function getAvailableWallets() {
-  const eip = Array.from(discoveredWallets.values()).map(w => ({
-    type: 'eip6963',
-    id: w.rdns,
-    name: w.name || w.rdns,
-    icon: w.icon || null
-  }));
-
-  const wc = [{
-    type: 'walletconnect',
-    id: 'walletconnect',
-    name: 'WalletConnect',
-    icon: null
-  }];
-
-  return [...eip, ...wc];
-}
-
-export async function getAvailableWalletsAsync(waitMs = 250) {
-  setupEip6963Discovery();
-  await new Promise(r => setTimeout(r, waitMs));
-  return getAvailableWallets();
-}
 
 
 function pickEip6963ProviderByRdns(rdns) {
@@ -339,6 +316,7 @@ async function waitForWalletsIfNeeded(maxWaitMs = 1200) {
   }
 }
 
+
 // -----------------------------
 // Public API
 // -----------------------------
@@ -364,6 +342,13 @@ export function getAvailableWallets() {
 
   return list;
 }
+
+export async function getAvailableWalletsAsync(waitMs = 250) {
+  setupEip6963Discovery();
+  await new Promise(r => setTimeout(r, waitMs));
+  return getAvailableWallets();
+}
+
 
 export async function connectWallet(chosen = null) {
   assertConfig();
