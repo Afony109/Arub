@@ -18,6 +18,14 @@ document.documentElement.classList.add('dark');
 // Address used by wallet dropdown actions
 let selectedAddress = null;
 
+window.addEventListener('error', (ev) => {
+  console.error('[GLOBAL] window.error:', ev?.message, ev?.error || ev);
+});
+
+window.addEventListener('unhandledrejection', (ev) => {
+  console.error('[GLOBAL] unhandledrejection:', ev?.reason || ev);
+});
+
 /**
  * Обновление глобальной статистики (Vault-only)
  * - ARUB price
