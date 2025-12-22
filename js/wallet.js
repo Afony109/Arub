@@ -106,42 +106,6 @@ function dispatchDisconnected() {
   window.dispatchEvent(new Event('wallet:disconnected'));
 }
 
-// Возвращает список для UI-селектора
-// Формат chosen, который потом можно передать в connectWallet(chosen)
-export function getAvailableWallets() {
-  // EIP-6963
-  const eip = Array.from(discoveredWallets.values()).map(w => ({
-    type: 'eip6963',
-    id: w.rdns,            // IMPORTANT: это ключ для discoveredWallets.get(id)
-    name: w.name || w.rdns,
-    icon: w.icon || null
-  }));
-
-  // WalletConnect (если поддерживаете)
-  const wc = [{
-    type: 'walletconnect',
-    id: 'walletconnect',
-    name: 'WalletConnect',
-    icon: null
-  }];
-
-  // Legacy injected fallback (если у вас есть getLegacyInjectedEntries)
-  let legacy = [];
-  try {
-    if (typeof getLegacyInjectedEntries === 'function') {
-      legacy = (getLegacyInjectedEntries() || []).map(x => ({
-        type: 'injected-fallback',
-        id: x.id,
-        name: x.name || 'Injected',
-        icon: x.icon || null
-      }));
-    }
-  } catch (_) {}
-
-  return [...eip, ...wc, ...legacy];
-}
-
-
 // -----------------------------
 // Provider request helper (NEVER uses window.ethereum)
 // -----------------------------
@@ -300,7 +264,6 @@ function setupEip6963Discovery() {
 // Wallet list helpers (wait for async EIP-6963 announcements)
 // ------------------------------------------------------------
 export function getAvailableWallets() {
-  // EIP-6963 wallets
   const eip = Array.from(discoveredWallets.values()).map(w => ({
     type: 'eip6963',
     id: w.rdns,
@@ -308,7 +271,6 @@ export function getAvailableWallets() {
     icon: w.icon || null
   }));
 
-  // WalletConnect option (always show if you support it)
   const wc = [{
     type: 'walletconnect',
     id: 'walletconnect',
@@ -316,23 +278,9 @@ export function getAvailableWallets() {
     icon: null
   }];
 
-  // Legacy injected fallback (only if you already have getLegacyInjectedEntries)
-  let legacy = [];
-  try {
-    if (typeof getLegacyInjectedEntries === 'function') {
-      legacy = (getLegacyInjectedEntries() || []).map(x => ({
-        type: 'injected-fallback',
-        id: x.id,
-        name: x.name || 'Injected',
-        icon: x.icon || null
-      }));
-    }
-  } catch (_) {}
-
-  return [...eip, ...wc, ...legacy];
+  return [...eip, ...wc];
 }
 
-// Async helper: give the browser a short tick to dispatch announceProvider events
 export async function getAvailableWalletsAsync(waitMs = 250) {
   setupEip6963Discovery();
   await new Promise(r => setTimeout(r, waitMs));
