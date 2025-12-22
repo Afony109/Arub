@@ -129,3 +129,11 @@ export function showLoading(element, message = 'Завантаження...') {
     </div>
   `;
 }
+
+// -----------------------------
+// Oracle price formatting
+// -----------------------------
+export function formatPrice(value, maxDecimals = (CONFIG?.ORACLE_DECIMALS ?? 6)) {
+  if (!Number.isFinite(value)) return '—';
+  return value.toFixed(maxDecimals).replace(/\.?0+$/, '');
+}
