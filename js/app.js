@@ -12,6 +12,9 @@ import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from 
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount, formatPrice } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
 
+// Theme bootstrap: ensure dark theme class is present
+document.documentElement.classList.add('dark');
+
 // Address used by wallet dropdown actions
 let selectedAddress = null;
 
