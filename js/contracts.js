@@ -123,10 +123,8 @@ export async function getArubPrice() {
     // Здесь предполагается, что далее в проекте ты приводишь rate к Number "price".
     // Если rate уже Number — оставим как есть. Если BigNumber — приведи по твоим decimals.
     // ВНИМАНИЕ: точное преобразование зависит от того, что возвращает ваш oracle.
-    const price =
-      typeof rate === 'number'
-        ? rate
-        : (rate?.toString ? Number(rate.toString()) : Number(rate));
+    const ORACLE_DECIMALS = Number(CONFIG?.ORACLE_DECIMALS ?? 6);
+    const price = Number(ethers.utils.formatUnits(rate, ORACLE_DECIMALS));
 
     // Если price не конечный — считаем это ошибкой чтения
     if (!Number.isFinite(price)) throw new Error('Oracle returned non-finite price');
