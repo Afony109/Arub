@@ -261,19 +261,31 @@ async function connectWalletUI() {
       return;
     }
 
-    // 2) Если кошелёк один — подключаем сразу
+    // 2) Если кошелёк один — можно подключить сразу (или попросить подтверждение)
     if (wallets.length === 1) {
+      // Вариант A: подключаем сразу
       await connectWallet(wallets[0]);
       return;
+
+      // Вариант B (строже): просим подтверждение
+      // const ok = confirm(`Подключить кошелёк: ${wallets[0].name}?`);
+      // if (!ok) return;
+      // await connectWallet(wallets[0]);
+      // return;
     }
 
-    // 3) Если несколько — предлагаем выбор
-    const menu = wallets.map((w, i) => `${i}: ${w.name} [${w.type}]`).join('\n');
-    const pick = prompt(`Выберите кошелек:\n${menu}`, '0');
+    // 3) Если несколько — предлагаем выбор (БЕЗ дефолта "0")
+    const menu = wallets
+      .map((w, i) => `${i + 1}: ${w.name} [${w.type}]`)
+      .join('\n');
+
+    const pick = prompt(`Выберите кошелек (1-${wallets.length}):\n${menu}`, '');
     if (pick === null) return;
 
-    const idx = Number(String(pick).trim());
-    if (!Number.isInteger(idx) || idx < 0 || idx >= wallets.length) {
+    const n = Number(String(pick).trim());
+    const idx = n - 1;
+
+    if (!Number.isInteger(n) || idx < 0 || idx >= wallets.length) {
       showNotification?.('Неверный выбор кошелька', 'error');
       return;
     }
@@ -284,6 +296,7 @@ async function connectWalletUI() {
     showNotification?.(e?.message || 'Wallet connection failed', 'error');
   }
 }
+
 // Старт приложения
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
