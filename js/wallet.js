@@ -106,6 +106,42 @@ function dispatchDisconnected() {
   window.dispatchEvent(new Event('wallet:disconnected'));
 }
 
+// Возвращает список для UI-селектора
+// Формат chosen, который потом можно передать в connectWallet(chosen)
+export function getAvailableWallets() {
+  // EIP-6963
+  const eip = Array.from(discoveredWallets.values()).map(w => ({
+    type: 'eip6963',
+    id: w.rdns,            // IMPORTANT: это ключ для discoveredWallets.get(id)
+    name: w.name || w.rdns,
+    icon: w.icon || null
+  }));
+
+  // WalletConnect (если поддерживаете)
+  const wc = [{
+    type: 'walletconnect',
+    id: 'walletconnect',
+    name: 'WalletConnect',
+    icon: null
+  }];
+
+  // Legacy injected fallback (если у вас есть getLegacyInjectedEntries)
+  let legacy = [];
+  try {
+    if (typeof getLegacyInjectedEntries === 'function') {
+      legacy = (getLegacyInjectedEntries() || []).map(x => ({
+        type: 'injected-fallback',
+        id: x.id,
+        name: x.name || 'Injected',
+        icon: x.icon || null
+      }));
+    }
+  } catch (_) {}
+
+  return [...eip, ...wc, ...legacy];
+}
+
+
 // -----------------------------
 // Provider request helper (NEVER uses window.ethereum)
 // -----------------------------
@@ -260,6 +296,61 @@ function setupEip6963Discovery() {
   window.dispatchEvent(new Event('eip6963:requestProvider'));
 }
 
+// ------------------------------------------------------------
+// Wallet list helpers (wait for async EIP-6963 announcements)
+// ------------------------------------------------------------
+export function getAvailableWallets() {
+  // EIP-6963 wallets
+  const eip = Array.from(discoveredWallets.values()).map(w => ({
+    type: 'eip6963',
+    id: w.rdns,
+    name: w.name || w.rdns,
+    icon: w.icon || null
+  }));
+
+  // WalletConnect option (always show if you support it)
+  const wc = [{
+    type: 'walletconnect',
+    id: 'walletconnect',
+    name: 'WalletConnect',
+    icon: null
+  }];
+
+  // Legacy injected fallback (only if you already have getLegacyInjectedEntries)
+  let legacy = [];
+  try {
+    if (typeof getLegacyInjectedEntries === 'function') {
+      legacy = (getLegacyInjectedEntries() || []).map(x => ({
+        type: 'injected-fallback',
+        id: x.id,
+        name: x.name || 'Injected',
+        icon: x.icon || null
+      }));
+    }
+  } catch (_) {}
+
+  return [...eip, ...wc, ...legacy];
+}
+
+// Async helper: give the browser a short tick to dispatch announceProvider events
+export async function getAvailableWalletsAsync(waitMs = 250) {
+  setupEip6963Discovery();
+  await new Promise(r => setTimeout(r, waitMs));
+  return getAvailableWallets();
+}
+
+
+function pickEip6963ProviderByRdns(rdns) {
+  const w = discoveredWallets.get(rdns);
+  if (!w?.provider) throw new Error('Selected wallet provider not found: ' + rdns);
+  return { provider: w.provider, meta: { type: 'eip6963', name: w.name, rdns: w.rdns } };
+}
+
+function mustRequireSelection(options = {}) {
+  // selection считается заданным, если явно указан тип/rdns
+  return !options?.type && !options?.rdns;
+}
+
 /**
  * Legacy injected fallback (ONLY for listing/selection)
  */
@@ -326,54 +417,44 @@ export function getAvailableWallets() {
   return list;
 }
 
-export async function connectWallet(options = {}) {
-  const { walletId = null, autoSelect = true } = options;
+export async function connectWallet(chosen = null) {
+  assertConfig();
+  setupEip6963Discovery();
 
-  if (isConnecting) {
-    // If already connected — just return address; if in-flight — avoid second requestAccounts
-    if (currentAddress) return currentAddress;
-    throw new Error('Wallet connection is already in progress. Please wait.');
-  }
-
+  if (isConnecting) return;
   isConnecting = true;
 
   try {
-    assertConfig();
+    // ------------------------------------------------------------
+    // 1) REQUIRE SELECTION if multiple wallets are available
+    // ------------------------------------------------------------
+    const hasChoice = !!(chosen && chosen.type);
 
-    // If already connected, reuse
-    if (currentAddress && selectedEip1193) {
-      publishGlobals();
-      dispatchConnected();
-      return currentAddress;
+    if (!hasChoice) {
+      const eipCount = discoveredWallets.size;
+
+      if (eipCount > 1) {
+        // UI must open selector and call connectWallet(chosen)
+        throw new Error('WALLET_SELECTION_REQUIRED');
+      }
+
+      if (eipCount === 1) {
+        const only = Array.from(discoveredWallets.values())[0];
+        chosen = { type: 'eip6963', id: only.rdns, name: only.name };
+      } else {
+        // No EIP-6963 wallets announced yet; UI may offer WalletConnect
+        throw new Error('NO_WALLETS_FOUND');
+      }
     }
 
-    await waitForWalletsIfNeeded(1200);
-
-    const wallets = getAvailableWallets();
-    if (!wallets.length) throw new Error('No wallets found (no injected wallets and WalletConnect not configured)');
-
-    let chosen = null;
-
-    if (walletId) {
-      chosen = wallets.find(w => w.id === walletId) || null;
-    } else if (autoSelect) {
-      const injected = wallets.filter(w => w.type !== 'walletconnect');
-      if (injected.length === 1) chosen = injected[0];
-    }
-
-    if (!chosen) {
-      const lines = wallets.map((w, i) => `${i + 1}) ${w.name} [${w.type}]`).join('\n');
-      const pick = window.prompt(`Select wallet:\n${lines}\n\nEnter number:`);
-      const idx = Number(pick) - 1;
-      if (!Number.isFinite(idx) || idx < 0 || idx >= wallets.length) throw new Error('Wallet selection cancelled');
-      chosen = wallets[idx];
-    }
-
+    // ------------------------------------------------------------
+    // 2) Select provider strictly by chosen (NO silent auto-fallback)
+    // ------------------------------------------------------------
     if (chosen.type === 'eip6963') {
       const w = discoveredWallets.get(chosen.id);
-      if (!w?.provider) throw new Error('Selected wallet provider not available');
+      if (!w?.provider) throw new Error('EIP-6963 provider not found');
 
-      setSelectedProvider(w.provider, { type: 'eip6963', name: chosen.name, rdns: chosen.id });
+      setSelectedProvider(w.provider, { type: 'eip6963', name: chosen.name || w.name, rdns: chosen.id });
 
       const accounts = await requestAccountsSafe();
       if (!accounts?.[0]) throw new Error('No accounts returned');
@@ -423,60 +504,62 @@ export async function connectWallet(options = {}) {
       if (!accounts?.[0]) throw new Error('No accounts returned');
 
       currentAddress = ethers.utils.getAddress(accounts[0]);
-          await ensureNetwork();
-  } else {
-    throw new Error(`Unsupported wallet type: ${chosen.type}`);
-  }
+      await ensureNetwork();
+    }
 
-  // ВАЖНО: после того как selectedEip1193 определён и сеть обеспечена
-  ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
-  signer = ethersProvider.getSigner();
+    else {
+      throw new Error(`Unsupported wallet type: ${chosen.type}`);
+    }
 
-  // Получаем chainId и фиксируем walletState (чтобы не было undefined)
-  const network = await ethersProvider.getNetwork();
+    // ------------------------------------------------------------
+    // 3) Finalize signer/provider + pin chainId + publish globals
+    // ------------------------------------------------------------
+    ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+    signer = ethersProvider.getSigner();
 
-  window.walletState = {
-    address: currentAddress,
-    signer,
-    provider: ethersProvider,
-    chainId: network.chainId
-  };
+    // Base walletState
+    let network = null;
+    try { network = await ethersProvider.getNetwork(); } catch (_) {}
 
-  console.log('[WALLET] connected', {
-    address: currentAddress,
-    chainId: network.chainId
-  });
-
-  publishGlobals();
+    window.walletState = {
+      address: currentAddress,
+      signer,
+      provider: ethersProvider,
+      chainId: network?.chainId ?? null
+    };
 
     // Fix: ensure chainId is present in walletState
-let chainId = null;
-try {
-  const hex = await selectedEip1193.request({ method: 'eth_chainId' });
-  chainId = parseInt(hex, 16);
-currentChainId = chainId;
-} catch (_) {
-  const net = await ethersProvider.getNetwork();
-  chainId = net?.chainId ?? null;
-currentChainId = chainId;
-}
+    let chainId = null;
+    try {
+      const hex = await selectedEip1193.request({ method: 'eth_chainId' });
+      chainId = parseInt(hex, 16);
+      currentChainId = chainId;
+    } catch (_) {
+      const net = await ethersProvider.getNetwork();
+      chainId = net?.chainId ?? null;
+      currentChainId = chainId;
+    }
 
-window.walletState = {
-  ...(window.walletState || {}),
-  chainId
-};
+    window.walletState = {
+      ...(window.walletState || {}),
+      chainId
+    };
 
-console.log('[WALLET] chainId pinned to walletState:', window.walletState.chainId);
+    console.log('[WALLET] connected', {
+      address: currentAddress,
+      chainId: window.walletState.chainId
+    });
 
+    publishGlobals();
 
-  showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
+    showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
 
-  if (typeof window.onWalletConnected === 'function') {
-    window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
-  }
-  dispatchConnected();
+    if (typeof window.onWalletConnected === 'function') {
+      window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
+    }
+    dispatchConnected();
 
-  return currentAddress;
+    return currentAddress;
 
   } catch (err) {
     console.error('[WALLET] connectWallet error:', err);
