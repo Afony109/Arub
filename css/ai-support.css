@@ -259,6 +259,24 @@
 /* FAQ Styles */
 .faq-arrow {
     transition: transform var(--transition-normal);
+   /* ================================
+   Page ready visibility control
+   ================================ */
+
+body {
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+
+body.page-ready {
+  opacity: 1;
+}
+
+body:not(.page-ready) * {
+  animation: none !important;
+  transition: none !important;
+}
+
 }
 
 .faq-content {
