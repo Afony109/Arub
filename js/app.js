@@ -10,6 +10,11 @@ import { initWalletModule, addTokenToWallet, connectWallet, disconnectWallet } f
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
+import { connectWalletUI } from './wallet.js';
+window.connectWalletUI = connectWalletUI;
+
+// чтобы старый onclick="connectWallet()" продолжал работать:
+window.connectWallet = connectWalletUI;
 
 window.CONFIG = window.CONFIG || CONFIG;
 
@@ -228,8 +233,16 @@ async function initApp() {
     setInterval(() => updateGlobalStats(), interval);
 
     console.log('[APP] ✅ Application ready!');
-    console.log('[APP] Network:', CONFIG?.NETWORK?.name);
-    console.log('[APP] Chain ID:', CONFIG?.NETWORK?.chainIdDecimal);
+    const netName =
+  CONFIG?.NETWORK?.name ||
+  CONFIG?.NETWORK?.chainName ||
+  CONFIG?.NETWORK?.chainIdName ||
+  'Arbitrum One';
+
+const chainId = Number(CONFIG?.NETWORK?.chainIdDecimal ?? CONFIG?.NETWORK?.chainId ?? 42161);
+
+console.log('[APP] Network:', netName);
+console.log('[APP] Chain ID:', chainId);
 
     await logNetworkState('APP');
   } catch (error) {
