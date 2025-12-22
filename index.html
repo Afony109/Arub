@@ -1217,30 +1217,32 @@
     return value;
   }
 
-  async function fetchRateAndUpdate() {
-    try {
-      let newRate = getRateFromArubCard();
-      if (!newRate) newRate = await resolveRateFromAllSources();
+ async function fetchRateAndUpdate() {
+  try {
+    let newRate = getRateFromArubCard();
+    if (!newRate) newRate = await resolveRateFromAllSources();
 
-      if (!newRate) {
-        console.warn("All sources failed, keeping previous currentRate =", currentRate);
-        updateDomWithCurrentRate();
-        return;
-      }
+    if (!newRate) {
+      console.warn("All sources failed, keeping previous currentRate =", currentRate);
+      updateDomWithCurrentRate();
+      return;
+    }
 
-     currentRate = newRate;
-updateDomWithCurrentRate();
+    currentRate = newRate;
+    updateDomWithCurrentRate();
 
-const src =
-  window.currentRateSourceLabel ||
-  'oracle'; // явный дефолт, без "локальне значення"
+    const src = window.currentRateSourceLabel || 'oracle'; // явный дефолт
 
-console.log(
-  "Rate updated:",
-  formatPrice(currentRate, CONFIG.ORACLE_DECIMALS),
-  "| source:",
-  src
-);
+    console.log(
+      "Rate updated:",
+      formatPrice(currentRate, CONFIG.ORACLE_DECIMALS),
+      "| source:",
+      src
+    );
+  } catch (err) {
+    console.error("Unexpected error in fetchRateAndUpdate:", err);
+  }
+}
 
 
   window.addEventListener('load', () => {
