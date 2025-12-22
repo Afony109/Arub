@@ -294,4 +294,18 @@ if (document.readyState === 'loading') {
 console.log('[APP] Version: 2.0.0 (Vault-only)');
 console.log('[APP] Build: ' + new Date().toISOString());
 
+const netName =
+  CONFIG?.chainName ||
+  CONFIG?.networkName ||
+  CONFIG?.name ||
+  'Arbitrum One';
+
+const chainId = Number(CONFIG?.chainId ?? CONFIG?.chainIdDecimal ?? 42161);
+
+console.log('[APP] Network:', netName);
+console.log('[APP] Chain ID:', chainId);
+console.log('[APP] RPC:', (CONFIG?.rpcUrls?.[0] || '(none)'));
+console.log('[APP] Explorer:', (CONFIG?.blockExplorerUrls?.[0] || '(none)'));
+
+
 export { initApp };
