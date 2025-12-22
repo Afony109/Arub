@@ -272,43 +272,64 @@ async function initApp() {
       '(unknown)';
 
     console.log('[APP] walletState chainId:', chainId);
-     } finally {
-    // 🔓 Page is ready — show UI (always)
-    document.body.classList.add('page-ready')
+   } finally {
+  document.body.classList.add('page-ready');
+
+  const connectBtn = document.getElementById('connectBtn');
+  if (connectBtn && !connectBtn.dataset.bound) {
+    connectBtn.dataset.bound = '1';
+    connectBtn.addEventListener('click', connectWalletUI);
   }
 }
-/**
- * Глобальные функции для HTML-обработчиков (Vault-only)
+
+  /**
+ * Wallet connect UI helper (selector-aware)
+ * Used by both the main Connect button and dropdown actions.
  */
-// Wallet
-// Универсальный connect для HTML-кнопок (с селектором)
-window.connectWalletUI = async () => {
+async function connectWalletUI() {
   try {
     await connectWallet();
+    return;
   } catch (e) {
-    if (e?.message === 'WALLET_SELECTION_REQUIRED') {
-      const wallets = await getAvailableWalletsAsync(250);
+    if (e?.message !== 'WALLET_SELECTION_REQUIRED') throw e;
 
-      if (!wallets?.length) {
-        showNotification?.('No wallets found', 'error');
-        return;
-      }
+    const wallets = await getAvailableWalletsAsync(250);
 
-      // ВРЕМЕННО: простой селектор (prompt) — для проверки
-      const menu = wallets.map((w, i) => `${i}: ${w.name} [${w.type}]`).join('\n');
-      const pick = prompt(`Выберите кошелек:\n${menu}`, '0');
-      const idx = Number(pick);
-
-      if (!Number.isInteger(idx) || idx < 0 || idx >= wallets.length) return;
-
-      await connectWallet(wallets[idx]);
+    if (!wallets?.length) {
+      showNotification?.('No wallets found', 'error');
       return;
     }
 
-    throw e;
+    // TEMP: prompt selector (replace with your modal later)
+    const menu = wallets.map((w, i) => `${i}: ${w.name} [${w.type}]`).join('\n');
+    const pick = prompt(`Выберите кошелек:\n${menu}`, '0');
+    const idx = Number(pick);
+
+    if (!Number.isInteger(idx) || idx < 0 || idx >= wallets.length) return;
+
+    await connectWallet(wallets[idx]);
   }
+}
+
+window.buyTokens = buyTokens;
+window.sellTokens = sellTokens;
+window.setMaxBuy = setMaxBuy;
+window.setMaxSell = setMaxSell;
+
+window.scrollToSection = (sectionId) => {
+  const element = document.getElementById(sectionId);
+  if (element) element.scrollIntoView({ behavior: 'smooth' });
 };
 
+
+/**
+ * Глобальные функции для HTML-обработчиков (Vault-only)
+ */
+
+// Wallet connect (с селектором)
+window.connectWalletUI = connectWalletUI;
+
+// Wallet utils
 window.addTokenToWallet = addTokenToWallet;
 window.addArubToMetaMask = () => addTokenToWallet('ARUB');
 window.addUsdtToMetaMask = () => addTokenToWallet('USDT');
@@ -321,11 +342,12 @@ window.sellTokens = sellTokens;
 window.setMaxBuy = setMaxBuy;
 window.setMaxSell = setMaxSell;
 
-// Хелпер для скролла
+// UI helpers
 window.scrollToSection = (sectionId) => {
   const element = document.getElementById(sectionId);
   if (element) element.scrollIntoView({ behavior: 'smooth' });
 };
+
 
 // Старт
 if (document.readyState === 'loading') {
@@ -341,36 +363,6 @@ console.log('[APP] Build: ' + new Date().toISOString());
 // Wallet dropdown menu logic
 // =========================
 
-document.addEventListener("click", (e) => {
-  const menu = document.getElementById("walletMenu");
-  const wrap = document.querySelector(".wallet-wrap");
-
-  if (!menu || !wrap) return;
-
-  if (menu.classList.contains("open") && !wrap.contains(e.target)) {
-    menu.classList.remove("open");
-  }
-});
-
-document.getElementById("copyAddrBtn")?.addEventListener("click", async () => {
-  if (!selectedAddress) return;
-
-  await navigator.clipboard.writeText(selectedAddress);
-  document.getElementById("walletMenu").classList.remove("open");
-});
-
-document.getElementById("changeWalletBtn")?.addEventListener("click", async () => {
-  document.getElementById("walletMenu").classList.remove("open");
-
-  // Сброс текущего и выбор нового кошелька
-  await disconnectWallet();
-  await connectWallet();
-});
-
-document.getElementById("disconnectBtn")?.addEventListener("click", async () => {
-  document.getElementById("walletMenu").classList.remove("open");
-  await disconnectWallet();
-});
 
 export { initApp };
 
