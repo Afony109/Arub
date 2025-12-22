@@ -18,6 +18,50 @@ document.documentElement.classList.add('dark');
 // Address used by wallet dropdown actions
 let selectedAddress = null;
 
+// ---- Network debug helpers (safe) ----
+async function logNetworkState(tag = 'APP') {
+  const ws = window.walletState;
+
+  if (!ws?.provider) {
+    console.log(`[${tag}] walletState chainId: (not connected)`);
+    return;
+  }
+
+  let chainId = ws?.chainId;
+
+  if (!chainId && typeof ws.provider.getNetwork === 'function') {
+    try {
+      const net = await ws.provider.getNetwork();
+      chainId = net?.chainId;
+    } catch (e) {
+      console.warn(`[${tag}] getNetwork() failed:`, e);
+    }
+  }
+
+  console.log(`[${tag}] walletState chainId:`, chainId ?? '(unknown)');
+}
+
+// Hook previous handlers once (safe even if undefined)
+const prevOnWalletConnected = window.onWalletConnected;
+const prevOnWalletDisconnected = window.onWalletDisconnected;
+
+window.onWalletConnected = async (address, meta) => {
+  selectedAddress = address ?? window.walletState?.address ?? null;
+
+  try { prevOnWalletConnected?.(address, meta); } catch (_) {}
+
+  try { await logNetworkState('APP'); } catch (e) {
+    console.warn('[APP] logNetworkState after connect failed:', e);
+  }
+};
+
+window.onWalletDisconnected = async () => {
+  selectedAddress = null;
+
+  try { prevOnWalletDisconnected?.(); } catch (_) {}
+};
+
+
 window.addEventListener('error', (ev) => {
   console.error('[GLOBAL] window.error:', ev?.message, ev?.error || ev);
 });
@@ -188,10 +232,16 @@ async function logWalletNetwork() {
 async function logNetworkState(tag = 'APP') {
   const ws = window.walletState;
 
+  // Если кошелёк ещё не подключён — это нормальная ситуация
+  if (!ws?.provider) {
+    console.log(`[${tag}] walletState chainId: (not connected)`);
+    return;
+  }
+
   // Берём chainId максимально надёжно
   let chainId = ws?.chainId;
 
-  if (!chainId && ws?.provider?.getNetwork) {
+  if (!chainId && typeof ws.provider.getNetwork === 'function') {
     try {
       const net = await ws.provider.getNetwork();
       chainId = net?.chainId;
@@ -202,33 +252,6 @@ async function logNetworkState(tag = 'APP') {
 
   console.log(`[${tag}] walletState chainId:`, chainId ?? '(unknown)');
 }
-
-// Один раз: при загрузке (если хочешь)
-logNetworkState('APP').catch((e) => console.warn('[APP] logNetworkState init failed:', e));
-
-const prevOnWalletConnected = window.onWalletConnected;
-
-window.onWalletConnected = async (address, meta) => {
-  // keep dropdown address in sync
-  selectedAddress = address ?? window.walletState?.address ?? null;
-
-  try {
-    prevOnWalletConnected?.(address, meta);
-  } catch (_) {}
-
-  await logNetworkState('APP');
-};
-
-const prevOnWalletDisconnected = window.onWalletDisconnected;
-
-window.onWalletDisconnected = async () => {
-  selectedAddress = null;
-
-  try {
-    prevOnWalletDisconnected?.();
-  } catch (_) {}
-};
-
 
 /**
  * Инициализация приложения
@@ -255,6 +278,8 @@ async function initApp() {
 
     console.log('[APP] Initializing trading module...');
     initTradingModule();
+
+    await logNetworkState('APP');
 
     setupGlobalEventListeners();
     setupScrollAnimations();
@@ -335,6 +360,12 @@ async function connectWalletUI() {
     console.error('[UI] connectWalletUI error:', e);
     showNotification?.(e?.message || 'Wallet connection failed', 'error');
   }
+}
+// Старт приложения
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
 }
 
 
