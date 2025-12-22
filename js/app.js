@@ -9,26 +9,11 @@ import { CONFIG } from './config.js';
 window.CONFIG = window.CONFIG || CONFIG;
 import { initWalletModule, addTokenToWallet, connectWallet, disconnectWallet } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
-import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
+import { showNotification, copyToClipboard, formatUSD, formatTokenAmount, formatPrice } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
 
 // Address used by wallet dropdown actions
 let selectedAddress = null;
-
-const { price, isFallback, isStale, updatedAtSec } = await getArubPrice();
-
-setText('arubPriceValue', formatPrice(price, 6)); // ты хотел убирать нули, но до 6 знаков
-
-// (опционально) небольшая метка статуса рядом с ценой
-// например: "stale" или "cached"
-const status = isFallback ? 'cached' : (isStale ? 'stale' : '');
-setText('arubPriceStatus', status);
-
-// лог — всегда сырьё и статус
-console.log('[APP] Oracle price:', { price, isFallback, isStale, updatedAtSec });
-
-
-
 
 /**
  * Обновление глобальной статистики (Vault-only)
@@ -52,7 +37,10 @@ async function updateGlobalStats() {
       if (el) el.textContent = val;
     };
 
-    setText('arubPriceValue', Number.isFinite(arubPrice) ? arubPrice.toFixed(2) : '—');
+    setText('arubPriceValue', formatPrice(arubPrice, CONFIG.ORACLE_DECIMALS ?? 6));
+
+    const status = arubPriceInfo?.isFallback ? 'cached' : (arubPriceInfo?.isStale ? 'stale' : '');
+    setText('arubPriceStatus', status);
 
     const supplyEl = document.getElementById('totalSupplyArub');
     if (supplyEl) {
