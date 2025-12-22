@@ -305,19 +305,41 @@ function detectInjectedLabel(p, idx) {
 }
 
 function getLegacyInjectedEntries() {
-  const providers = getInjectedProviders();
-  if (!providers.length) return [];
+  const out = [];
 
-  return providers.map((p, idx) => ({
-    // IMPORTANT: id may be unstable across reloads, but we do NOT re-lookup by id.
-    // We pass the provider object to UI and connectWallet uses chosen._provider.
-    id: `legacy:${idx}`,
-    name: detectInjectedLabel(p, idx),
-    icon: null,
-    type: 'injected-fallback',
-    _provider: p
-  }));
+  const eth = window.ethereum;
+  if (!eth) return out;
+
+  const providers = Array.isArray(eth.providers) ? eth.providers : [eth];
+
+  const seen = new Set();
+  for (const p of providers) {
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+
+    // попытка определить имя (примерно)
+    let name = 'InjectedProvider';
+    if (p.isMetaMask) name = 'MetaMask';
+    else if (p.isTrust) name = 'Trust Wallet';
+    else if (p.isBybit) name = 'Bybit Wallet';
+
+    out.push({
+      id: `injected:${name.toLowerCase().replace(/\s+/g, '-')}`,
+      name,
+      type: 'injected',
+      _provider: p,
+    });
+  }
+
+  // если найдено больше 1 и есть брендовые — выкинуть общий InjectedProvider
+  const hasBranded = out.some(x => x.name !== 'InjectedProvider');
+  if (hasBranded) {
+    return out.filter(x => x.name !== 'InjectedProvider');
+  }
+
+  return out;
 }
+
 
 async function waitForWalletsIfNeeded(maxWaitMs = 1200) {
   if (discoveredWallets.size > 0 || getLegacyInjectedEntries().length > 0) return;
@@ -351,35 +373,68 @@ export function initWalletModule() {
 export function getAvailableWallets() {
   const list = [];
 
-  // EIP-6963 wallets (include provider directly)
+  // 1) Собираем все provider-объекты, которые уже пришли через EIP-6963
+  const eipProviders = new Set();
+
+  // helper: добавить кошелёк только если ещё не добавлен
+  const seenKeys = new Set();
+  const add = (entry, key, priority = 0) => {
+    if (!key) key = entry.id || entry.name;
+    if (seenKeys.has(key)) return;
+
+    // Можно хранить priority, если захотите "перезаписывать" (не нужно в простом варианте)
+    seenKeys.add(key);
+    list.push(entry);
+  };
+
+  // EIP-6963 wallets (приоритетные)
   for (const w of discoveredWallets.values()) {
-    list.push({
+    if (w?.provider) eipProviders.add(w.provider);
+
+    // ключ дедупа: rdns (самый надёжный)
+    const key = `eip:${w.rdns}`;
+
+    add({
       id: w.rdns,
       name: w.name,
       icon: w.icon,
       type: 'eip6963',
-      _provider: w.provider
-    });
+      _provider: w.provider,
+      _meta: { rdns: w.rdns, name: w.name }
+    }, key, 10);
   }
 
-  // Legacy injected wallets (include provider directly)
+  // Legacy injected — добавляем только если provider НЕ был уже добавлен через EIP-6963
   for (const w of getLegacyInjectedEntries()) {
-    list.push({
+    const p = w?._provider;
+
+    // если это тот же объект provider, который уже есть в EIP-6963 — пропускаем
+    if (p && eipProviders.has(p)) continue;
+
+    // дополнительно: убираем общий "InjectedProvider", если у него нет явного бренда
+    const legacyName = String(w.name || '').toLowerCase();
+    if (legacyName === 'injected' || legacyName === 'injectedprovider' || legacyName === 'injected provider') {
+      continue;
+    }
+
+    const key = `legacy:${w.id || w.name || 'injected'}:${p ? (p._walletId || '') : ''}`;
+    add({
       id: w.id,
       name: w.name,
       icon: null,
       type: w.type,
-      _provider: w._provider
-    });
+      _provider: w._provider,
+      _meta: { name: w.name }
+    }, key, 1);
   }
 
-  // WalletConnect entry (provider created on connect)
   if (CONFIG?.WALLETCONNECT_PROJECT_ID) {
-    list.push({ id: 'walletconnect', name: 'WalletConnect', icon: null, type: 'walletconnect' });
+    add({ id: 'walletconnect', name: 'WalletConnect', icon: null, type: 'walletconnect' }, 'wc', 0);
   }
 
   return list;
 }
+
 
 export async function getAvailableWalletsAsync(waitMs = 250) {
   setupEip6963Discovery();
