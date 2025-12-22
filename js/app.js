@@ -42,6 +42,17 @@ async function updateGlobalStats() {
     const status = arubPriceInfo?.isFallback ? 'cached' : (arubPriceInfo?.isStale ? 'stale' : '');
     setText('arubPriceStatus', status);
 
+    // Notify other scripts (e.g., chart) that oracle price has updated
+    window.dispatchEvent(new CustomEvent('oraclePriceUpdated', {
+      detail: {
+        price: arubPrice,
+        sourceLabel: arubPriceInfo?.isFallback
+          ? 'oracle (cached)'
+          : (arubPriceInfo?.isStale ? 'oracle (stale)' : 'oracle'),
+      }
+    }));
+
+
     const supplyEl = document.getElementById('totalSupplyArub');
     if (supplyEl) {
       supplyEl.textContent = formatTokenAmount(totalSupply) + ' ARUB';
@@ -257,8 +268,7 @@ async function initApp() {
  * Глобальные функции для HTML-обработчиков (Vault-only)
  */
 // Wallet
-window.connectWallet = connectWallet;
-window.disconnectWallet = disconnectWallet;
+
 window.addTokenToWallet = addTokenToWallet;
 window.addArubToMetaMask = () => addTokenToWallet('ARUB');
 window.addUsdtToMetaMask = () => addTokenToWallet('USDT');
@@ -324,7 +334,4 @@ document.getElementById("disconnectBtn")?.addEventListener("click", async () => 
 
 
 export { initApp };
-
-window.connectWallet = connectWallet;
-window.disconnectWallet = disconnectWallet;
 
