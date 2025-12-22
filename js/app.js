@@ -297,39 +297,37 @@ async function initApp() {
  */
 async function connectWalletUI() {
   try {
-    // Пытаемся подключиться без параметров (если ваш wallet.js умеет auto-connect)
-    await connectWallet();
-    return;
-  } catch (e) {
-    const msg = (e && (e.message || e.reason)) ? String(e.message || e.reason) : String(e);
-
-    // Если это не "не выбран кошелёк" — пробрасываем наверх
-    if (msg !== 'WALLET_SELECTION_REQUIRED') throw e;
-
-    const wallets = await getAvailableWalletsAsync(250);
+    // 1) Всегда сначала получаем список
+    const wallets = await getAvailableWalletsAsync(400);
 
     if (!Array.isArray(wallets) || wallets.length === 0) {
       showNotification?.('No wallets found', 'error');
       return;
     }
 
-    const menu = wallets
-      .map((w, i) => `${i}: ${w.name} [${w.type}]`)
-      .join('\n');
+    // 2) Если кошелёк один — подключаем сразу
+    if (wallets.length === 1) {
+      await connectWallet(wallets[0]);
+      return;
+    }
 
+    // 3) Если несколько — предлагаем выбор
+    const menu = wallets.map((w, i) => `${i}: ${w.name} [${w.type}]`).join('\n');
     const pick = prompt(`Выберите кошелек:\n${menu}`, '0');
-    if (pick === null) return; // Cancel -> ничего не делаем
+    if (pick === null) return;
 
-    const idx = Number(pick.trim());
-    if (!Number.isFinite(idx) || !Number.isInteger(idx) || idx < 0 || idx >= wallets.length) {
+    const idx = Number(String(pick).trim());
+    if (!Number.isInteger(idx) || idx < 0 || idx >= wallets.length) {
       showNotification?.('Неверный выбор кошелька', 'error');
       return;
     }
 
     await connectWallet(wallets[idx]);
+  } catch (e) {
+    console.error('[UI] connectWalletUI error:', e);
+    showNotification?.(e?.message || 'Wallet connection failed', 'error');
   }
 }
-
 
 
 
