@@ -1,20 +1,21 @@
-﻿/**
+/**
  * wallet.js — Multi-wallet connection layer (EIP-6963 + WalletConnect) — HARDENED
  * Fixes:
  *  - Prevents double eth_requestAccounts calls (-32002 "already pending")
  *  - If -32002 occurs, waits for eth_accounts to become available
  *  - Single selected provider only (never window.ethereum for signing/tx)
+ *  - Stable legacy injected IDs (prevents Trust selection connecting MetaMask)
  *
  * Exposes:
  *   initWalletModule()
  *   getAvailableWallets()
- *   connectWallet(options?)
+ *   connectWallet(chosen?)
  *   disconnectWallet()
  *   addTokenToWallet('ARUB'|'USDT')
  *   isWalletConnected(), getAddress(), getEthersProvider(), getSigner(), getEip1193Provider()
  *
  * Globals:
- *   window.walletState = { provider, signer, address, eip1193, wallet }
+ *   window.walletState = { provider, signer, address, eip1193, wallet, chainId }
  *   window.provider, window.signer, window.userAddress, window.selectedAddress
  *
  * Events:
@@ -35,8 +36,8 @@ let selectedEip1193 = null;
 let ethersProvider = null;
 let signer = null;
 let currentAddress = null;
-
 let currentChainId = null;
+
 // Prevent double connect
 let isConnecting = false;
 
@@ -45,6 +46,10 @@ const discoveredWallets = new Map(); // rdns -> { rdns, name, icon, provider }
 
 // WalletConnect provider reference (for cleanup)
 let wcProvider = null;
+
+// Stable IDs for legacy injected providers (critical fix)
+const _legacyIdByProvider = new WeakMap(); // providerObj -> stableId
+let _legacySeq = 0;
 
 // -----------------------------
 // Utils
@@ -70,7 +75,7 @@ function isHexChainIdMatch(chainIdHex, targetChainIdDec) {
 
 function getActiveWalletInfo() {
   const m = selectedEip1193?.__arub_meta || {};
-  return { type: m.type || null, name: m.name || null, rdns: m.rdns || null };
+  return { type: m.type || null, name: m.name || null, rdns: m.rdns || null, id: m.id || null };
 }
 
 function publishGlobals() {
@@ -79,7 +84,8 @@ function publishGlobals() {
     signer,
     address: currentAddress,
     eip1193: selectedEip1193,
-    wallet: getActiveWalletInfo()
+    wallet: getActiveWalletInfo(),
+    chainId: currentChainId
   };
 
   window.provider = ethersProvider;
@@ -123,7 +129,6 @@ async function requestAccountsSafe() {
     return await pRequest('eth_requestAccounts');
   } catch (err) {
     if (err?.code === -32002) {
-      // wait for accounts to become available
       const maxWaitMs = 4000;
       const step = 200;
       let waited = 0;
@@ -156,7 +161,6 @@ async function ensureNetwork() {
     await pRequest('wallet_switchEthereumChain', [{ chainId: targetHex }]);
     return;
   } catch (err) {
-    // fallthrough to add
     if (err?.code !== 4902) console.warn('[WALLET] switch chain failed:', err);
   }
 
@@ -194,6 +198,12 @@ async function onAccountsChanged(accounts) {
   ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
   signer = ethersProvider.getSigner();
 
+  // refresh chainId best-effort
+  try {
+    const hex = await selectedEip1193.request({ method: 'eth_chainId' });
+    currentChainId = hex ? parseInt(hex, 16) : currentChainId;
+  } catch (_) {}
+
   publishGlobals();
 
   if (typeof window.onWalletConnected === 'function') {
@@ -209,6 +219,17 @@ async function onChainChanged() {
     currentAddress = ethers.utils.getAddress(await signer.getAddress());
 
     await ensureNetwork();
+
+    // refresh chainId best-effort
+    try {
+      const hex = await selectedEip1193.request({ method: 'eth_chainId' });
+      currentChainId = hex ? parseInt(hex, 16) : currentChainId;
+    } catch (_) {
+      try {
+        const net = await ethersProvider.getNetwork();
+        currentChainId = net?.chainId ?? currentChainId;
+      } catch (_) {}
+    }
 
     publishGlobals();
 
@@ -261,45 +282,50 @@ function setupEip6963Discovery() {
 }
 
 // ------------------------------------------------------------
-// Wallet list helpers (wait for async EIP-6963 announcements)
+// Legacy injected fallback (ONLY for listing/selection)
 // ------------------------------------------------------------
 
+function getOrCreateLegacyId(providerObj, preferredKey = 'legacy') {
+  if (!providerObj || (typeof providerObj !== 'object' && typeof providerObj !== 'function')) {
+    return `legacy:invalid:${preferredKey}`;
+  }
+  const existing = _legacyIdByProvider.get(providerObj);
+  if (existing) return existing;
 
-function pickEip6963ProviderByRdns(rdns) {
-  const w = discoveredWallets.get(rdns);
-  if (!w?.provider) throw new Error('Selected wallet provider not found: ' + rdns);
-  return { provider: w.provider, meta: { type: 'eip6963', name: w.name, rdns: w.rdns } };
+  _legacySeq += 1;
+  const id = `legacy:${preferredKey}:${_legacySeq}`;
+  _legacyIdByProvider.set(providerObj, id);
+  return id;
 }
 
-function mustRequireSelection(options = {}) {
-  // selection считается заданным, если явно указан тип/rdns
-  return !options?.type && !options?.rdns;
+function detectInjectedNameAndKey(p) {
+  // be tolerant: different wallets use different flags
+  const isMetaMask = !!p?.isMetaMask;
+  const isTrust = !!(p?.isTrust || p?.isTrustWallet);
+  const isRabby = !!p?.isRabby;
+  const isCoinbase = !!(p?.isCoinbaseWallet);
+  const isBybit = !!(p?.isBybitWallet || p?.isBybit || p?.isBybitWeb3);
+
+  if (isTrust) return { name: 'Trust Wallet', key: 'trust' };
+  if (isBybit) return { name: 'Bybit Wallet', key: 'bybit' };
+  if (isRabby) return { name: 'Rabby', key: 'rabby' };
+  if (isCoinbase) return { name: 'Coinbase Wallet', key: 'coinbase' };
+  if (isMetaMask) return { name: 'MetaMask', key: 'metamask' };
+
+  return { name: 'Injected Wallet', key: 'injected' };
 }
 
-/**
- * Legacy injected fallback (ONLY for listing/selection)
- */
 function getLegacyInjectedEntries() {
   const eth = window.ethereum;
   if (!eth) return [];
 
-  if (Array.isArray(eth.providers) && eth.providers.length) {
-    return eth.providers.map((p, idx) => {
-      const name =
-        p.isMetaMask ? 'MetaMask' :
-        p.isTrust ? 'Trust Wallet' :
-        p.isRabby ? 'Rabby' :
-        `Injected #${idx + 1}`;
-      return { id: `legacy:${idx}`, name, icon: null, type: 'injected-fallback', _provider: p };
-    });
-  }
+  const providers = (Array.isArray(eth.providers) && eth.providers.length) ? eth.providers : [eth];
 
-  const name =
-    eth.isMetaMask ? 'MetaMask' :
-    eth.isTrust ? 'Trust Wallet' :
-    eth.isRabby ? 'Rabby' :
-    'Injected Wallet';
-  return [{ id: 'legacy:single', name, icon: null, type: 'injected-fallback', _provider: eth }];
+  return providers.map((p) => {
+    const { name, key } = detectInjectedNameAndKey(p);
+    const id = getOrCreateLegacyId(p, key);
+    return { id, name, icon: null, type: 'injected-fallback', _provider: p };
+  });
 }
 
 async function waitForWalletsIfNeeded(maxWaitMs = 1200) {
@@ -316,7 +342,6 @@ async function waitForWalletsIfNeeded(maxWaitMs = 1200) {
   }
 }
 
-
 // -----------------------------
 // Public API
 // -----------------------------
@@ -328,14 +353,17 @@ export function initWalletModule() {
 export function getAvailableWallets() {
   const list = [];
 
+  // EIP-6963 wallets
   for (const w of discoveredWallets.values()) {
     list.push({ id: w.rdns, name: w.name, icon: w.icon, type: 'eip6963' });
   }
 
+  // Legacy injected wallets (stable ids)
   for (const w of getLegacyInjectedEntries()) {
     list.push({ id: w.id, name: w.name, icon: null, type: w.type });
   }
 
+  // WalletConnect
   if (CONFIG?.WALLETCONNECT_PROJECT_ID) {
     list.push({ id: 'walletconnect', name: 'WalletConnect', icon: null, type: 'walletconnect' });
   }
@@ -349,6 +377,12 @@ export async function getAvailableWalletsAsync(waitMs = 250) {
   return getAvailableWallets();
 }
 
+function countAvailableWalletChoices() {
+  const legacyCount = getLegacyInjectedEntries().length;
+  const eipCount = discoveredWallets.size;
+  const wc = CONFIG?.WALLETCONNECT_PROJECT_ID ? 1 : 0;
+  return { legacyCount, eipCount, wc, total: legacyCount + eipCount + wc };
+}
 
 export async function connectWallet(chosen = null) {
   assertConfig();
@@ -358,25 +392,36 @@ export async function connectWallet(chosen = null) {
   isConnecting = true;
 
   try {
+    // Give EIP-6963 a short chance to announce
+    await waitForWalletsIfNeeded(900);
+
     // ------------------------------------------------------------
     // 1) REQUIRE SELECTION if multiple wallets are available
     // ------------------------------------------------------------
     const hasChoice = !!(chosen && chosen.type);
 
     if (!hasChoice) {
-      const eipCount = discoveredWallets.size;
+      const { total, eipCount, legacyCount, wc } = countAvailableWalletChoices();
 
-      if (eipCount > 1) {
+      if (total === 0) throw new Error('NO_WALLETS_FOUND');
+
+      if (total > 1) {
         // UI must open selector and call connectWallet(chosen)
         throw new Error('WALLET_SELECTION_REQUIRED');
       }
 
+      // Exactly one wallet exists -> auto-select it
       if (eipCount === 1) {
         const only = Array.from(discoveredWallets.values())[0];
         chosen = { type: 'eip6963', id: only.rdns, name: only.name };
+      } else if (legacyCount === 1) {
+        const onlyLegacy = getLegacyInjectedEntries()[0];
+        chosen = { type: 'injected-fallback', id: onlyLegacy.id, name: onlyLegacy.name };
+      } else if (wc === 1) {
+        chosen = { type: 'walletconnect', id: 'walletconnect', name: 'WalletConnect' };
       } else {
-        // No EIP-6963 wallets announced yet; UI may offer WalletConnect
-        throw new Error('NO_WALLETS_FOUND');
+        // defensive
+        throw new Error('WALLET_SELECTION_REQUIRED');
       }
     }
 
@@ -387,7 +432,12 @@ export async function connectWallet(chosen = null) {
       const w = discoveredWallets.get(chosen.id);
       if (!w?.provider) throw new Error('EIP-6963 provider not found');
 
-      setSelectedProvider(w.provider, { type: 'eip6963', name: chosen.name || w.name, rdns: chosen.id });
+      setSelectedProvider(w.provider, {
+        type: 'eip6963',
+        name: chosen.name || w.name,
+        rdns: chosen.id,
+        id: chosen.id
+      });
 
       const accounts = await requestAccountsSafe();
       if (!accounts?.[0]) throw new Error('No accounts returned');
@@ -401,7 +451,12 @@ export async function connectWallet(chosen = null) {
       const entry = legacy.find(x => x.id === chosen.id);
       if (!entry?._provider) throw new Error('Injected provider not found');
 
-      setSelectedProvider(entry._provider, { type: 'injected-fallback', name: chosen.name, rdns: null });
+      setSelectedProvider(entry._provider, {
+        type: 'injected-fallback',
+        name: chosen.name || entry.name,
+        rdns: null,
+        id: chosen.id
+      });
 
       const accounts = await requestAccountsSafe();
       if (!accounts?.[0]) throw new Error('No accounts returned');
@@ -428,9 +483,13 @@ export async function connectWallet(chosen = null) {
 
       await wcProvider.connect();
 
-      setSelectedProvider(wcProvider, { type: 'walletconnect', name: 'WalletConnect', rdns: null });
+      setSelectedProvider(wcProvider, {
+        type: 'walletconnect',
+        name: 'WalletConnect',
+        rdns: null,
+        id: 'walletconnect'
+      });
 
-      // WC often has eth_accounts immediately
       let accounts = null;
       try { accounts = await pRequest('eth_accounts'); } catch (_) {}
       if (!accounts?.[0]) accounts = await requestAccountsSafe();
@@ -450,37 +509,24 @@ export async function connectWallet(chosen = null) {
     ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
     signer = ethersProvider.getSigner();
 
-    // Base walletState
-    let network = null;
-    try { network = await ethersProvider.getNetwork(); } catch (_) {}
-
-    window.walletState = {
-      address: currentAddress,
-      signer,
-      provider: ethersProvider,
-      chainId: network?.chainId ?? null
-    };
-
-    // Fix: ensure chainId is present in walletState
+    // ensure chainId
     let chainId = null;
     try {
       const hex = await selectedEip1193.request({ method: 'eth_chainId' });
-      chainId = parseInt(hex, 16);
-      currentChainId = chainId;
+      chainId = hex ? parseInt(hex, 16) : null;
     } catch (_) {
-      const net = await ethersProvider.getNetwork();
-      chainId = net?.chainId ?? null;
-      currentChainId = chainId;
+      try {
+        const net = await ethersProvider.getNetwork();
+        chainId = net?.chainId ?? null;
+      } catch (_) {}
     }
 
-    window.walletState = {
-      ...(window.walletState || {}),
-      chainId
-    };
+    currentChainId = chainId;
 
     console.log('[WALLET] connected', {
+      wallet: getActiveWalletInfo(),
       address: currentAddress,
-      chainId: window.walletState.chainId
+      chainId: currentChainId
     });
 
     publishGlobals();
@@ -516,6 +562,7 @@ export async function disconnectWallet() {
     ethersProvider = null;
     signer = null;
     currentAddress = null;
+    currentChainId = null;
 
     clearGlobals();
 
@@ -568,4 +615,3 @@ export async function addTokenToWallet(symbol) {
     throw err;
   }
 }
-
