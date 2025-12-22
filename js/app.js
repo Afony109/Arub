@@ -7,7 +7,7 @@
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
 window.CONFIG = window.CONFIG || CONFIG;
-import { initWalletModule, addTokenToWallet, connectWallet, disconnectWallet } from './wallet.js';
+import { initWalletModule, addTokenToWallet, connectWallet, disconnectWallet, getAvailableWalletsAsync } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount, formatPrice } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
@@ -281,6 +281,33 @@ async function initApp() {
  * Глобальные функции для HTML-обработчиков (Vault-only)
  */
 // Wallet
+// Универсальный connect для HTML-кнопок (с селектором)
+window.connectWalletUI = async () => {
+  try {
+    await connectWallet();
+  } catch (e) {
+    if (e?.message === 'WALLET_SELECTION_REQUIRED') {
+      const wallets = await getAvailableWalletsAsync(250);
+
+      if (!wallets?.length) {
+        showNotification?.('No wallets found', 'error');
+        return;
+      }
+
+      // ВРЕМЕННО: простой селектор (prompt) — для проверки
+      const menu = wallets.map((w, i) => `${i}: ${w.name} [${w.type}]`).join('\n');
+      const pick = prompt(`Выберите кошелек:\n${menu}`, '0');
+      const idx = Number(pick);
+
+      if (!Number.isInteger(idx) || idx < 0 || idx >= wallets.length) return;
+
+      await connectWallet(wallets[idx]);
+      return;
+    }
+
+    throw e;
+  }
+};
 
 window.addTokenToWallet = addTokenToWallet;
 window.addArubToMetaMask = () => addTokenToWallet('ARUB');
