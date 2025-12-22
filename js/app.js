@@ -272,6 +272,9 @@ async function initApp() {
       '(unknown)';
 
     console.log('[APP] walletState chainId:', chainId);
+     } finally {
+    // 🔓 Page is ready — show UI (always)
+    document.body.classList.add('page-ready')
   }
 }
 /**
@@ -341,7 +344,6 @@ document.getElementById("disconnectBtn")?.addEventListener("click", async () => 
   document.getElementById("walletMenu").classList.remove("open");
   await disconnectWallet();
 });
-
 
 export { initApp };
 
