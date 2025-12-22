@@ -258,13 +258,19 @@ async function initApp() {
     console.log('[APP] ✅ Application ready!');
 
     // Network info (be tolerant to CONFIG field names)
-    const netName = CONFIG?.NETWORK?.name || CONFIG?.NETWORK?.chainName || CONFIG?.NETWORK?.chainIdName || 'Arbitrum One';
+    const netName =
+      CONFIG?.NETWORK?.name ||
+      CONFIG?.NETWORK?.chainName ||
+      CONFIG?.NETWORK?.chainIdName ||
+      'Arbitrum One';
+
     const chainId = Number(CONFIG?.NETWORK?.chainIdDecimal ?? CONFIG?.NETWORK?.chainId ?? 42161);
+
     console.log('[APP] Network:', netName);
     console.log('[APP] Chain ID:', chainId);
   } catch (error) {
     console.error('[APP] ❌ Initialization error:', error);
-    showNotification('❌ Помилка ініціалізації додатку', 'error');
+    showNotification?.('❌ Помилка ініціалізації додатку', 'error');
 
     const chainId =
       window.walletState?.chainId ??
@@ -272,15 +278,18 @@ async function initApp() {
       '(unknown)';
 
     console.log('[APP] walletState chainId:', chainId);
-   } finally {
-  document.body.classList.add('page-ready');
+  } finally {
+    // 🔓 Page is ready — show UI
+    document.body.classList.add('page-ready');
 
-  const connectBtn = document.getElementById('connectBtn');
-  if (connectBtn && !connectBtn.dataset.bound) {
-    connectBtn.dataset.bound = '1';
-    connectBtn.addEventListener('click', connectWalletUI);
+    const connectBtn = document.getElementById('connectBtn');
+    if (connectBtn && !connectBtn.dataset.bound) {
+      connectBtn.dataset.bound = '1';
+      connectBtn.addEventListener('click', connectWalletUI);
+    }
   }
 }
+
 
   /**
  * Wallet connect UI helper (selector-aware)
@@ -359,9 +368,7 @@ if (document.readyState === 'loading') {
 console.log('[APP] Version: 2.0.0 (Vault-only)');
 console.log('[APP] Build: ' + new Date().toISOString());
 
-// =========================
-// Wallet dropdown menu logic
-// =========================
+
 
 
 
