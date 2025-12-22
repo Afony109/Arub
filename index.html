@@ -1228,13 +1228,20 @@
         return;
       }
 
-      currentRate = newRate;
-      updateDomWithCurrentRate();
-      console.log("Rate updated:", currentRate.toFixed(4), "| source:", window.currentRateSourceLabel || 'ARUB card');
-    } catch (err) {
-      console.error("Unexpected error in fetchRateAndUpdate:", err);
-    }
-  }
+     currentRate = newRate;
+updateDomWithCurrentRate();
+
+const src =
+  window.currentRateSourceLabel ||
+  'oracle'; // явный дефолт, без "локальне значення"
+
+console.log(
+  "Rate updated:",
+  formatPrice(currentRate, CONFIG.ORACLE_DECIMALS),
+  "| source:",
+  src
+);
+
 
   window.addEventListener('load', () => {
     initUsdRubChart();
