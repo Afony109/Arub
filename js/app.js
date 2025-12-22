@@ -36,24 +36,31 @@ async function updateGlobalStats() {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
     };
+    const sourceLabel =
+      arubPriceInfo?.isFallback ? 'oracle (cached)' :
+      (arubPriceInfo?.isStale ? 'oracle (stale)' : 'oracle');
+
+    setText('arubPriceSource', 'Джерело курсу: ' + sourceLabel);
 
     setText('arubPriceValue', formatPrice(arubPrice, CONFIG.ORACLE_DECIMALS ?? 6));
 
-    const status = arubPriceInfo?.isFallback ? 'cached' : (arubPriceInfo?.isStale ? 'stale' : '');
+    const status =
+      arubPriceInfo?.isFallback ? 'cached' :
+      (arubPriceInfo?.isStale ? 'stale' : '');
+
     setText('arubPriceStatus', status);
 
     // Notify other scripts (e.g., chart) that oracle price has updated
-    window.dispatchEvent(new CustomEvent('oraclePriceUpdated', {
-      detail: {
-        price: arubPrice,
-        sourceLabel: arubPriceInfo?.isFallback
-          ? 'oracle (cached)'
-          : (arubPriceInfo?.isStale ? 'oracle (stale)' : 'oracle'),
-      }
-    }));
-
-
-    const supplyEl = document.getElementById('totalSupplyArub');
+    if (Number.isFinite(arubPrice)) {
+      window.dispatchEvent(new CustomEvent('oraclePriceUpdated', {
+        detail: {
+          price: arubPrice,
+          sourceLabel,
+          updatedAtSec: arubPriceInfo?.updatedAtSec ?? null,
+        }
+      }));
+    }
+const supplyEl = document.getElementById('totalSupplyArub');
     if (supplyEl) {
       supplyEl.textContent = formatTokenAmount(totalSupply) + ' ARUB';
     }
