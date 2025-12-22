@@ -6,17 +6,12 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-window.CONFIG = window.CONFIG || CONFIG;
-import { initWalletModule, addTokenToWallet, connectWallet, disconnectWallet, getAvailableWalletsAsync } from './wallet.js';
+import { initWalletModule, addTokenToWallet, connectWallet, disconnectWallet } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
-import { showNotification, copyToClipboard, formatUSD, formatTokenAmount, formatPrice } from './ui.js';
+import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
 
-// Theme bootstrap: ensure dark theme class is present
-document.documentElement.classList.add('dark');
-
-// Address used by wallet dropdown actions
-let selectedAddress = null;
+window.CONFIG = window.CONFIG || CONFIG;
 
 /**
  * Обновление глобальной статистики (Vault-only)
@@ -39,60 +34,43 @@ async function updateGlobalStats() {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
     };
-    const sourceLabel =
-      arubPriceInfo?.isFallback ? 'oracle (cached)' :
-      (arubPriceInfo?.isStale ? 'oracle (stale)' : 'oracle');
 
-    setText('arubPriceSource', 'Джерело курсу: ' + sourceLabel);
+    // 1) ARUB price
+    setText('arubPriceValue', Number.isFinite(arubPrice) ? arubPrice.toFixed(2) : '—');
 
-    setText('arubPriceValue', formatPrice(arubPrice, CONFIG.ORACLE_DECIMALS ?? 6));
-
-    const status =
-      arubPriceInfo?.isFallback ? 'cached' :
-      (arubPriceInfo?.isStale ? 'stale' : '');
-
-    setText('arubPriceStatus', status);
-
-    // Notify other scripts (e.g., chart) that oracle price has updated
-    if (Number.isFinite(arubPrice)) {
-      window.dispatchEvent(new CustomEvent('oraclePriceUpdated', {
-        detail: {
-          price: arubPrice,
-          sourceLabel,
-          updatedAtSec: arubPriceInfo?.updatedAtSec ?? null,
-        }
-      }));
-    }
-const supplyEl = document.getElementById('totalSupplyArub');
+    // 2) Total supply (если где-то показывается)
+    const supplyEl = document.getElementById('totalSupplyArub');
     if (supplyEl) {
       supplyEl.textContent = formatTokenAmount(totalSupply) + ' ARUB';
     }
 
+    // 3) Если в верстке остались staking-поля — заполняем "—"
     [
-      'dashHeroStakers', 'dashHeroTvl', 'totalTvl', 'currentApy', 'totalStakers',
-      'globalTvl', 'globalApy', 'globalStakers', 'globalArubPrice'
+      'dashHeroStakers', 'dashHeroTvl',
+      'totalTvl', 'currentApy', 'totalStakers',
+      'globalTvl', 'globalApy', 'globalStakers',
+      'globalArubPrice'
     ].forEach((id) => setText(id, '—'));
 
     console.log('[APP] ✅ Stats updated (vault-only)');
   } catch (error) {
     console.error('[APP] ❌ Error updating stats (vault-only):', error);
 
+    // мягкий фолбек
     const ids = [
-      'arubPriceValue', 'totalSupplyArub', 'dashHeroStakers',
-      'dashHeroTvl', 'totalTvl', 'currentApy', 'totalStakers'
+      'arubPriceValue',
+      'totalSupplyArub',
+      'dashHeroStakers',
+      'dashHeroTvl',
+      'totalTvl',
+      'currentApy',
+      'totalStakers'
     ];
 
     ids.forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.textContent = '—';
     });
-
-    const chainId =
-      window.walletState?.chainId ??
-      window.walletState?.provider?.network?.chainId ??
-      '(unknown)';
-
-    console.log('[APP] walletState chainId:', chainId);
   }
 }
 
@@ -152,31 +130,68 @@ function setupGlobalEventListeners() {
   });
 }
 
-async function logWalletNetwork() {
+/**
+ * Лог сети/chainId максимально безопасно
+ */
+async function logNetworkState(tag = 'APP') {
   try {
     const ws = window.walletState;
 
-    if (!ws?.provider) {
-      console.warn('[APP] walletState.provider missing');
-      return;
+    let chainId = ws?.chainId;
+
+    if (!chainId && ws?.provider?.getNetwork) {
+      const net = await ws.provider.getNetwork();
+      chainId = net?.chainId;
     }
 
-    const net = await ws.provider.getNetwork();
-
-    console.log('[APP] Network:', net?.name);
-    console.log('[APP] Chain ID:', net?.chainId);
+    console.log(`[${tag}] walletState chainId:`, chainId ?? '(unknown)');
   } catch (e) {
-    console.error('[APP] logWalletNetwork error:', e);
-
-    const chainId =
-      window.walletState?.chainId ??
-      window.walletState?.provider?.network?.chainId ??
-      '(unknown)';
-
-    console.log('[APP] walletState:', window.walletState, 'chainId:', chainId ?? '(unknown)');
+    console.warn(`[${tag}] logNetworkState failed:`, e);
   }
 }
 
+/**
+ * Wallet dropdown menu logic (без падений, без несуществующих переменных)
+ */
+function setupWalletMenu() {
+  const getAddress = () => window.walletState?.address || '';
+
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('walletMenu');
+    const wrap = document.querySelector('.wallet-wrap');
+    if (!menu || !wrap) return;
+
+    if (menu.classList.contains('open') && !wrap.contains(e.target)) {
+      menu.classList.remove('open');
+    }
+  });
+
+  document.getElementById('copyAddrBtn')?.addEventListener('click', async () => {
+    const addr = getAddress();
+    if (!addr) return;
+
+    await navigator.clipboard.writeText(addr);
+    document.getElementById('walletMenu')?.classList.remove('open');
+  });
+
+  document.getElementById('changeWalletBtn')?.addEventListener('click', async () => {
+    document.getElementById('walletMenu')?.classList.remove('open');
+
+    // Если у вас есть отдельная функция выбора кошелька (connectWalletUI) — используем её.
+    // Иначе просто дисконнект.
+    await disconnectWallet();
+    if (typeof window.connectWalletUI === 'function') {
+      await window.connectWalletUI();
+    } else {
+      showNotification?.('Вибір кошелька не налаштований (connectWalletUI відсутня)', 'info');
+    }
+  });
+
+  document.getElementById('disconnectBtn')?.addEventListener('click', async () => {
+    document.getElementById('walletMenu')?.classList.remove('open');
+    await disconnectWallet();
+  });
+}
 
 /**
  * Инициализация приложения
@@ -206,104 +221,64 @@ async function initApp() {
 
     setupGlobalEventListeners();
     setupScrollAnimations();
+    setupWalletMenu();
 
     // Периодическое обновление статов (если нужно)
     const interval = CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000;
     setInterval(() => updateGlobalStats(), interval);
 
     console.log('[APP] ✅ Application ready!');
+    console.log('[APP] Network:', CONFIG?.NETWORK?.name);
+    console.log('[APP] Chain ID:', CONFIG?.NETWORK?.chainIdDecimal);
 
-    // Network info (be tolerant to CONFIG field names)
-    const netName =
-      CONFIG?.NETWORK?.name ||
-      CONFIG?.NETWORK?.chainName ||
-      CONFIG?.NETWORK?.chainIdName ||
-      'Arbitrum One';
-
-    const chainId = Number(CONFIG?.NETWORK?.chainIdDecimal ?? CONFIG?.NETWORK?.chainId ?? 42161);
-
-    console.log('[APP] Network:', netName);
-    console.log('[APP] Chain ID:', chainId);
+    await logNetworkState('APP');
   } catch (error) {
     console.error('[APP] ❌ Initialization error:', error);
     showNotification?.('❌ Помилка ініціалізації додатку', 'error');
-
-    const chainId =
-      window.walletState?.chainId ??
-      window.walletState?.provider?.network?.chainId ??
-      '(unknown)';
-
-    console.log('[APP] walletState chainId:', chainId);
-  } finally {
-    // 🔓 Page is ready — show UI
-    document.body.classList.add('page-ready');
-
-    const connectBtn = document.getElementById('connectBtn');
-    if (connectBtn && !connectBtn.dataset.bound) {
-      connectBtn.dataset.bound = '1';
-      connectBtn.addEventListener('click', connectWalletUI);
-    }
+    await logNetworkState('APP');
   }
 }
 
+// -------------------------
+// Глобальные функции для HTML
+// -------------------------
 
-  /**
- * Wallet connect UI helper (selector-aware)
- * Used by both the main Connect button and dropdown actions.
- */
-async function connectWalletUI() {
-  try {
-    // 1) Всегда сначала получаем список
-    const wallets = await getAvailableWalletsAsync(400);
+// Wallet
+window.connectWallet = connectWallet;
+window.disconnectWallet = disconnectWallet;
+window.addTokenToWallet = addTokenToWallet;
+window.addArubToMetaMask = () => addTokenToWallet('ARUB');
+window.addUsdtToMetaMask = () => addTokenToWallet('USDT');
+window.copyTokenAddress = () =>
+  copyToClipboard(CONFIG.TOKEN_ADDRESS, '✅ Адресу токена скопійовано!');
 
-    if (!Array.isArray(wallets) || wallets.length === 0) {
-      showNotification?.('No wallets found', 'error');
-      return;
-    }
+// Trading
+window.buyTokens = buyTokens;
+window.sellTokens = sellTokens;
+window.setMaxBuy = setMaxBuy;
+window.setMaxSell = setMaxSell;
 
-    // 2) Если кошелёк один — можно подключить сразу (или попросить подтверждение)
-    if (wallets.length === 1) {
-      // Вариант A: подключаем сразу
-      await connectWallet(wallets[0]);
-      return;
+// Хелпер для скролла
+window.scrollToSection = (sectionId) => {
+  const element = document.getElementById(sectionId);
+  if (element) element.scrollIntoView({ behavior: 'smooth' });
+};
 
-      // Вариант B (строже): просим подтверждение
-      // const ok = confirm(`Подключить кошелёк: ${wallets[0].name}?`);
-      // if (!ok) return;
-      // await connectWallet(wallets[0]);
-      // return;
-    }
+// Подпишемся на wallet-connected, если событие/хук используется
+const prevOnWalletConnected = window.onWalletConnected;
+window.onWalletConnected = async (address, meta) => {
+  try { prevOnWalletConnected?.(address, meta); } catch (_) {}
+  await logNetworkState('APP');
+};
 
-    // 3) Если несколько — предлагаем выбор (БЕЗ дефолта "0")
-    const menu = wallets
-      .map((w, i) => `${i + 1}: ${w.name} [${w.type}]`)
-      .join('\n');
-
-    const pick = prompt(`Выберите кошелек (1-${wallets.length}):\n${menu}`, '');
-    if (pick === null) return;
-
-    const n = Number(String(pick).trim());
-    const idx = n - 1;
-
-    if (!Number.isInteger(n) || idx < 0 || idx >= wallets.length) {
-      showNotification?.('Неверный выбор кошелька', 'error');
-      return;
-    }
-
-    await connectWallet(wallets[idx]);
-  } catch (e) {
-    console.error('[UI] connectWalletUI error:', e);
-    showNotification?.(e?.message || 'Wallet connection failed', 'error');
-  }
-}
-
-// Старт приложения
+// Старт
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
 } else {
   initApp();
 }
 
+console.log('[APP] Version: 2.0.0 (Vault-only)');
+console.log('[APP] Build: ' + new Date().toISOString());
 
-
-
+export { initApp };
