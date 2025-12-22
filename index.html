@@ -1080,39 +1080,45 @@
 </script>
 <script src="js/app.js" type="module"></script>
 <!-- USD/RUB chart + source chain -->
+<!-- USD/RUB chart (oracle-driven only) -->
 <script>
-  let currentRate = 80.98;
+  let currentRate = null;
   let usdRubChart = null;
-  window.currentRateSourceLabel = 'локальне значення (дефолт)';
 
   const years = ['2020','2021','2022','2023','2024','2025','2026','2027','2028','2029','2030'];
 
-  function buildUsdRubDatasets() {
-    const historyData = [72.3, 73.7, 140, 110, 92.8, currentRate, null, null, null, null, null];
-    const scenarioData = [null,null,null,null,null, currentRate, 200, 400, 500, 350, 250];
-    const currentPointData = [null,null,null,null,null, currentRate, null, null, null, null, null];
+  function buildUsdRubDatasets(rate) {
+    const historyData = [72.3, 73.7, 140, 110, 92.8, rate, null, null, null, null, null];
+    const scenarioData = [null,null,null,null,null, rate, 200, 400, 500, 350, 250];
+    const currentPointData = [null,null,null,null,null, rate, null, null, null, null, null];
     const peak2022 = [null,null,140,null,null,null,null,null,null,null,null];
     return { historyData, scenarioData, currentPointData, peak2022 };
   }
 
-  function updateDomWithCurrentRate() {
-    const arubPriceEl = document.getElementById('arubPriceValue');
-    if (arubPriceEl) arubPriceEl.textContent = currentRate.toFixed(2);
+  function formatShownRate(rate) {
+    const decimals = (window.CONFIG?.ORACLE_DECIMALS ?? 6);
+    if (!Number.isFinite(rate)) return '—';
+    return rate.toFixed(decimals).replace(/\.?0+$/, '');
+  }
+
+  function updateChartAndLabels(sourceLabel) {
+    // ВАЖНО: arubPriceValue НЕ ТРОГАЕМ — его обновляет app.js по oracle
+    const shown = formatShownRate(currentRate);
 
     const currentRateSpan = document.getElementById('currentRateText');
-    if (currentRateSpan) currentRateSpan.textContent = currentRate.toFixed(2);
+    if (currentRateSpan) currentRateSpan.textContent = shown;
 
     const legendCurrentRateText = document.getElementById('legendCurrentRateText');
-    if (legendCurrentRateText) legendCurrentRateText.textContent = `Поточний курс (${currentRate.toFixed(2)})`;
+    if (legendCurrentRateText) legendCurrentRateText.textContent = `Поточний курс (${shown})`;
 
     const sourceEl = document.getElementById('rateSourceIndicator');
-    if (sourceEl) sourceEl.textContent = 'Джерело даних: ' + (window.currentRateSourceLabel || '—');
+    if (sourceEl) sourceEl.textContent = 'Джерело даних: ' + (sourceLabel || 'oracle');
 
-    if (usdRubChart) {
+    if (usdRubChart && Number.isFinite(currentRate)) {
       usdRubChart.data.datasets[0].data[5] = currentRate;
       usdRubChart.data.datasets[1].data[5] = currentRate;
       usdRubChart.data.datasets[2].data[5] = currentRate;
-      usdRubChart.data.datasets[2].label = `Поточний курс (${currentRate.toFixed(2)})`;
+      usdRubChart.data.datasets[2].label = `Поточний курс (${shown})`;
       usdRubChart.update();
     }
   }
@@ -1122,7 +1128,8 @@
     if (!ctxEl) return;
 
     const ctx = ctxEl.getContext('2d');
-    const { historyData, scenarioData, currentPointData, peak2022 } = buildUsdRubDatasets();
+    const seed = Number.isFinite(currentRate) ? currentRate : 80.98; // только для первой отрисовки
+    const { historyData, scenarioData, currentPointData, peak2022 } = buildUsdRubDatasets(seed);
 
     usdRubChart = new Chart(ctx, {
       type: 'line',
@@ -1131,7 +1138,7 @@
         datasets: [
           { label: 'Історичний курс', data: historyData, tension: 0.45, borderWidth: 2, borderColor: '#4ba3ff', fill: false, pointRadius: 0, pointHoverRadius: 0 },
           { label: 'Сценарій 2025–2030', data: scenarioData, tension: 0.35, borderWidth: 2, borderColor: '#4ba3ff', borderDash: [6, 4], fill: false, spanGaps: false, pointRadius: 0, pointHoverRadius: 0 },
-          { label: `Поточний курс (${currentRate.toFixed(2)})`, data: currentPointData, borderWidth: 0, pointRadius: 6, pointHoverRadius: 8, pointBackgroundColor: '#ffd54a', pointBorderColor: '#ffd54a', pointStyle: 'circle' },
+          { label: `Поточний курс (${formatShownRate(seed)})`, data: currentPointData, borderWidth: 0, pointRadius: 6, pointHoverRadius: 8, pointBackgroundColor: '#ffd54a', pointBorderColor: '#ffd54a', pointStyle: 'circle' },
           { label: 'Пік 2022 року (140)', data: peak2022, borderWidth: 0, pointRadius: 7, pointHoverRadius: 9, pointBackgroundColor: '#ff4b4b', pointBorderColor: '#ff4b4b', pointStyle: 'circle' }
         ]
       },
@@ -1153,110 +1160,22 @@
       }
     });
 
-    updateDomWithCurrentRate();
+    updateChartAndLabels('oracle');
   }
 
-  async function fetchFromPrimaryForex() {
-    try {
-      const res = await fetch("https://open.er-api.com/v6/latest/USD");
-      if (!res.ok) throw new Error("Primary forex error");
-      const data = await res.json();
-      if (!data || data.result !== "success" || !data.rates || !data.rates.RUB) throw new Error("Primary forex: RUB missing");
-      const rate = parseFloat(data.rates.RUB);
-      if (!rate || isNaN(rate)) throw new Error("Primary forex: NaN");
-      return rate;
-    } catch (e) { console.warn("[Primary forex] fail:", e.message || e); return null; }
-  }
+  window.addEventListener('oraclePriceUpdated', (e) => {
+    const d = e?.detail || {};
+    if (!Number.isFinite(d.price)) return;
 
-  async function fetchFromDexScreener() {
-    try {
-      const res = await fetch("https://api.dexscreener.com/latest/dex/tokens/0x98fFc1A4Ff6eAD8EebFd02cDA54852Bb69744788");
-      if (!res.ok) throw new Error("DexScreener error");
-      const data = await res.json();
-      if (!data.pairs || !data.pairs.length) throw new Error("DexScreener: no pairs");
-      const p = data.pairs[0];
-      if (!p.priceUsd) throw new Error("DexScreener: no priceUsd");
-      const price = parseFloat(p.priceUsd);
-      if (!price || isNaN(price)) throw new Error("DexScreener: NaN");
-      return price;
-    } catch (e) { console.warn("[DexScreener] fail:", e.message || e); return null; }
-  }
-
-  async function fetchFromSecondaryForex() {
-    try {
-      const res = await fetch("https://api.exchangerate.host/latest?base=USD&symbols=RUB");
-      if (!res.ok) throw new Error("Secondary forex error");
-      const data = await res.json();
-      if (!data || !data.rates || !data.rates.RUB) throw new Error("Secondary forex: RUB missing");
-      const rate = parseFloat(data.rates.RUB);
-      if (!rate || isNaN(rate)) throw new Error("Secondary forex: NaN");
-      return rate;
-    } catch (e) { console.warn("[Secondary forex] fail:", e.message || e); return null; }
-  }
-
-  async function resolveRateFromAllSources() {
-    let rate = await fetchFromPrimaryForex();
-    if (rate) { window.currentRateSourceLabel = 'Forex #1 (open.er-api.com)'; return rate; }
-
-    rate = await fetchFromDexScreener();
-    if (rate) { window.currentRateSourceLabel = 'DexScreener (ARUB токен)'; return rate; }
-
-    rate = await fetchFromSecondaryForex();
-    if (rate) { window.currentRateSourceLabel = 'Forex #2 (exchangerate.host)'; return rate; }
-
-    return null;
-  }
-
-  function getRateFromArubCard() {
-    const el = document.getElementById('arubPriceValue');
-    if (!el) return null;
-
-    const raw = (el.textContent || '').trim().replace(',', '.').replace(/[^0-9.]/g, '');
-    const value = parseFloat(raw);
-    if (!value || isNaN(value)) return null;
-    return value;
-  }
-
- async function fetchRateAndUpdate() {
-  try {
-    let newRate = getRateFromArubCard();
-    if (!newRate) newRate = await resolveRateFromAllSources();
-
-    if (!newRate) {
-      console.warn("All sources failed, keeping previous currentRate =", currentRate);
-      updateDomWithCurrentRate();
-      return;
-    }
-
-    currentRate = newRate;
-    updateDomWithCurrentRate();
-
-    const src = window.currentRateSourceLabel || 'oracle'; // явный дефолт
-
-    const decimals = (window.CONFIG?.ORACLE_DECIMALS ?? 6);
-const shown = Number.isFinite(currentRate)
-  ? currentRate.toFixed(decimals).replace(/\.?0+$/, '')
-  : '—';
-
-console.log("Rate updated:", shown, "| source:", src);
-
-  } catch (err) {
-    console.error("Unexpected error in fetchRateAndUpdate:", err);
-  }
-}
-
+    currentRate = d.price;
+    updateChartAndLabels(d.sourceLabel || 'oracle');
+  });
 
   window.addEventListener('load', () => {
     initUsdRubChart();
-    fetchRateAndUpdate();
-    setInterval(fetchRateAndUpdate, 60000);
   });
 </script>
-<script>
-  window.addEventListener("load", () => {
-    document.body.classList.add("page-ready");
-  });
-</script>
+
 <script>
   // Навігація: підсвітка активної кнопки при кліку та скролі
   const navLinks = document.querySelectorAll('.main-nav a.main-nav-link');
