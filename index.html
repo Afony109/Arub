@@ -1078,6 +1078,7 @@
     const menu2 = document.getElementById('walletMenu');
     if (menu && !menu2) menu.id = 'walletMenu';
   })();
+ </script>
 <script type="module" src="js/app.js"></script>
     
 <!-- USD/RUB chart (oracle-driven only) -->
@@ -1100,6 +1101,7 @@
     if (!Number.isFinite(rate)) return '—';
     return rate.toFixed(decimals).replace(/\.?0+$/, '');
   }
+    <script>
 
   function updateChartAndLabels(sourceLabel) {
     // ВАЖНО: arubPriceValue НЕ ТРОГАЕМ — его обновляет app.js по oracle
