@@ -1233,12 +1233,13 @@
 
     const src = window.currentRateSourceLabel || 'oracle'; // явный дефолт
 
-    console.log(
-      "Rate updated:",
-      formatPrice(currentRate, CONFIG.ORACLE_DECIMALS),
-      "| source:",
-      src
-    );
+    const decimals = (window.CONFIG?.ORACLE_DECIMALS ?? 6);
+const shown = Number.isFinite(currentRate)
+  ? currentRate.toFixed(decimals).replace(/\.?0+$/, '')
+  : '—';
+
+console.log("Rate updated:", shown, "| source:", src);
+
   } catch (err) {
     console.error("Unexpected error in fetchRateAndUpdate:", err);
   }
