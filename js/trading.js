@@ -160,8 +160,8 @@ async function refreshLockPanel() {
 
   panel.style.display = '';
 
-  setText('lockedPrincipal', formatTokenAmount(principal, 6, 6));
-  setText('lockedBonus', formatTokenAmount(bonus, 6, 6));
+  setText('lockedPrincipal', formatTokenAmount(principal, DECIMALS_ARUB, DECIMALS_ARUB));
+  setText('lockedBonus', formatTokenAmount(bonus, DECIMALS_ARUB, DECIMALS_ARUB));
   setText('unlockDate', formatJerusalemDate(info.unlockTime));
   setText('unlockRemaining', formatRemaining(info.remaining));
 
@@ -664,7 +664,7 @@ export async function buyTokens(usdtAmount, withBonus = false) {
   // USDT = 6
   let amountBN;
   try {
-    amountBN = parseTokenAmount(usdtAmount, 6);
+    amountBN = parseTokenAmount(usdtAmount, DECIMALS_USDT);
   } catch (e) {
     showNotification?.(e?.message || 'Invalid amount', 'error');
     return;
@@ -745,7 +745,7 @@ export async function sellTokens(arubAmount) {
   // ARUB = 6 (в вашем проекте)
   let amountBN;
   try {
-    amountBN = parseTokenAmount(arubAmount, 6);
+    amountBN = parseTokenAmount(arubAmount, DECIMALS_ARUB);
   } catch (e) {
     showNotification?.(e?.message || 'Invalid amount', 'error');
     return;
