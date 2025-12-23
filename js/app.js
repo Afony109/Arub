@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Main Application Entry Point (Vault-only)
  * Initializes modules and manages global state
  * Staking/Faucet removed.
@@ -6,17 +6,20 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import { initWalletModule, addTokenToWallet, connectWallet, disconnectWallet } from './wallet.js';
+import { initWalletModule, addTokenToWallet, connectWalletUI, disconnectWallet } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
-import { connectWalletUI } from './wallet.js';
+//------------
 window.connectWalletUI = connectWalletUI;
 
 // чтобы старый onclick="connectWallet()" продолжал работать:
 window.connectWallet = connectWalletUI;
 
 window.CONFIG = window.CONFIG || CONFIG;
+
+await addTokenToWallet('ARUB');
+
 
 /**
  * Обновление глобальной статистики (Vault-only)
