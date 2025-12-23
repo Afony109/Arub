@@ -131,7 +131,7 @@ export function getAvailableWallets() {
   return list;
 }
 
-export async function connectWallet({ walletId = null } = {}) {
+ export async function connectWallet({ walletId = null } = {}) {
   if (isConnecting) {
     if (currentAddress) return currentAddress;
     throw new Error('Wallet connection already in progress');
@@ -141,7 +141,11 @@ export async function connectWallet({ walletId = null } = {}) {
 
   try {
     const wallets = getAvailableWallets();
-    const entry = walletId ? wallets.find(w => w.id === walletId) : null;
+
+    // Если walletId не передан — не пытаемся "подключаться в пустоту"
+    if (!walletId) throw new Error('No wallet selected');
+
+    const entry = wallets.find(w => w.id === walletId);
     if (!entry) throw new Error('No wallet selected');
 
     if (entry.type === 'walletconnect') {
@@ -158,9 +162,14 @@ export async function connectWallet({ walletId = null } = {}) {
       await wcProvider.connect();
       selectedEip1193 = wcProvider;
     } else {
-      if (!entry.provider) throw new Error('Selected wallet provider not found');
-      selectedEip1193 = entry.provider;
-      await pRequest('eth_requestAccounts');
+      // Поддерживаем и entry.provider, и entry._provider (как у вас было в getAvailableWallets)
+      const prov = entry.provider || entry._provider;
+      if (!prov) throw new Error('Selected wallet provider not found');
+
+      selectedEip1193 = prov;
+
+      // Важно: запрос аккаунтов делаем через выбранный провайдер
+      await selectedEip1193.request({ method: 'eth_requestAccounts' });
     }
 
     ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
@@ -180,8 +189,9 @@ export async function connectWallet({ walletId = null } = {}) {
   }
 }
 
-export function connectWalletUI(walletId = null) {
-  return connectWallet(walletId ? { walletId } : {});
+// UI-обёртка: сюда должен приходить walletId из клика по пункту кошелька
+export function connectWalletUI(walletId) {
+  return connectWallet({ walletId });
 }
 
 
