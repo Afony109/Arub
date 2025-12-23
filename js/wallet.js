@@ -219,3 +219,42 @@ export function getSigner() {
 export function getEthersProvider() {
   return ethersProvider;
 }
+
+export async function addTokenToWallet(symbol) {
+  // symbol: 'ARUB' | 'USDT'
+  if (!selectedEip1193?.request) {
+    throw new Error('Wallet not connected');
+  }
+
+  const token =
+    symbol === 'ARUB' ? (CONFIG?.ARUB_TOKEN || CONFIG?.TOKEN || CONFIG?.ARUB) :
+    symbol === 'USDT' ? (CONFIG?.USDT_TOKEN || CONFIG?.USDT) :
+    null;
+
+  if (!token?.address || !token?.symbol || token?.decimals == null) {
+    throw new Error(
+      `Token config missing for ${symbol}. Expected CONFIG.ARUB_TOKEN / CONFIG.USDT_TOKEN with {address,symbol,decimals,image?}`
+    );
+  }
+
+  const ok = await selectedEip1193.request({
+    method: 'wallet_watchAsset',
+    params: {
+      type: 'ERC20',
+      options: {
+        address: token.address,
+        symbol: token.symbol,
+        decimals: Number(token.decimals),
+        image: token.image || undefined
+      }
+    }
+  });
+
+  return ok;
+}
+
+try {
+  if (ok) showNotification?.(`${token.symbol} added to wallet`, 'success');
+  else showNotification?.(`${token.symbol} was not added`, 'info');
+} catch (_) {}
+
