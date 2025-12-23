@@ -1,662 +1,448 @@
-/**
- * wallet.js — Multi-wallet connection layer (EIP-6963 + Injected + WalletConnect) — HARDENED
- *
- * Key fixes:
- *  - Never uses window.ethereum for signing/tx once a provider is selected
- *  - connectWallet(chosen) uses chosen._provider directly (no re-lookup -> no "Trust selects MetaMask" chaos)
- *  - Handles -32002 pending request by waiting for eth_accounts
- *  - Requires explicit selection when >1 wallet is available (EIP-6963 + injected + WalletConnect)
- *
- * Public API:
- *   initWalletModule()
- *   getAvailableWallets()
- *   getAvailableWalletsAsync(waitMs?)
- *   connectWallet(chosen?)              // chosen is an entry returned by getAvailableWallets()
- *   disconnectWallet()
- *   addTokenToWallet('ARUB'|'USDT')
- *   isWalletConnected(), getAddress(), getEthersProvider(), getSigner(), getEip1193Provider()
- *
- * Globals:
- *   window.walletState = { provider, signer, address, eip1193, wallet, chainId }
- *   window.provider, window.signer, window.userAddress, window.selectedAddress
- *
- * Events:
- *   wallet:connected (CustomEvent, detail: {address, wallet})
- *   wallet:disconnected (Event)
- */
-
+<DOCUMENT filename="wallet (4).js">
+﻿/**
+* wallet.js — Шар підключення кількох гаманців (EIP-6963 + WalletConnect) — ЗАХИЩЕНИЙ
+* Виправлення:
+*  - Запобігає подвійним викликам eth_requestAccounts (-32002 "already pending")
+*  - Якщо -32002 виникає, чекає, поки eth_accounts стануть доступними
+*  - Тільки один вибраний провайдер (ніколи window.ethereum для підпису/транзакцій)
+*
+* Експортує:
+*   initWalletModule()
+*   getAvailableWallets()
+*   connectWallet(options?)
+*   disconnectWallet()
+*   addTokenToWallet('ARUB'|'USDT')
+*   isWalletConnected(), getAddress(), getEthersProvider(), getSigner(), getEip1193Provider()
+*
+* Глобальні змінні:
+*   window.walletState = { provider, signer, address, eip1193, wallet }
+*   window.provider, window.signer, window.userAddress, window.selectedAddress
+*
+* Події:
+*   wallet:connected (CustomEvent, detail: {address, wallet})
+*   wallet:disconnected (Event)
+*/
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
 import { showNotification } from './ui.js';
-
-console.log('[WALLET] wallet.js loaded, build:', Date.now());
-
+console.log('[WALLET] wallet.js завантажено, збірка:', Date.now());
 // -----------------------------
-// Internal state (single source of truth)
+// Внутрішній стан (єдиний джерело правди)
 // -----------------------------
-let selectedEip1193 = null;     // EIP-1193 provider object
-let ethersProvider = null;      // ethers Web3Provider
+let selectedEip1193 = null;
+let ethersProvider = null;
 let signer = null;
 let currentAddress = null;
 let currentChainId = null;
-
+// Запобігти подвійному підключенню
 let isConnecting = false;
-
-// EIP-6963 registry
+// Реєстр EIP-6963
 const discoveredWallets = new Map(); // rdns -> { rdns, name, icon, provider }
-
-// WalletConnect provider reference (cleanup)
+// Посилання на провайдер WalletConnect (для очищення)
 let wcProvider = null;
-
 // -----------------------------
-// Utils
+// Утиліти
 // -----------------------------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 function assertConfig() {
-  if (!CONFIG?.NETWORK?.chainId) throw new Error('CONFIG.NETWORK.chainId is missing');
-  if (!CONFIG?.NETWORK?.chainName) throw new Error('CONFIG.NETWORK.chainName is missing');
-  if (!CONFIG?.NETWORK?.rpcUrls?.[0]) throw new Error('CONFIG.NETWORK.rpcUrls[0] is missing');
-  if (!CONFIG?.NETWORK?.nativeCurrency) throw new Error('CONFIG.NETWORK.nativeCurrency is missing');
+if (!CONFIG?.NETWORK?.chainId) throw new Error('CONFIG.NETWORK.chainId відсутній');
+if (!CONFIG?.NETWORK?.chainName) throw new Error('CONFIG.NETWORK.chainName відсутній');
+if (!CONFIG?.NETWORK?.rpcUrls?.[0]) throw new Error('CONFIG.NETWORK.rpcUrls[0] відсутній');
+if (!CONFIG?.NETWORK?.nativeCurrency) throw new Error('CONFIG.NETWORK.nativeCurrency відсутній');
 }
-
 function toHexChainId(chainIdDec) {
-  return '0x' + Number(chainIdDec).toString(16);
+return '0x' + Number(chainIdDec).toString(16);
 }
-
 function isHexChainIdMatch(chainIdHex, targetChainIdDec) {
-  if (!chainIdHex) return false;
-  const v = parseInt(chainIdHex, 16);
-  return v === Number(targetChainIdDec);
+if (!chainIdHex) return false;
+const v = parseInt(chainIdHex, 16);
+return v === Number(targetChainIdDec);
 }
-
 function getActiveWalletInfo() {
-  const m = selectedEip1193?.__arub_meta || {};
-  return { type: m.type || null, name: m.name || null, rdns: m.rdns || null, id: m.id || null };
+const m = selectedEip1193?.__arub_meta || {};
+return { type: m.type || null, name: m.name || null, rdns: m.rdns || null };
 }
-
 function publishGlobals() {
-  window.walletState = {
-    provider: ethersProvider,
-    signer,
-    address: currentAddress,
-    eip1193: selectedEip1193,
-    wallet: getActiveWalletInfo(),
-    chainId: currentChainId
-  };
-
-  window.provider = ethersProvider;
-  window.signer = signer;
-  window.userAddress = currentAddress;
-  window.selectedAddress = currentAddress;
+window.walletState = {
+provider: ethersProvider,
+signer,
+address: currentAddress,
+eip1193: selectedEip1193,
+wallet: getActiveWalletInfo()
+};
+window.provider = ethersProvider;
+window.signer = signer;
+window.userAddress = currentAddress;
+window.selectedAddress = currentAddress;
 }
-
 function clearGlobals() {
-  window.walletState = null;
-  window.provider = null;
-  window.signer = null;
-  window.userAddress = null;
-  window.selectedAddress = null;
+window.walletState = null;
+window.provider = null;
+window.signer = null;
+window.userAddress = null;
+window.selectedAddress = null;
 }
-
 function dispatchConnected() {
-  window.dispatchEvent(new CustomEvent('wallet:connected', {
-    detail: { address: currentAddress, wallet: getActiveWalletInfo() }
-  }));
+window.dispatchEvent(new CustomEvent('wallet:connected', {
+detail: { address: currentAddress, wallet: getActiveWalletInfo() }
+}));
 }
-
 function dispatchDisconnected() {
-  window.dispatchEvent(new Event('wallet:disconnected'));
+window.dispatchEvent(new Event('wallet:disconnected'));
 }
-
 // -----------------------------
-// Provider request helper (NEVER uses window.ethereum)
+// Допоміжний запит провайдера (НІКОЛИ не використовує window.ethereum)
 // -----------------------------
 async function pRequest(method, params = []) {
-  if (!selectedEip1193?.request) throw new Error('No selected EIP-1193 provider');
-  return await selectedEip1193.request({ method, params });
+if (!selectedEip1193?.request) throw new Error('Немає вибраного провайдера EIP-1193');
+return await selectedEip1193.request({ method, params });
 }
-
 /**
- * If user double-clicks connect, some wallets return -32002.
- * Then we wait for eth_accounts to become available.
- */
+
+Якщо користувач двічі клацає підключення, MetaMask повертає -32002.
+У такому випадку ми можемо просто чекати, поки eth_accounts з'являться.
+*/
 async function requestAccountsSafe() {
-  try {
-    return await pRequest('eth_requestAccounts');
-  } catch (err) {
-    if (err?.code === -32002) {
-      const maxWaitMs = 5000;
-      const step = 200;
-      let waited = 0;
-
-      while (waited < maxWaitMs) {
-        await sleep(step);
-        waited += step;
-
-        let acc = null;
-        try { acc = await pRequest('eth_accounts'); } catch (_) {}
-        if (acc?.[0]) return acc;
-      }
-    }
-    throw err;
-  }
+try {
+return await pRequest('eth_requestAccounts');
+} catch (err) {
+if (err?.code === -32002) {
+// чекати, поки акаунти стануть доступними
+const maxWaitMs = 4000;
+const step = 200;
+let waited = 0;while (waited < maxWaitMs) {
+await sleep(step);
+waited += step;let acc = null;
+try { acc = await pRequest('eth_accounts'); } catch (_) {}
+if (acc?.[0]) return acc;
+}
+}
+throw err;
+}
 }
 
 async function ensureNetwork() {
-  assertConfig();
-
-  let chainIdHex = null;
-  try { chainIdHex = await pRequest('eth_chainId'); } catch (_) {}
-
-  const targetHex = toHexChainId(CONFIG.NETWORK.chainId);
-
-  if (chainIdHex && isHexChainIdMatch(chainIdHex, CONFIG.NETWORK.chainId)) return;
-
-  // try switch
-  try {
-    await pRequest('wallet_switchEthereumChain', [{ chainId: targetHex }]);
-    return;
-  } catch (err) {
-    if (err?.code !== 4902) console.warn('[WALLET] switch chain failed:', err);
-  }
-
-  // add chain
-  await pRequest('wallet_addEthereumChain', [{
-    chainId: targetHex,
-    chainName: CONFIG.NETWORK.chainName,
-    rpcUrls: CONFIG.NETWORK.rpcUrls,
-    nativeCurrency: CONFIG.NETWORK.nativeCurrency,
-    blockExplorerUrls: CONFIG.NETWORK.blockExplorerUrls || []
-  }]);
+assertConfig();
+let chainIdHex = null;
+try { chainIdHex = await pRequest('eth_chainId'); } catch (_) {}
+const targetHex = toHexChainId(CONFIG.NETWORK.chainId);
+if (chainIdHex && isHexChainIdMatch(chainIdHex, CONFIG.NETWORK.chainId)) return;
+// спробувати перемикнути
+try {
+await pRequest('wallet_switchEthereumChain', [{ chainId: targetHex }]);
+return;
+} catch (err) {
+// перейти до додавання
+if (err?.code !== 4902) console.warn('[WALLET] перемикання ланцюга не вдалося:', err);
 }
-
+// додати ланцюг
+await pRequest('wallet_addEthereumChain', [{
+chainId: targetHex,
+chainName: CONFIG.NETWORK.chainName,
+rpcUrls: CONFIG.NETWORK.rpcUrls,
+nativeCurrency: CONFIG.NETWORK.nativeCurrency,
+blockExplorerUrls: CONFIG.NETWORK.blockExplorerUrls || []
+}]);
+}
 function wireProviderEvents(provider) {
-  if (!provider?.on) return;
-
-  try { provider.removeListener?.('accountsChanged', onAccountsChanged); } catch (_) {}
-  try { provider.removeListener?.('chainChanged', onChainChanged); } catch (_) {}
-  try { provider.removeListener?.('disconnect', onDisconnect); } catch (_) {}
-
-  provider.on('accountsChanged', onAccountsChanged);
-  provider.on('chainChanged', onChainChanged);
-  provider.on('disconnect', onDisconnect);
+if (!provider?.on) return;
+try { provider.removeListener?.('accountsChanged', onAccountsChanged); } catch () {}
+try { provider.removeListener?.('chainChanged', onChainChanged); } catch () {}
+try { provider.removeListener?.('disconnect', onDisconnect); } catch (_) {}
+provider.on('accountsChanged', onAccountsChanged);
+provider.on('chainChanged', onChainChanged);
+provider.on('disconnect', onDisconnect);
 }
-
 async function onAccountsChanged(accounts) {
-  const a = Array.isArray(accounts) ? accounts[0] : null;
-  currentAddress = a ? ethers.utils.getAddress(a) : null;
-
-  if (!currentAddress) {
-    await disconnectWallet();
-    return;
-  }
-
-  ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
-  signer = ethersProvider.getSigner();
-
-  // refresh chainId best-effort
-  try {
-    const hex = await selectedEip1193.request({ method: 'eth_chainId' });
-    currentChainId = hex ? parseInt(hex, 16) : currentChainId;
-  } catch (_) {}
-
-  publishGlobals();
-
-  if (typeof window.onWalletConnected === 'function') {
-    window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
-  }
-  dispatchConnected();
+const a = Array.isArray(accounts) ? accounts[0] : null;
+currentAddress = a ? ethers.utils.getAddress(a) : null;
+if (!currentAddress) {
+await disconnectWallet();
+return;
 }
-
+ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+signer = ethersProvider.getSigner();
+publishGlobals();
+if (typeof window.onWalletConnected === 'function') {
+window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
+}
+dispatchConnected();
+}
 async function onChainChanged() {
-  try {
-    ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
-    signer = ethersProvider.getSigner();
-    currentAddress = ethers.utils.getAddress(await signer.getAddress());
-
-    await ensureNetwork();
-
-    // refresh chainId best-effort
-    try {
-      const hex = await selectedEip1193.request({ method: 'eth_chainId' });
-      currentChainId = hex ? parseInt(hex, 16) : currentChainId;
-    } catch (_) {
-      try {
-        const net = await ethersProvider.getNetwork();
-        currentChainId = net?.chainId ?? currentChainId;
-      } catch (_) {}
-    }
-
-    publishGlobals();
-
-    if (typeof window.onWalletConnected === 'function') {
-      window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
-    }
-    dispatchConnected();
-  } catch (e) {
-    console.warn('[WALLET] chainChanged handling error:', e);
-  }
+try {
+ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+signer = ethersProvider.getSigner();
+currentAddress = ethers.utils.getAddress(await signer.getAddress());
+await ensureNetwork();
+publishGlobals();
+if (typeof window.onWalletConnected === 'function') {
+window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
 }
-
+dispatchConnected();
+} catch (e) {
+console.warn('[WALLET] помилка обробки chainChanged:', e);
+}
+}
 async function onDisconnect() {
-  await disconnectWallet();
+await disconnectWallet();
 }
-
 function setSelectedProvider(provider, meta = {}) {
-  if (!provider?.request) throw new Error('Selected provider has no request()');
-  selectedEip1193 = provider;
-  selectedEip1193.__arub_meta = meta;
-
-  ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
-  signer = ethersProvider.getSigner();
-
-  wireProviderEvents(selectedEip1193);
+selectedEip1193 = provider;
+selectedEip1193.__arub_meta = meta;
+ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+signer = ethersProvider.getSigner();
+wireProviderEvents(selectedEip1193);
 }
-
 // -----------------------------
-// EIP-6963 discovery
+// Відкриття EIP-6963
 // -----------------------------
 let _discoveryReady = false;
-
 function setupEip6963Discovery() {
-  if (_discoveryReady) return;
-  _discoveryReady = true;
-
-  window.addEventListener('eip6963:announceProvider', (event) => {
-    const detail = event?.detail;
-    if (!detail?.info?.rdns || !detail?.provider) return;
-
-    const rdns = detail.info.rdns;
-    discoveredWallets.set(rdns, {
-      rdns,
-      name: detail.info.name || rdns,
-      icon: detail.info.icon || null,
-      provider: detail.provider
-    });
-  });
-
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
+if (_discoveryReady) return;
+_discoveryReady = true;
+window.addEventListener('eip6963:announceProvider', (event) => {
+const detail = event?.detail;
+if (!detail?.info?.rdns || !detail?.provider) return;
+const rdns = detail.info.rdns;
+discoveredWallets.set(rdns, {
+rdns,
+name: detail.info.name || rdns,
+icon: detail.info.icon || null,
+provider: detail.provider
+});
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
 }
+/**
 
-// -----------------------------
-// Legacy injected providers (for listing)
-// -----------------------------
-function getInjectedProviders() {
-  const eth = window.ethereum;
-  if (!eth) return [];
-  if (Array.isArray(eth.providers) && eth.providers.length) return eth.providers;
-  return [eth];
-}
-
-function detectInjectedLabel(p, idx) {
-  const isTrust = !!(p?.isTrust || p?.isTrustWallet);
-  const isBybit = !!(p?.isBybitWallet || p?.isBybit || p?.isBybitWeb3);
-  const isRabby = !!p?.isRabby;
-  const isCoinbase = !!p?.isCoinbaseWallet;
-  const isMetaMask = !!p?.isMetaMask;
-
-  if (isTrust) return 'Trust Wallet';
-  if (isBybit) return 'Bybit Wallet';
-  if (isRabby) return 'Rabby';
-  if (isCoinbase) return 'Coinbase Wallet';
-  if (isMetaMask) return 'MetaMask';
-  return `Injected #${idx + 1}`;
-}
-
+Запасний варіант для спадкових інжектованих (ЛИШЕ для списку/вибору)
+*/
 function getLegacyInjectedEntries() {
-  const out = [];
+const eth = window.ethereum;
+if (!eth) return [];
 
-  const eth = window.ethereum;
-  if (!eth) return out;
-
-  const providers = Array.isArray(eth.providers) ? eth.providers : [eth];
-
-  const seen = new Set();
-  for (const p of providers) {
-    if (!p || seen.has(p)) continue;
-    seen.add(p);
-
-    // попытка определить имя (примерно)
-    let name = 'InjectedProvider';
-    if (p.isMetaMask) name = 'MetaMask';
-    else if (p.isTrust) name = 'Trust Wallet';
-    else if (p.isBybit) name = 'Bybit Wallet';
-
-    out.push({
-      id: `injected:${name.toLowerCase().replace(/\s+/g, '-')}`,
-      name,
-      type: 'injected',
-      _provider: p,
-    });
-  }
-
-  // если найдено больше 1 и есть брендовые — выкинуть общий InjectedProvider
-  const hasBranded = out.some(x => x.name !== 'InjectedProvider');
-  if (hasBranded) {
-    return out.filter(x => x.name !== 'InjectedProvider');
-  }
-
-  return out;
+if (Array.isArray(eth.providers) && eth.providers.length) {
+return eth.providers.map((p, idx) => {
+const name =
+p.isMetaMask ? 'MetaMask' :
+p.isTrust ? 'Trust Wallet' :
+p.isRabby ? 'Rabby' :
+Injected #${idx + 1};
+return { id: legacy:${idx}, name, icon: null, type: 'injected-fallback', _provider: p };
+});
 }
-
-
+const name =
+eth.isMetaMask ? 'MetaMask' :
+eth.isTrust ? 'Trust Wallet' :
+eth.isRabby ? 'Rabby' :
+'Injected Wallet';
+return [{ id: 'legacy:single', name, icon: null, type: 'injected-fallback', _provider: eth }];
+}
 async function waitForWalletsIfNeeded(maxWaitMs = 1200) {
-  if (discoveredWallets.size > 0 || getLegacyInjectedEntries().length > 0) return;
-
-  try { window.dispatchEvent(new Event('eip6963:requestProvider')); } catch (_) {}
-
-  const step = 150;
-  let waited = 0;
-  while (waited < maxWaitMs) {
-    await sleep(step);
-    waited += step;
-    if (discoveredWallets.size > 0 || getLegacyInjectedEntries().length > 0) return;
-  }
+if (discoveredWallets.size > 0 || getLegacyInjectedEntries().length > 0) return;
+try { window.dispatchEvent(new Event('eip6963:requestProvider')); } catch (_) {}
+const step = 150;
+let waited = 0;
+while (waited < maxWaitMs) {
+await sleep(step);
+waited += step;
+if (discoveredWallets.size > 0 || getLegacyInjectedEntries().length > 0) return;
 }
-
-function countAvailableChoices() {
-  const eip = discoveredWallets.size;
-  const inj = getLegacyInjectedEntries().length;
-  const wc = CONFIG?.WALLETCONNECT_PROJECT_ID ? 1 : 0;
-  return { eip, inj, wc, total: eip + inj + wc };
 }
-
 // -----------------------------
-// Public API
+// Публічний API
 // -----------------------------
 export function initWalletModule() {
-  setupEip6963Discovery();
-  console.log('[WALLET] initWalletModule: discovery enabled');
+setupEip6963Discovery();
+console.log('[WALLET] initWalletModule: відкриття ввімкнено');
 }
-
 export function getAvailableWallets() {
-  const list = [];
-
-  // 1) Собираем все provider-объекты, которые уже пришли через EIP-6963
-  const eipProviders = new Set();
-
-  // helper: добавить кошелёк только если ещё не добавлен
-  const seenKeys = new Set();
-  const add = (entry, key, priority = 0) => {
-    if (!key) key = entry.id || entry.name;
-    if (seenKeys.has(key)) return;
-
-    // Можно хранить priority, если захотите "перезаписывать" (не нужно в простом варианте)
-    seenKeys.add(key);
-    list.push(entry);
-  };
-
-  // EIP-6963 wallets (приоритетные)
-  for (const w of discoveredWallets.values()) {
-    if (w?.provider) eipProviders.add(w.provider);
-
-    // ключ дедупа: rdns (самый надёжный)
-    const key = `eip:${w.rdns}`;
-
-    add({
-      id: w.rdns,
-      name: w.name,
-      icon: w.icon,
-      type: 'eip6963',
-      _provider: w.provider,
-      _meta: { rdns: w.rdns, name: w.name }
-    }, key, 10);
-  }
-
-  // Legacy injected — добавляем только если provider НЕ был уже добавлен через EIP-6963
-  for (const w of getLegacyInjectedEntries()) {
-    const p = w?._provider;
-
-    // если это тот же объект provider, который уже есть в EIP-6963 — пропускаем
-    if (p && eipProviders.has(p)) continue;
-
-    // дополнительно: убираем общий "InjectedProvider", если у него нет явного бренда
-    const legacyName = String(w.name || '').toLowerCase();
-    if (legacyName === 'injected' || legacyName === 'injectedprovider' || legacyName === 'injected provider') {
-      continue;
-    }
-
-    const key = `legacy:${w.id || w.name || 'injected'}:${p ? (p._walletId || '') : ''}`;
-    add({
-      id: w.id,
-      name: w.name,
-      icon: null,
-      type: w.type,
-      _provider: w._provider,
-      _meta: { name: w.name }
-    }, key, 1);
-  }
-
-  if (CONFIG?.WALLETCONNECT_PROJECT_ID) {
-    add({ id: 'walletconnect', name: 'WalletConnect', icon: null, type: 'walletconnect' }, 'wc', 0);
-  }
-
-  return list;
+const list = [];
+for (const w of discoveredWallets.values()) {
+list.push({ id: w.rdns, name: w.name, icon: w.icon, type: 'eip6963' });
 }
-
-
-export async function getAvailableWalletsAsync(waitMs = 250) {
-  setupEip6963Discovery();
-  await new Promise(r => setTimeout(r, waitMs));
-  return getAvailableWallets();
+for (const w of getLegacyInjectedEntries()) {
+list.push({ id: w.id, name: w.name, icon: null, type: w.type });
 }
-
-export async function connectWallet(chosen = null) {
-  assertConfig();
-  setupEip6963Discovery();
-
-  if (isConnecting) return;
-  isConnecting = true;
-
-  try {
-    await waitForWalletsIfNeeded(900);
-
-    // 1) Require selection if there is more than one available choice
-    const hasChoice = !!(chosen && chosen.type);
-
-    if (!hasChoice) {
-      const { total, eip, inj, wc } = countAvailableChoices();
-
-      if (total === 0) throw new Error('NO_WALLETS_FOUND');
-      if (total > 1) throw new Error('WALLET_SELECTION_REQUIRED');
-
-      // Exactly one -> autoselect
-      if (eip === 1) {
-        const only = Array.from(discoveredWallets.values())[0];
-        chosen = { type: 'eip6963', id: only.rdns, name: only.name, _provider: only.provider };
-      } else if (inj === 1) {
-        const only = getLegacyInjectedEntries()[0];
-        chosen = { type: 'injected-fallback', id: only.id, name: only.name, _provider: only._provider };
-      } else if (wc === 1) {
-        chosen = { type: 'walletconnect', id: 'walletconnect', name: 'WalletConnect' };
-      } else {
-        throw new Error('WALLET_SELECTION_REQUIRED');
-      }
-    }
-
-    // 2) Select provider strictly by chosen (NO re-lookup by id)
-    if (chosen.type === 'eip6963') {
-      const p = chosen._provider || discoveredWallets.get(chosen.id)?.provider;
-      if (!p?.request) throw new Error('EIP-6963 provider not found');
-
-      setSelectedProvider(p, {
-        type: 'eip6963',
-        name: chosen.name || discoveredWallets.get(chosen.id)?.name || chosen.id,
-        rdns: chosen.id,
-        id: chosen.id
-      });
-
-      const accounts = await requestAccountsSafe();
-      if (!accounts?.[0]) throw new Error('No accounts returned');
-
-      await ensureNetwork();
-      currentAddress = ethers.utils.getAddress(accounts[0]);
-    }
-
-    else if (chosen.type === 'injected-fallback') {
-      const p = chosen._provider;
-      if (!p?.request) throw new Error('Injected provider not found');
-
-      setSelectedProvider(p, {
-        type: 'injected-fallback',
-        name: chosen.name || 'Injected Wallet',
-        rdns: null,
-        id: chosen.id
-      });
-
-      const accounts = await requestAccountsSafe();
-      if (!accounts?.[0]) throw new Error('No accounts returned');
-
-      await ensureNetwork();
-      currentAddress = ethers.utils.getAddress(accounts[0]);
-    }
-
-    else if (chosen.type === 'walletconnect') {
-      if (!CONFIG.WALLETCONNECT_PROJECT_ID) throw new Error('CONFIG.WALLETCONNECT_PROJECT_ID is missing for WalletConnect');
-
-      const { default: EthereumProvider } = await import(
-        'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.2/dist/index.es.js'
-      );
-
-      wcProvider = await EthereumProvider.init({
-        projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-        chains: [Number(CONFIG.NETWORK.chainId)],
-        optionalChains: CONFIG?.WALLETCONNECT_OPTIONAL_CHAINS || [],
-        showQrModal: true,
-        rpcMap: { [Number(CONFIG.NETWORK.chainId)]: CONFIG.NETWORK.rpcUrls[0] },
-        metadata: CONFIG?.WALLETCONNECT_METADATA || undefined
-      });
-
-      await wcProvider.connect();
-
-      setSelectedProvider(wcProvider, {
-        type: 'walletconnect',
-        name: 'WalletConnect',
-        rdns: null,
-        id: 'walletconnect'
-      });
-
-      let accounts = null;
-      try { accounts = await pRequest('eth_accounts'); } catch (_) {}
-      if (!accounts?.[0]) accounts = await requestAccountsSafe();
-      if (!accounts?.[0]) throw new Error('No accounts returned');
-
-      currentAddress = ethers.utils.getAddress(accounts[0]);
-      await ensureNetwork();
-    }
-
-    else {
-      throw new Error(`Unsupported wallet type: ${chosen.type}`);
-    }
-
-    // 3) Finalize chainId + publish globals
-    let chainId = null;
-    try {
-      const hex = await selectedEip1193.request({ method: 'eth_chainId' });
-      chainId = hex ? parseInt(hex, 16) : null;
-    } catch (_) {
-      try {
-        const net = await ethersProvider.getNetwork();
-        chainId = net?.chainId ?? null;
-      } catch (_) {}
-    }
-    currentChainId = chainId;
-
-    console.log('[WALLET] connected', {
-      wallet: getActiveWalletInfo(),
-      address: currentAddress,
-      chainId: currentChainId,
-      providerFlags: {
-        isMetaMask: !!selectedEip1193?.isMetaMask,
-        isTrust: !!(selectedEip1193?.isTrust || selectedEip1193?.isTrustWallet),
-        isBybit: !!(selectedEip1193?.isBybitWallet || selectedEip1193?.isBybit || selectedEip1193?.isBybitWeb3)
-      }
-    });
-
-    publishGlobals();
-
-    showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
-
-    if (typeof window.onWalletConnected === 'function') {
-      window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
-    }
-    dispatchConnected();
-
-    return currentAddress;
-
-  } catch (err) {
-    console.error('[WALLET] connectWallet error:', err);
-    showNotification?.(err?.message || 'Wallet connect failed', 'error');
-    throw err;
-  } finally {
-    isConnecting = false;
-  }
+if (CONFIG?.WALLETCONNECT_PROJECT_ID) {
+list.push({ id: 'walletconnect', name: 'WalletConnect', icon: null, type: 'walletconnect' });
 }
-
+return list;
+}
+export async function connectWallet(options = {}) {
+const { walletId = null, autoSelect = true } = options;
+if (isConnecting) {
+// Якщо вже підключено — просто повернути адресу; якщо в процесі — уникнути другого requestAccounts
+if (currentAddress) return currentAddress;
+throw new Error('Підключення гаманця вже в процесі. Будь ласка, зачекайте.');
+}
+isConnecting = true;
+try {
+assertConfig();
+// Якщо вже підключено, повторно використати
+if (currentAddress && selectedEip1193) {
+publishGlobals();
+dispatchConnected();
+return currentAddress;
+}
+await waitForWalletsIfNeeded(1200);
+const wallets = getAvailableWallets();
+if (!wallets.length) throw new Error('Гаманці не знайдено (немає інжектованих гаманців і WalletConnect не налаштовано)');
+let chosen = null;
+if (walletId) {
+chosen = wallets.find(w => w.id === walletId) || null;
+} else if (autoSelect) {
+const injected = wallets.filter(w => w.type !== 'walletconnect');
+if (injected.length === 1) chosen = injected[0];
+}
+if (!chosen) {
+const lines = wallets.map((w, i) => ${i + 1}) ${w.name} [${w.type}]).join('\n');
+const pick = window.prompt(Виберіть гаманець:\n${lines}\n\nВведіть номер:);
+const idx = Number(pick) - 1;
+if (!Number.isFinite(idx) || idx < 0 || idx >= wallets.length) throw new Error('Вибір гаманця скасовано');
+chosen = wallets[idx];
+}
+if (chosen.type === 'eip6963') {
+const w = discoveredWallets.get(chosen.id);
+if (!w?.provider) throw new Error('Провайдер вибраного гаманця недоступний');
+setSelectedProvider(w.provider, { type: 'eip6963', name: chosen.name, rdns: chosen.id });
+const accounts = await requestAccountsSafe();
+if (!accounts?.[0]) throw new Error('Акаунти не повернено');
+await ensureNetwork();
+currentAddress = ethers.utils.getAddress(accounts[0]);
+}
+else if (chosen.type === 'injected-fallback') {
+const legacy = getLegacyInjectedEntries();
+const entry = legacy.find(x => x.id === chosen.id);
+if (!entry?._provider) throw new Error('Інжектований провайдер не знайдено');
+setSelectedProvider(entry._provider, { type: 'injected-fallback', name: chosen.name, rdns: null });
+const accounts = await requestAccountsSafe();
+if (!accounts?.[0]) throw new Error('Акаунти не повернено');
+await ensureNetwork();
+currentAddress = ethers.utils.getAddress(accounts[0]);
+}
+else if (chosen.type === 'walletconnect') {
+if (!CONFIG.WALLETCONNECT_PROJECT_ID) throw new Error('CONFIG.WALLETCONNECT_PROJECT_ID відсутній для WalletConnect');
+const { default: EthereumProvider } = await import(
+'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.2/dist/index.es.js'
+);
+wcProvider = await EthereumProvider.init({
+projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+chains: [Number(CONFIG.NETWORK.chainId)],
+optionalChains: CONFIG?.WALLETCONNECT_OPTIONAL_CHAINS || [],
+showQrModal: true,
+rpcMap: { [Number(CONFIG.NETWORK.chainId)]: CONFIG.NETWORK.rpcUrls[0] },
+metadata: CONFIG?.WALLETCONNECT_METADATA || undefined
+});
+await wcProvider.connect();
+setSelectedProvider(wcProvider, { type: 'walletconnect', name: 'WalletConnect', rdns: null });
+// WC часто має eth_accounts відразу
+let accounts = null;
+try { accounts = await pRequest('eth_accounts'); } catch (_) {}
+if (!accounts?.[0]) accounts = await requestAccountsSafe();
+if (!accounts?.[0]) throw new Error('Акаунти не повернено');
+currentAddress = ethers.utils.getAddress(accounts[0]);
+await ensureNetwork();
+} else {
+throw new Error(Непідтримуваний тип гаманця: ${chosen.type});
+}
+// ВАЖЛИВО: після того як selectedEip1193 визначено і мережу забезпечено
+ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+signer = ethersProvider.getSigner();
+// Отримуємо chainId і фіксуємо walletState (щоб не було undefined)
+const network = await ethersProvider.getNetwork();
+window.walletState = {
+address: currentAddress,
+signer,
+provider: ethersProvider,
+chainId: network.chainId
+};
+console.log('[WALLET] підключено', {
+address: currentAddress,
+chainId: network.chainId
+});
+publishGlobals();
+// Виправлення: забезпечити chainId в walletState
+let chainId = null;
+try {
+const hex = await selectedEip1193.request({ method: 'eth_chainId' });
+chainId = parseInt(hex, 16);
+currentChainId = chainId;
+} catch (_) {
+const net = await ethersProvider.getNetwork();
+chainId = net?.chainId ?? null;
+currentChainId = chainId;
+}
+window.walletState = {
+...(window.walletState || {}),
+chainId
+};
+console.log('[WALLET] chainId зафіксовано в walletState:', window.walletState.chainId);
+showNotification?.(Гаманець підключено: ${currentAddress}, 'success');
+if (typeof window.onWalletConnected === 'function') {
+window.onWalletConnected(currentAddress, { wallet: getActiveWalletInfo() });
+}
+dispatchConnected();
+return currentAddress;
+} catch (err) {
+console.error('[WALLET] помилка connectWallet:', err);
+showNotification?.(err?.message || 'Підключення гаманця не вдалося', 'error');
+throw err;
+} finally {
+isConnecting = false;
+}
+}
 export async function disconnectWallet() {
-  try {
-    if (wcProvider) {
-      try { await wcProvider.disconnect?.(); } catch (_) {}
-      wcProvider = null;
-    }
-
-    try { selectedEip1193?.disconnect?.(); } catch (_) {}
-
-    selectedEip1193 = null;
-    ethersProvider = null;
-    signer = null;
-    currentAddress = null;
-    currentChainId = null;
-
-    clearGlobals();
-
-    showNotification?.('Wallet disconnected', 'info');
-    if (typeof window.onWalletDisconnected === 'function') window.onWalletDisconnected();
-    dispatchDisconnected();
-  } catch (err) {
-    console.warn('[WALLET] disconnectWallet error:', err);
-  } finally {
-    isConnecting = false;
-  }
+try {
+if (wcProvider) {
+try { await wcProvider.disconnect?.(); } catch (_) {}
+wcProvider = null;
 }
-
+try { selectedEip1193?.disconnect?.(); } catch (_) {}
+selectedEip1193 = null;
+ethersProvider = null;
+signer = null;
+currentAddress = null;
+clearGlobals();
+showNotification?.('Гаманець відключено', 'info');
+if (typeof window.onWalletDisconnected === 'function') window.onWalletDisconnected();
+dispatchDisconnected();
+} catch (err) {
+console.warn('[WALLET] помилка disconnectWallet:', err);
+} finally {
+isConnecting = false;
+}
+}
 export function isWalletConnected() { return !!currentAddress && !!selectedEip1193; }
 export function getAddress() { return currentAddress; }
 export function getEthersProvider() { return ethersProvider; }
 export function getSigner() { return signer; }
 export function getEip1193Provider() { return selectedEip1193; }
-
 export async function addTokenToWallet(symbol) {
-  try {
-    if (!selectedEip1193) throw new Error('Wallet not connected');
-
-    const token =
-      symbol === 'ARUB' ? CONFIG?.ARUB_TOKEN :
-      symbol === 'USDT' ? CONFIG?.USDT_TOKEN :
-      null;
-
-    if (!token?.address || !token?.symbol || token?.decimals == null) {
-      throw new Error(`Token config missing for ${symbol}. Expected CONFIG.ARUB_TOKEN / CONFIG.USDT_TOKEN`);
-    }
-
-    const ok = await pRequest('wallet_watchAsset', [{
-      type: 'ERC20',
-      options: {
-        address: token.address,
-        symbol: token.symbol,
-        decimals: token.decimals,
-        image: token.image || undefined
-      }
-    }]);
-
-    if (ok) showNotification?.(`${token.symbol} added to wallet`, 'success');
-    else showNotification?.(`${token.symbol} was not added`, 'info');
-
-    return ok;
-  } catch (err) {
-    console.error('[WALLET] addTokenToWallet error:', err);
-    showNotification?.(err?.message || 'Add token failed', 'error');
-    throw err;
-  }
+try {
+if (!selectedEip1193) throw new Error('Гаманець не підключено');
+const token =
+symbol === 'ARUB' ? CONFIG?.ARUB_TOKEN :
+symbol === 'USDT' ? CONFIG?.USDT_TOKEN :
+null;
+if (!token?.address || !token?.symbol || token?.decimals == null) {
+throw new Error(Конфігурація токена відсутня для ${symbol}. Очікується CONFIG.ARUB_TOKEN / CONFIG.USDT_TOKEN);
+}
+const ok = await pRequest('wallet_watchAsset', [{
+type: 'ERC20',
+options: {
+address: token.address,
+symbol: token.symbol,
+decimals: token.decimals,
+image: token.image || undefined
+}
+}]);
+if (ok) showNotification?.(${token.symbol} додано до гаманця, 'success');
+else showNotification?.(${token.symbol} не додано, 'info');
+return ok;
+} catch (err) {
+console.error('[WALLET] помилка addTokenToWallet:', err);
+showNotification?.(err?.message || 'Додавання токена не вдалося', 'error');
+throw err;
+}
 }
