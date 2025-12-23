@@ -42,15 +42,62 @@ window.addEventListener('wallet:connected', () => {
 initWalletModule?.();
 
 // 2) UI: список кошельков в dropdown
+// (1) Объявили один раз
 const connectBtn = document.getElementById('connectBtn');
-const dropdown = document.getElementById('walletDropdown');
+const dropdown   = document.getElementById('walletDropdown');
 const disconnectBtn = document.getElementById('disconnectWalletBtn');
+
+// (2) Дальше используем, без повторных const
+connectBtn?.addEventListener('click', () => {
+  const isOpen = dropdown?.style.display === 'block';
+  if (dropdown) dropdown.style.display = isOpen ? 'none' : 'block';
+});
+
+disconnectBtn?.addEventListener('click', async () => {
+  try {
+    await disconnectWallet();
+    if (dropdown) dropdown.style.display = 'none';
+  } catch (e) {
+    console.error(e);
+  }
+});
+
 
 function clearWalletList() {
   if (!dropdown) return;
   // оставляем кнопку disconnect, остальное удаляем
   [...dropdown.querySelectorAll('[data-wallet-item="1"]')].forEach(n => n.remove());
 }
+
+function renderWallets() {
+  // удалить старые элементы списка (кроме disconnect)
+  dropdown.querySelectorAll('[data-wallet]').forEach(n => n.remove());
+
+  const wallets = getAvailableWallets();
+
+  wallets.forEach(w => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.wallet = '1';
+    b.textContent = w.name;
+    b.onclick = async () => {
+      await connectWalletUI(w.id);
+      dropdown.style.display = 'none';
+    };
+    dropdown.prepend(b);
+  });
+}
+
+connectBtn?.addEventListener('click', () => {
+  const open = dropdown.style.display === 'block';
+  dropdown.style.display = open ? 'none' : 'block';
+  if (!open) renderWallets();
+});
+
+document.getElementById('disconnectWalletBtn')?.addEventListener('click', async () => {
+  await disconnectWallet();
+  dropdown.style.display = 'none';
+});
 
 function renderWalletList() {
   if (!dropdown) return;
