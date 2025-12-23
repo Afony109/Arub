@@ -140,18 +140,10 @@ export async function connectWallet({ walletId = null } = {}) {
   isConnecting = true;
 
   try {
-    let entry = null;
     const wallets = getAvailableWallets();
-
-    entry = walletId
-      ? wallets.find(w => w.id === walletId)
-      : wallets[0];
-
+    const entry = walletId ? wallets.find(w => w.id === walletId) : null;
     if (!entry) throw new Error('No wallet selected');
 
-    // -----------------
-    // WalletConnect
-    // -----------------
     if (entry.type === 'walletconnect') {
       const { default: EthereumProvider } = await import(
         'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.2/dist/index.es.js'
@@ -166,6 +158,7 @@ export async function connectWallet({ walletId = null } = {}) {
       await wcProvider.connect();
       selectedEip1193 = wcProvider;
     } else {
+      if (!entry.provider) throw new Error('Selected wallet provider not found');
       selectedEip1193 = entry.provider;
       await pRequest('eth_requestAccounts');
     }
@@ -182,11 +175,15 @@ export async function connectWallet({ walletId = null } = {}) {
     dispatchConnected();
 
     return currentAddress;
-
   } finally {
     isConnecting = false;
   }
 }
+
+export function connectWalletUI(walletId = null) {
+  return connectWallet(walletId ? { walletId } : {});
+}
+
 
 export async function disconnectWallet() {
   try {
@@ -274,13 +271,8 @@ export async function addTokenToWallet(symbol) {
 }
 
 // UI helper — используется из app.js
-export async function connectWalletUI(walletId = null) {
-  try {
-    return await connectWallet(
-      walletId ? { walletId } : {}
-    );
-  } catch (err) {
-    console.error('[WALLET] connectWalletUI error:', err);
-    throw err;
-  }
+
+export function connectWalletUI(walletId = null) {
+  return connectWallet(walletId ? { walletId } : {});
 }
+
