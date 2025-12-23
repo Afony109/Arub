@@ -36,6 +36,7 @@ export const CONFIG = {
   // -----------------------------
   USDT_ADDRESS: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
   TOKEN_ADDRESS: '0x161296CD7F742220f727e1B4Ccc02cAEc71Ed2C6',
+  TOKEN_DECIMALS: 6,
 
   // -----------------------------
   // Other contracts
