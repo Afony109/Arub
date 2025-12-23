@@ -6,7 +6,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import { initWalletModule, addTokenToWallet, connectWalletUI, disconnectWallet } from './wallet.js';
+import { initWalletModule, getAvailableWallets, connectWalletUI, disconnectWallet } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
@@ -34,6 +34,82 @@ window.addTokenToWallet = async (symbol) => {
     throw e;
   }
 };
+
+window.addEventListener('wallet:connected', () => {
+  console.log('[APP] walletState chainId:', window.walletState?.chainId ?? '(unknown)');
+});
+// ------------------------------
+initWalletModule?.();
+
+// 2) UI: список кошельков в dropdown
+const connectBtn = document.getElementById('connectBtn');
+const dropdown = document.getElementById('walletDropdown');
+const disconnectBtn = document.getElementById('disconnectWalletBtn');
+
+function clearWalletList() {
+  if (!dropdown) return;
+  // оставляем кнопку disconnect, остальное удаляем
+  [...dropdown.querySelectorAll('[data-wallet-item="1"]')].forEach(n => n.remove());
+}
+
+function renderWalletList() {
+  if (!dropdown) return;
+
+  clearWalletList();
+
+  const wallets = getAvailableWallets();
+  if (!wallets.length) {
+    const el = document.createElement('div');
+    el.dataset.walletItem = '1';
+    el.style.padding = '10px';
+    el.textContent = 'No wallets found';
+    dropdown.prepend(el);
+    return;
+  }
+
+  // рендерим кнопки выбора кошелька
+  wallets.forEach((w) => {
+    const btn = document.createElement('button');
+    btn.dataset.walletItem = '1';
+    btn.type = 'button';
+    btn.style.display = 'block';
+    btn.style.width = '100%';
+    btn.style.marginBottom = '6px';
+    btn.textContent = w.name;
+
+    btn.onclick = async () => {
+      try {
+        await connectWalletUI(w.id);   // <-- КЛЮЧ: выбор по id
+        dropdown.style.display = 'none';
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    dropdown.prepend(btn);
+  });
+}
+
+connectBtn?.addEventListener('click', () => {
+  if (!dropdown) return;
+
+  const isOpen = dropdown.style.display === 'block';
+  dropdown.style.display = isOpen ? 'none' : 'block';
+
+  if (!isOpen) renderWalletList();
+});
+
+disconnectBtn?.addEventListener('click', async () => {
+  await disconnectWallet();
+  if (dropdown) dropdown.style.display = 'none';
+});
+
+// закрытие dropdown по клику вне
+window.addEventListener('click', (e) => {
+  if (!dropdown || !connectBtn) return;
+  if (e.target === connectBtn || dropdown.contains(e.target)) return;
+  dropdown.style.display = 'none';
+});
 
 /**
  * Обновление глобальной статистики (Vault-only)
