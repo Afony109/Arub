@@ -270,9 +270,3 @@ export async function addTokenToWallet(symbol) {
   return ok;
 }
 
-// UI helper — используется из app.js
-
-export function connectWalletUI(walletId = null) {
-  return connectWallet(walletId ? { walletId } : {});
-}
-
