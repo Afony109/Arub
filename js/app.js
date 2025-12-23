@@ -11,15 +11,29 @@ import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from 
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
 //------------
-window.connectWalletUI = connectWalletUI;
+
 
 // чтобы старый onclick="connectWallet()" продолжал работать:
-window.connectWallet = connectWalletUI;
+
 
 window.CONFIG = window.CONFIG || CONFIG;
 
-await addTokenToWallet('ARUB');
+window.connectWalletUI = connectWalletUI;
+window.connectWallet = connectWalletUI;
 
+
+// Для inline onclick="addTokenToWallet('ARUB')" из HTML
+window.addTokenToWallet = async (symbol) => {
+  try {
+    // Важно: add token требует подключённого кошелька
+    await connectWalletUI(); 
+    return await addTokenToWallet(symbol);
+  } catch (e) {
+    console.error(e);
+    showNotification?.(e?.message || 'Add token failed', 'error');
+    throw e;
+  }
+};
 
 /**
  * Обновление глобальной статистики (Vault-only)
