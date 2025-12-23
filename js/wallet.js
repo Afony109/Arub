@@ -243,7 +243,7 @@ export async function addTokenToWallet(symbol) {
       ? {
           address: CONFIG.TOKEN_ADDRESS,
           symbol: 'ARUB',
-          decimals: Number(CONFIG.TOKEN_DECIMALS ?? 18),
+          decimals: Number(CONFIG.TOKEN_DECIMALS ?? 6),
           image: CONFIG.ARUB_IMAGE || undefined
         }
       : null;
