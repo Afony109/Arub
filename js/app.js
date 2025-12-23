@@ -99,15 +99,20 @@ function renderWallets() {
 
 
 connectBtn?.addEventListener('click', () => {
-  if (!dropdown) {
-    console.warn('[UI] wallet dropdown not found');
+  // пробуем найти dropdown на момент клика
+  const menu =
+    document.getElementById('walletDropdown') ||
+    document.getElementById('walletMenu');
+
+  if (!menu) {
+    console.warn('[UI] wallet dropdown not found in DOM');
     return;
   }
 
-  const open = dropdown.style.display === 'block';
-  dropdown.style.display = open ? 'none' : 'block';
+  const isOpen = menu.style.display === 'block';
+  menu.style.display = isOpen ? 'none' : 'block';
 
-  if (!open) renderWallets();
+  if (!isOpen) renderWallets();
 });
 
 
@@ -116,20 +121,37 @@ document.getElementById('disconnectWalletBtn')?.addEventListener('click', async 
   dropdown.style.display = 'none';
 });
 
-function renderWalletList() {
-  if (!dropdown) return;
+function renderWallets() {
+  const menu =
+    document.getElementById('walletDropdown') ||
+    document.getElementById('walletMenu');
 
-  clearWalletList();
+  if (!menu) return;
+
+  menu.querySelectorAll('[data-wallet="1"]').forEach(n => n.remove());
 
   const wallets = getAvailableWallets();
-  if (!wallets.length) {
-    const el = document.createElement('div');
-    el.dataset.walletItem = '1';
-    el.style.padding = '10px';
-    el.textContent = 'No wallets found';
-    dropdown.prepend(el);
-    return;
-  }
+
+  wallets.forEach(w => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.wallet = '1';
+    b.textContent = w.name;
+
+    b.onclick = async () => {
+      try {
+        await connectWalletUI(w.id);
+        menu.style.display = 'none';
+      } catch (e) {
+        console.error('[UI] connect error:', e);
+        showNotification?.(e?.message || 'Wallet connect failed', 'error');
+      }
+    };
+
+    menu.prepend(b);
+  });
+}
+
 
   // рендерим кнопки выбора кошелька
   wallets.forEach((w) => {
