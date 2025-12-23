@@ -145,7 +145,6 @@ document.getElementById('disconnectWalletBtn')?.addEventListener('click', async 
 
     dropdown.prepend(btn);
   });
-}
 
 connectBtn?.addEventListener('click', () => {
   if (!dropdown) return;
