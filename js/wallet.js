@@ -220,21 +220,36 @@ export function getEthersProvider() {
   return ethersProvider;
 }
 
+// Добавление токена в кошелёк (MetaMask/Trust/Rabby и т.п.)
 export async function addTokenToWallet(symbol) {
-  // symbol: 'ARUB' | 'USDT'
   if (!selectedEip1193?.request) {
     throw new Error('Wallet not connected');
   }
 
-  const token =
-    symbol === 'ARUB' ? (CONFIG?.ARUB_TOKEN || CONFIG?.TOKEN || CONFIG?.ARUB) :
-    symbol === 'USDT' ? (CONFIG?.USDT_TOKEN || CONFIG?.USDT) :
-    null;
+  const sym = String(symbol || '').toUpperCase();
 
-  if (!token?.address || !token?.symbol || token?.decimals == null) {
-    throw new Error(
-      `Token config missing for ${symbol}. Expected CONFIG.ARUB_TOKEN / CONFIG.USDT_TOKEN with {address,symbol,decimals,image?}`
-    );
+  // ВАЖНО: decimals должны соответствовать контракту
+  // USDT на Arbitrum = 6
+  // ARUB — укажите фактические decimals вашего токена (если у него 18 — поставьте 18)
+  const token =
+    sym === 'USDT'
+      ? {
+          address: CONFIG.USDT_ADDRESS,
+          symbol: 'USDT',
+          decimals: 6,
+          image: CONFIG.USDT_IMAGE || undefined
+        }
+      : sym === 'ARUB'
+      ? {
+          address: CONFIG.TOKEN_ADDRESS,
+          symbol: 'ARUB',
+          decimals: Number(CONFIG.TOKEN_DECIMALS ?? 18),
+          image: CONFIG.ARUB_IMAGE || undefined
+        }
+      : null;
+
+  if (!token?.address) {
+    throw new Error(`Unknown token symbol: ${symbol}`);
   }
 
   const ok = await selectedEip1193.request({
@@ -244,17 +259,16 @@ export async function addTokenToWallet(symbol) {
       options: {
         address: token.address,
         symbol: token.symbol,
-        decimals: Number(token.decimals),
-        image: token.image || undefined
+        decimals: token.decimals,
+        image: token.image
       }
     }
   });
 
+  try {
+    if (ok) showNotification?.(`${token.symbol} added to wallet`, 'success');
+    else showNotification?.(`${token.symbol} was not added`, 'info');
+  } catch (_) {}
+
   return ok;
 }
-
-try {
-  if (ok) showNotification?.(`${token.symbol} added to wallet`, 'success');
-  else showNotification?.(`${token.symbol} was not added`, 'info');
-} catch (_) {}
-
