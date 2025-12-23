@@ -70,8 +70,10 @@ function clearWalletList() {
 }
 
 function renderWallets() {
+  if (!dropdown) return;
+
   // удалить старые элементы списка (кроме disconnect)
-  dropdown.querySelectorAll('[data-wallet]').forEach(n => n.remove());
+  dropdown.querySelectorAll('[data-wallet="1"]').forEach(n => n.remove());
 
   const wallets = getAvailableWallets();
 
@@ -80,19 +82,34 @@ function renderWallets() {
     b.type = 'button';
     b.dataset.wallet = '1';
     b.textContent = w.name;
+
     b.onclick = async () => {
-      await connectWalletUI(w.id);
-      dropdown.style.display = 'none';
+      try {
+        await connectWalletUI(w.id);     // важно: передаём walletId
+        dropdown.style.display = 'none';
+      } catch (e) {
+        console.error('[UI] connect error:', e);
+        showNotification?.(e?.message || 'Wallet connect failed', 'error');
+      }
     };
+
     dropdown.prepend(b);
   });
 }
 
+
 connectBtn?.addEventListener('click', () => {
+  if (!dropdown) {
+    console.warn('[UI] wallet dropdown not found');
+    return;
+  }
+
   const open = dropdown.style.display === 'block';
   dropdown.style.display = open ? 'none' : 'block';
+
   if (!open) renderWallets();
 });
+
 
 document.getElementById('disconnectWalletBtn')?.addEventListener('click', async () => {
   await disconnectWallet();
