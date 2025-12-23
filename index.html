@@ -1,4 +1,4 @@
-<DOCUMENT filename="index (8).html">
+<DOCUMENT filename="index.html">
 <!DOCTYPE html>
 
 <html lang="uk" class="dark some-other-class">
@@ -1032,16 +1032,26 @@
     walletConnected = false;
     connectBtn.textContent = "Підключити гаманець";
     connectBtn.classList.remove("connected");
-    dropdown.classList.remove("show");
+    dropdown?.classList.remove("show");
+    dropdown && (dropdown.style.display = 'none');
+    if (dropdown) dropdown.style.display = 'none';
+
   };
 
   // ✅ FIX: на клик вызываем connectWallet (она внутри сама покажет селектор кошелька)
- connectBtn.addEventListener("click", async () => {
-  if (!walletConnected) {
-    if (window.connectWallet) {
-      await window.connectWallet();
-      return;
-    }
+ connectBtn?.addEventListener('click', () => {
+  if (!dropdown) {
+    console.warn('[UI] wallet dropdown not found');
+    return;
+  }
+
+  // если уже подключены — можно открывать меню только для Disconnect (опционально)
+  const isOpen = dropdown.style.display === 'block';
+  dropdown.style.display = isOpen ? 'none' : 'block';
+
+  if (!isOpen) renderWallets();
+});
+
 
     // fallback на прямой запрос
     if (window.ethereum?.request) {
@@ -1052,8 +1062,7 @@
     }
 
     alert("Web3-гаманець не знайдено. Відкрийте сайт у браузері MetaMask.");
-  }
-});
+
 
 </script>
 <!-- Ethers -->
@@ -1223,4 +1232,3 @@
 </body>
 </html>
 
-</DOCUMENT>
