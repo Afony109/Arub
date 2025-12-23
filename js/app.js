@@ -70,58 +70,6 @@ function clearWalletList() {
 }
 
 function renderWallets() {
-  if (!dropdown) return;
-
-  // удалить старые элементы списка (кроме disconnect)
-  dropdown.querySelectorAll('[data-wallet="1"]').forEach(n => n.remove());
-
-  const wallets = getAvailableWallets();
-
-  wallets.forEach(w => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.dataset.wallet = '1';
-    b.textContent = w.name;
-
-    b.onclick = async () => {
-      try {
-        await connectWalletUI(w.id);     // важно: передаём walletId
-        dropdown.style.display = 'none';
-      } catch (e) {
-        console.error('[UI] connect error:', e);
-        showNotification?.(e?.message || 'Wallet connect failed', 'error');
-      }
-    };
-
-    dropdown.prepend(b);
-  });
-}
-
-
-connectBtn?.addEventListener('click', () => {
-  // пробуем найти dropdown на момент клика
-  const menu =
-    document.getElementById('walletDropdown') ||
-    document.getElementById('walletMenu');
-
-  if (!menu) {
-    console.warn('[UI] wallet dropdown not found in DOM');
-    return;
-  }
-
-  const isOpen = menu.style.display === 'block';
-  menu.style.display = isOpen ? 'none' : 'block';
-
-  if (!isOpen) renderWallets();
-});
-
-
-document.getElementById('disconnectWalletBtn')?.addEventListener('click', async () => {
-  await disconnectWallet();
-  dropdown.style.display = 'none';
-});
-
-function renderWallets() {
   const menu =
     document.getElementById('walletDropdown') ||
     document.getElementById('walletMenu');
@@ -151,6 +99,29 @@ function renderWallets() {
     menu.prepend(b);
   });
 }
+
+connectBtn?.addEventListener('click', () => {
+  // пробуем найти dropdown на момент клика
+  const menu =
+    document.getElementById('walletDropdown') ||
+    document.getElementById('walletMenu');
+
+  if (!menu) {
+    console.warn('[UI] wallet dropdown not found in DOM');
+    return;
+  }
+
+  const isOpen = menu.style.display === 'block';
+  menu.style.display = isOpen ? 'none' : 'block';
+
+  if (!isOpen) renderWallets();
+});
+
+
+document.getElementById('disconnectWalletBtn')?.addEventListener('click', async () => {
+  await disconnectWallet();
+  dropdown.style.display = 'none';
+});
 
 
   // рендерим кнопки выбора кошелька
