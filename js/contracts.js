@@ -78,99 +78,42 @@ export function initReadOnlyContracts() {
 // Oracle: function getRate() returns (rate, updatedAt)
 // We return ONLY "rate" as BigNumber (rate is scaled by 1e6).
 // -----------------------------
-const ORACLE_PRICE_CACHE_KEY = 'arub_oracle_price_cache_v1';
-
-// Сколько секунд считаем допустимой "старыми" данные оракула.
-// Под арбитраж можно поставить выше, но я бы начал с 300–900 сек.
-const ORACLE_STALE_AFTER_SEC = 600; // 10 минут
-
-function readOracleCache() {
-  try {
-    const raw = localStorage.getItem(ORACLE_PRICE_CACHE_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== 'object') return null;
-    if (!Number.isFinite(obj.price)) return null;
-    // updatedAtSec может быть null (если раньше не сохраняли)
-    return obj;
-  } catch {
-    return null;
-  }
-}
-
-function writeOracleCache(payload) {
-  try {
-    localStorage.setItem(ORACLE_PRICE_CACHE_KEY, JSON.stringify(payload));
-  } catch {
-    // ignore
-  }
-}
+// contracts.js
+let lastGoodArubPriceInfo = null;
 
 export async function getArubPrice() {
-  if (!roOracle) initReadOnlyContracts();
-
-  const fetchedAtMs = Date.now();
+  // ВАЖНО: initReadOnlyContracts() почти наверняка async -> нужен await
+  if (!roOracle) await initReadOnlyContracts();
 
   try {
     const { rate, updatedAt } = await callWithRetry(async () => {
-      const [rate, updatedAt] = await roOracle.getRate();
-      return { rate, updatedAt };
+      const [rate, updatedAt] = await roOracle.getRate(); // (uint256,uint256)
+      return { rate, updatedAt: Number(updatedAt) };
     }, 3, 400);
 
-    // ВАЖНО: rate/updatedAt могут быть BigNumber (ethers v5). Приводим updatedAt к секундам.
-    const updatedAtSec = updatedAt?.toNumber ? updatedAt.toNumber() : Number(updatedAt);
+    const decimals = Number(CONFIG?.ORACLE_DECIMALS ?? 6); // у вас 1e6 scale
+    const price = Number(ethers.utils.formatUnits(rate, decimals));
 
-    // Здесь предполагается, что далее в проекте ты приводишь rate к Number "price".
-    // Если rate уже Number — оставим как есть. Если BigNumber — приведи по твоим decimals.
-    // ВНИМАНИЕ: точное преобразование зависит от того, что возвращает ваш oracle.
-    const ORACLE_DECIMALS = Number(CONFIG?.ORACLE_DECIMALS ?? 6);
-    const price = Number(ethers.utils.formatUnits(rate, ORACLE_DECIMALS));
-
-    // Если price не конечный — считаем это ошибкой чтения
-    if (!Number.isFinite(price)) throw new Error('Oracle returned non-finite price');
-
-    const isStale =
-      Number.isFinite(updatedAtSec)
-        ? (Math.floor(fetchedAtMs / 1000) - updatedAtSec) > ORACLE_STALE_AFTER_SEC
-        : false;
-
-    // Сохраняем кэш последней успешной цены (даже если stale — это всё равно "последняя успешная")
-    writeOracleCache({
+    const info = {
       price,
-      updatedAtSec: Number.isFinite(updatedAtSec) ? updatedAtSec : null,
-      fetchedAtMs
-    });
-
-    return {
-      price,
-      updatedAtSec: Number.isFinite(updatedAtSec) ? updatedAtSec : null,
-      fetchedAtMs,
+      updatedAt,
       isFallback: false,
-      isStale
+      isStale: false,
     };
+
+    // кэш последнего валидного
+    if (Number.isFinite(price) && price > 0) lastGoodArubPriceInfo = info;
+
+    return info;
   } catch (e) {
-    const cached = readOracleCache();
-
-    if (cached?.price != null) {
-      const cachedUpdatedAtSec = cached.updatedAtSec;
-      const isStale =
-        Number.isFinite(cachedUpdatedAtSec)
-          ? (Math.floor(fetchedAtMs / 1000) - cachedUpdatedAtSec) > ORACLE_STALE_AFTER_SEC
-          : true; // если не знаем updatedAt — лучше считать stale
-
-      return {
-        price: cached.price,
-        updatedAtSec: Number.isFinite(cachedUpdatedAtSec) ? cachedUpdatedAtSec : null,
-        fetchedAtMs,
-        isFallback: true,
-        isStale
-      };
+    // если что-то “обвалилось” — показываем последний хороший курс как cached
+    if (lastGoodArubPriceInfo) {
+      return { ...lastGoodArubPriceInfo, isFallback: true };
     }
-
-    // Если кэша нет — пробрасываем ошибку выше
     throw e;
   }
 }
+
 
 
 // -----------------------------
