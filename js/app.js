@@ -40,41 +40,49 @@ function renderWallets() {
 
   const wallets = getAvailableWallets();
 
-  wallets.forEach((w) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.dataset.walletItem = '1';
-    btn.textContent = w.name;
+wallets.forEach((w) => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.dataset.walletItem = '1';
+  btn.textContent = w.name;
 
-    btn.onclick = async () => {
-      if (uiConnecting) {
-        showNotification?.('Подключение уже выполняется. Закройте окно кошелька или дождитесь завершения.', 'error');
-        return;
-      }
+  btn.onclick = async () => {
+    if (uiConnecting) {
+      showNotification?.('Подключение уже выполняется. Закройте окно кошелька или дождитесь завершения.', 'error');
+      return;
+    }
 
-      uiConnecting = true;
-      setWalletMenuDisabled(menu, true);
+    uiConnecting = true;
+    setWalletMenuDisabled(menu, true);
 
-      try {
-        // важно: connectWallet должен кидать ошибку при cancel/timeout
-        await connectWalletUI({ walletId: w.id });
+    try {
+      await connectWalletUI({ walletId: w.id });
+    } catch (e) {
+      // user rejected — это ожидаемое действие, не “ошибка приложения”
+      const code = e?.code;
+      const m = String(e?.message || '').toLowerCase();
+      const isUserRejected =
+        code === 4001 ||
+        m.includes('user rejected') ||
+        m.includes('rejected the request') ||
+        m.includes('request rejected') ||
+        m.includes('action_rejected');
 
-        // успех — здесь можно закрыть дропдаун/обновить UI
-        // showNotification?.('Кошелёк подключен', 'success');
-      } catch (e) {
+      if (isUserRejected) {
+        showNotification?.('Підключення скасовано користувачем.', 'info'); // если 'info' нет — оставьте 'error'
+      } else {
         console.error('[UI] connect error:', e);
-
-        // человеко-читаемая ошибка
-        const msg = normalizeWalletError(e);
-        showNotification?.(msg, 'error');
-      } finally {
-        uiConnecting = false;
-        setWalletMenuDisabled(menu, false);
+        showNotification?.('Підключення скасовано.', 'error');
       }
-    };
+    } finally {
+      uiConnecting = false;
+      setWalletMenuDisabled(menu, false);
+    }
+  };
 
-    menu.insertBefore(btn, menu.firstChild);
-  });
+  // <-- ВАЖНО: вставка кнопки должна быть здесь (вне onclick)
+  menu.insertBefore(btn, menu.firstChild);
+});
 }
 
 // Нормализация ошибок (cancel/timeout и т.п.)
