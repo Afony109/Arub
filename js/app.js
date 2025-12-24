@@ -306,13 +306,6 @@ window.addEventListener('click', (e) => {
   dropdown.style.display = 'none';
 });
 
-function formatTokenAmount(value, maxDecimals = 6) {
-  if (value == null) return '0';
-  const n = (typeof value === 'string') ? Number(value) : value;
-  if (!Number.isFinite(n)) return '0';
-  return n.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: maxDecimals });
-}
-
 /**
  * Обновление глобальной статистики (Vault-only)
  * - ARUB price
