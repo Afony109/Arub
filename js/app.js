@@ -205,18 +205,11 @@ disconnectBtn?.addEventListener('click', async () => {
     document.getElementById('walletMenu');
 
   try {
-    await disconnectWallet();              // ваша реальная функция
-  } catch (e) {
-    console.error('[UI] disconnect error:', e);
+    await disconnectWallet();
   } finally {
-    // Полный reset состояния — чтобы можно было снова подключать любой кошелёк
     uiConnecting = false;
     setWalletMenuDisabled(menu, false);
-
-    // Закрыть список (как у вас было)
     if (dropdown) dropdown.style.display = 'none';
-
-    // Перерисовать кошельки, если функция есть
     if (typeof renderWallets === 'function') renderWallets();
   }
 });
