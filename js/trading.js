@@ -417,8 +417,8 @@ async function refreshBalances() {
       usdtRO.balanceOf(user.address)
     ]);
 
-    setText('arubBalance', formatTokenAmount(arubBal, DECIMALS_ARUB, 2));
-    setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 2));
+    setText('arubBalance', formatTokenAmount(arubBal, DECIMALS_ARUB, 6));
+    setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 6));
   } catch (e) {
     console.warn('[TRADING] refreshBalances error:', e);
   }
