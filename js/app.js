@@ -242,12 +242,6 @@ window.addEventListener('wallet:disconnected', () => {
 setWalletUIDisconnected();
 
 
-// (2) Дальше используем, без повторных const
-connectBtn?.addEventListener('click', () => {
-  const isOpen = dropdown?.style.display === 'block';
-  if (dropdown) dropdown.style.display = isOpen ? 'none' : 'block';
-});
-
 disconnectBtn?.addEventListener('click', async () => {
   const menu =
     document.getElementById('walletDropdown') ||
@@ -271,21 +265,32 @@ function clearWalletList() {
 }
 
 
-connectBtn?.addEventListener('click', () => {
-  // пробуем найти dropdown на момент клика
-  const menu =
+function getDropdownEl() {
+  return (
     document.getElementById('walletDropdown') ||
-    document.getElementById('walletMenu');
+    document.getElementById('walletMenu')
+  );
+}
 
-  if (!menu) {
-    console.warn('[UI] wallet dropdown not found in DOM');
+connectBtn?.addEventListener('click', (ev) => {
+  ev.preventDefault();
+  ev.stopPropagation();
+
+  const dd = getDropdownEl();
+  console.log('[UI] connectBtn click', { connectBtn: !!connectBtn, dropdown: !!dd });
+
+  if (!dd) {
+    showNotification?.('Меню кошельков не найдено на странице.', 'error');
     return;
   }
 
-  const isOpen = menu.style.display === 'block';
-  menu.style.display = isOpen ? 'none' : 'block';
+  if (typeof renderWallets === 'function') renderWallets();
 
-  if (!isOpen) renderWallets();
+  const isVisible = window.getComputedStyle(dd).display !== 'none';
+  dd.style.display = isVisible ? 'none' : 'block';
+
+  dd.style.pointerEvents = 'auto';
+  dd.style.zIndex = '9999';
 });
 
 
