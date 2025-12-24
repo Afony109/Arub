@@ -28,6 +28,17 @@ function setWalletMenuDisabled(menuEl, disabled) {
   });
 }
 
+// Compatibility: unify ids across pages
+(function () {
+  const d1 = document.getElementById('disconnectWalletBtn');
+  const d2 = document.getElementById('walletDisconnect');
+  if (!d1 && d2) d2.id = 'disconnectWalletBtn';
+
+  const m1 = document.getElementById('walletDropdown');
+  const m2 = document.getElementById('walletMenu');
+  if (!m1 && m2) m2.id = 'walletDropdown';
+})();
+
 function renderWallets() {
   const menu =
     document.getElementById('walletDropdown') ||
