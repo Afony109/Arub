@@ -224,7 +224,7 @@ function setWalletUIConnected(address) {
 }
 
 function setWalletUIDisconnected() {
-  if (connectBtn) connectBtn.textContent = 'Connect Wallet';
+  if (connectBtn) connectBtn.textContent = 'Підключити гаманець';
   if (disconnectBtn) disconnectBtn.style.display = 'none';
 }
 
@@ -306,6 +306,13 @@ window.addEventListener('click', (e) => {
   dropdown.style.display = 'none';
 });
 
+function formatTokenAmount(value, maxDecimals = 6) {
+  if (value == null) return '0';
+  const n = (typeof value === 'string') ? Number(value) : value;
+  if (!Number.isFinite(n)) return '0';
+  return n.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: maxDecimals });
+}
+
 /**
  * Обновление глобальной статистики (Vault-only)
  * - ARUB price
@@ -329,7 +336,7 @@ async function updateGlobalStats() {
     };
 
     // 1) ARUB price
-    setText('arubPriceValue', Number.isFinite(arubPrice) ? arubPrice.toFixed(2) : '—');
+    setText('arubPriceValue', Number.isFinite(arubPrice) ? arubPrice.toFixed(6) : '—');
 
     // 2) Total supply (если где-то показывается)
     const supplyEl = document.getElementById('totalSupplyArub');
