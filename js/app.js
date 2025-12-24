@@ -18,6 +18,7 @@ import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contr
 
 window.CONFIG = window.CONFIG || CONFIG;
 
+// app.js (глобально)
 let uiConnecting = false;
 
 function setWalletMenuDisabled(menuEl, disabled) {
@@ -47,7 +48,7 @@ function renderWallets() {
 
     btn.onclick = async () => {
       if (uiConnecting) {
-        showNotification?.('Connection is already in progress. Close the wallet popup or wait.', 'error');
+        showNotification?.('Подключение уже выполняется. Закройте окно кошелька или дождитесь завершения.', 'error');
         return;
       }
 
@@ -55,28 +56,38 @@ function renderWallets() {
       setWalletMenuDisabled(menu, true);
 
       try {
-        await connectWalletUI(w.id);
-        menu.style.display = 'none';
+        // важно: connectWallet должен кидать ошибку при cancel/timeout
+        await connectWalletUI({ walletId: w.id });
+
+        // успех — здесь можно закрыть дропдаун/обновить UI
+        // showNotification?.('Кошелёк подключен', 'success');
       } catch (e) {
-        const msg = e?.message || 'Wallet connect failed';
-
-        if (msg.toLowerCase().includes('rejected')) {
-          showNotification?.('Request rejected. Please choose a wallet again.', 'error');
-        } else if (msg.toLowerCase().includes('already in progress')) {
-          showNotification?.('Connection is still pending in the wallet popup.', 'error');
-        } else {
-          showNotification?.(msg, 'error');
-        }
-
         console.error('[UI] connect error:', e);
+
+        // человеко-читаемая ошибка
+        const msg = normalizeWalletError(e);
+        showNotification?.(msg, 'error');
       } finally {
         uiConnecting = false;
         setWalletMenuDisabled(menu, false);
       }
     };
 
-    menu.prepend(btn);
+    menu.insertBefore(btn, menu.firstChild);
   });
+}
+
+// Нормализация ошибок (cancel/timeout и т.п.)
+function normalizeWalletError(e) {
+  const m = String(e?.message || e || '');
+
+  // частые случаи
+  if (/user rejected|rejected|denied|canceled|cancelled/i.test(m)) return 'Підключення скасовано користувачем.';
+  if (/timeout/i.test(m)) return 'Таймаут підключення. Відкрийте/розблокуйте гаманець і спробуйте ще раз.';
+  if (/already pending|pending request/i.test(m)) return 'У гаманці вже є запит на підключення. Відкрийте гаманець і завершіть/відхиліть його.';
+  if (/No wallet selected/i.test(m)) return 'Оберіть гаманець зі списку.';
+
+  return 'Не вдалося підключити гаманець: ' + m;
 }
 
 function renderWalletButtons(menu) {
@@ -189,11 +200,24 @@ connectBtn?.addEventListener('click', () => {
 });
 
 disconnectBtn?.addEventListener('click', async () => {
+  const menu =
+    document.getElementById('walletDropdown') ||
+    document.getElementById('walletMenu');
+
   try {
-    await disconnectWallet();
-    if (dropdown) dropdown.style.display = 'none';
+    await disconnectWallet();              // ваша реальная функция
   } catch (e) {
-    console.error(e);
+    console.error('[UI] disconnect error:', e);
+  } finally {
+    // Полный reset состояния — чтобы можно было снова подключать любой кошелёк
+    uiConnecting = false;
+    setWalletMenuDisabled(menu, false);
+
+    // Закрыть список (как у вас было)
+    if (dropdown) dropdown.style.display = 'none';
+
+    // Перерисовать кошельки, если функция есть
+    if (typeof renderWallets === 'function') renderWallets();
   }
 });
 
