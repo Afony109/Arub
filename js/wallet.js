@@ -258,7 +258,12 @@ export function getAvailableWallets() {
       });
 
       // ключевое: connect может “висеть”, поэтому ограничиваем по времени
-      await withTimeout(localWc.connect(), 25000, 'WalletConnect connect');
+     await withTimeout(
+  localSelected.request({ method: 'eth_requestAccounts' }),
+  20000,
+  'eth_requestAccounts timeout'
+);
+
 
       localSelected = localWc;
     } else {
@@ -292,7 +297,7 @@ export function getAvailableWallets() {
     dispatchConnected();
 
     return currentAddress;
-    } catch (e) {
+  } catch (e) {
     // Определяем "user rejected" (MetaMask/Trust/EIP-1193)
     const msg = (e?.message || '').toLowerCase();
     const code = e?.code;
@@ -312,25 +317,21 @@ export function getAvailableWallets() {
     } catch (_) {}
 
     // ВАЖНО: при любой неуспешной попытке не оставляем "полуподключённое" состояние
-    // (иначе следующий выбор кошелька может упираться в неконсистентные глобалы)
     selectedEip1193 = null;
     ethersProvider = null;
     signer = null;
     currentChainId = null;
     currentAddress = null;
 
-    // Дополнительно: если это был отказ/отмена, не держим глобальный wcProvider
-    // чтобы следующая попытка стартовала "с чистого листа"
-    if (isUserRejected) {
-      wcProvider = null;
-    }
+    // При любой неуспешной попытке лучше начинать WalletConnect с чистого листа
+    wcProvider = null;
 
     throw e;
   } finally {
-
     isConnecting = false;
   }
-}
+ }
+
 
 function withTimeout(promise, ms, label = 'operation') {
   let t;
@@ -342,7 +343,7 @@ function withTimeout(promise, ms, label = 'operation') {
 }
 
 // UI-обёртка: сюда должен приходить walletId из клика по пункту кошелька
-export function connectWalletUI(walletId) {
+export function connectWalletUI({ walletId } = {}) {
   return connectWallet({ walletId });
 }
 
