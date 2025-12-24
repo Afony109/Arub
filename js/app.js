@@ -201,6 +201,36 @@ const connectBtn = document.getElementById('connectBtn');
 const dropdown   = document.getElementById('walletDropdown');
 const disconnectBtn = document.getElementById('disconnectWalletBtn');
 
+function shortAddr(addr) {
+  if (!addr) return '';
+  return addr.slice(0, 6) + '…' + addr.slice(-4);
+}
+
+function setWalletUIConnected(address) {
+  if (connectBtn) connectBtn.textContent = `Wallet: ${shortAddr(address)}`;
+  if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+function setWalletUIDisconnected() {
+  if (connectBtn) connectBtn.textContent = 'Connect Wallet';
+  if (disconnectBtn) disconnectBtn.style.display = 'none';
+}
+
+// Подписка на события wallet.js
+window.addEventListener('wallet:connected', (e) => {
+  const address = e?.detail?.address;
+  if (address) setWalletUIConnected(address);
+});
+
+window.addEventListener('wallet:disconnected', () => {
+  setWalletUIDisconnected();
+});
+
+// На старте страницы — привести UI в корректное состояние
+setWalletUIDisconnected();
+
+
 // (2) Дальше используем, без повторных const
 connectBtn?.addEventListener('click', () => {
   const isOpen = dropdown?.style.display === 'block';
@@ -252,7 +282,6 @@ document.getElementById('disconnectWalletBtn')?.addEventListener('click', async 
   await disconnectWallet();
   dropdown.style.display = 'none';
 });
-
 
 // закрытие dropdown по клику вне
 window.addEventListener('click', (e) => {
