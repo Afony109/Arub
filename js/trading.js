@@ -418,7 +418,7 @@ async function refreshBalances() {
     ]);
 
     setText('arubBalance', formatTokenAmount(arubBal, DECIMALS_ARUB, 6));
-    setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 6));
+    setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 2));
   } catch (e) {
     console.warn('[TRADING] refreshBalances error:', e);
   }
