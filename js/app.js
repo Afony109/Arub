@@ -30,6 +30,15 @@ function renderWallets() {
 
   const wallets = getAvailableWallets();
 
+  let uiConnecting = false;
+
+function setWalletMenuDisabled(menuEl, disabled) {
+  if (!menuEl) return;
+  menuEl.querySelectorAll('button[data-wallet-item="1"]').forEach(b => {
+    b.disabled = disabled;
+  });
+}
+
   wallets.forEach((w) => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -37,14 +46,26 @@ function renderWallets() {
     btn.textContent = w.name;
 
     btn.onclick = async () => {
-      try {
-        await connectWalletUI(w.id);
-        menu.style.display = 'none';
-      } catch (e) {
-        console.error('[UI] connect error:', e);
-        showNotification?.(e?.message || 'Wallet connect failed', 'error');
-      }
-    };
+  if (uiConnecting) {
+    showNotification?.('Wallet connection is already in progress. Close the wallet popup or wait.', 'error');
+    return;
+  }
+
+  uiConnecting = true;
+  setWalletMenuDisabled(menu, true);
+
+  try {
+    await connectWalletUI(w.id);
+    menu.style.display = 'none';
+  } catch (e) {
+    // Это ожидаемая ситуация при закрытии окна или отказе
+    console.error('[UI] connect error:', e);
+    showNotification?.(e?.message || 'Wallet connect failed', 'error');
+  } finally {
+    uiConnecting = false;
+    setWalletMenuDisabled(menu, false);
+  }
+};
 
     menu.prepend(btn);
   });
