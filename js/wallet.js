@@ -115,49 +115,105 @@ export function initWalletModule() {
   setupEip6963Discovery();
   console.log('[WALLET] initWalletModule');
 }
+function detectWalletBrand(provider, fallbackName = 'Wallet') {
+  // EIP-1193 vendor hints (order matters)
+  if (provider?.isBybitWallet) return 'Bybit Wallet';
+  if (provider?.isOkxWallet) return 'OKX Wallet';
+  if (provider?.isRabby) return 'Rabby Wallet';
+  if (provider?.isCoinbaseWallet) return 'Coinbase Wallet';
+  if (provider?.isTrust || provider?.isTrustWallet) return 'Trust Wallet';
+  if (provider?.isPhantom) return 'Phantom';
+  if (provider?.isBraveWallet) return 'Brave Wallet';
+  if (provider?.isUniswapWallet || provider?.isUniswapExtension) return 'Uniswap Extension';
+
+  // MetaMask is commonly emulated; treat as MetaMask only if not a known emulator
+  if (provider?.isMetaMask) return 'MetaMask';
+
+  // fallback to whatever EIP-6963 metadata says
+  return fallbackName || 'Wallet';
+}
+
+function pickEip6963Fields(w) {
+  // Support multiple shapes just in case your discoveredWallets store differs.
+  // Expected: { rdns, name, icon, provider } OR { info: { rdns, name, icon }, provider }
+  const rdns = w?.rdns || w?.info?.rdns || w?.metadata?.rdns || '';
+  const metaName = w?.name || w?.info?.name || w?.metadata?.name || '';
+  const icon = w?.icon || w?.info?.icon || w?.metadata?.icon || null;
+  const provider = w?.provider || w?.info?.provider || w?.eip1193Provider || null;
+
+  return { rdns, metaName, icon, provider };
+}
+
 export function getAvailableWallets() {
   const list = [];
   const seen = new Set();
 
+  // -------------------------
   // EIP-6963 discovered wallets
+  // -------------------------
   for (const w of discoveredWallets.values()) {
-    const rdns = w?.rdns || w?.info?.rdns || w?.metadata?.rdns || '';
-    const name = w?.name || w?.info?.name || w?.metadata?.name || 'Wallet';
-    const provider = w?.provider || w?.info?.provider || w?.eip1193Provider;
+    const { rdns, metaName, icon, provider } = pickEip6963Fields(w);
 
-    const key = rdns ? `eip6963:${rdns}` : `eip6963:${name.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    // Brand-detected name (prevents "MetaMask" label opening Bybit, etc.)
+    const name = detectWalletBrand(provider, metaName || 'Wallet');
+
+    // Stable unique id
+    const id = rdns ? `eip6963:${rdns}` : `eip6963:${name.toLowerCase()}`;
+
+    // Dedup by id and by display name (case-insensitive)
+    const nameKey = `name:${name.toLowerCase()}`;
+    if (seen.has(id) || seen.has(nameKey)) continue;
+    seen.add(id);
+    seen.add(nameKey);
 
     list.push({
-      id: key,                 // уникальный id
+      id,
       name,
+      icon,
       type: 'eip6963',
       _provider: provider,
       _meta: { rdns, name }
     });
   }
 
-  // Legacy injected (metamask/bybit/etc), уже должен отдавать _provider
+  // -------------------------
+  // Legacy injected wallets
+  // -------------------------
   for (const w of getLegacyInjectedEntries()) {
-    const name = (w?.name || 'Injected').trim();
+    const prov = w?._provider || w?.provider || null;
+
+    // Prefer detected brand name over w.name if provider hints exist
+    const detectedName = detectWalletBrand(prov, w?.name || 'Injected');
+    const name = (detectedName || w?.name || 'Injected').trim();
+
+    const id = `legacy:${(w?.id || name).toLowerCase()}`;
     const nameKey = `name:${name.toLowerCase()}`;
 
-    // если такой же кошелёк уже есть из EIP-6963 — пропускаем legacy-дубликат
-    if (seen.has(nameKey)) continue;
+    // If an EIP-6963 wallet with same brand/name already exists, skip legacy duplicate
+    if (seen.has(nameKey) || seen.has(id)) continue;
     seen.add(nameKey);
+    seen.add(id);
 
     list.push({
-      id: `legacy:${w.id || name.toLowerCase()}`,
+      id,
       name,
-      type: w.type || 'injected',
-      _provider: w._provider || w.provider || null,
+      icon: null,
+      type: w?.type || 'injected',
+      _provider: prov,
       _meta: { name }
     });
   }
 
+  // -------------------------
+  // WalletConnect
+  // -------------------------
   if (CONFIG?.WALLETCONNECT_PROJECT_ID) {
-    list.push({ id: 'walletconnect', name: 'WalletConnect', type: 'walletconnect' });
+    list.push({
+      id: 'walletconnect',
+      name: 'WalletConnect',
+      icon: null,
+      type: 'walletconnect'
+    });
   }
 
   return list;
