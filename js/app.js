@@ -6,7 +6,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import { initWalletModule, getAvailableWallets, connectWalletUI, disconnectWallet } from './wallet.js';
+import {initWalletModule, getAvailableWallets, connectWalletUI, disconnectWallet} from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
@@ -18,16 +18,81 @@ import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contr
 
 window.CONFIG = window.CONFIG || CONFIG;
 
+function renderWallets() {
+  const menu =
+    document.getElementById('walletDropdown') ||
+    document.getElementById('walletMenu');
+
+  if (!menu) return;
+
+  // удалить старые элементы списка (кроме disconnect)
+  menu.querySelectorAll('[data-wallet-item="1"], [data-walletItem="1"]').forEach(n => n.remove());
+
+  const wallets = getAvailableWallets();
+
+  wallets.forEach((w) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.walletItem = '1';
+    btn.textContent = w.name;
+
+    btn.onclick = async () => {
+      try {
+        await connectWalletUI(w.id);
+        menu.style.display = 'none';
+      } catch (e) {
+        console.error('[UI] connect error:', e);
+        showNotification?.(e?.message || 'Wallet connect failed', 'error');
+      }
+    };
+
+    menu.prepend(btn);
+  });
+}
+
+
+window.CONFIG = window.CONFIG || CONFIG;
+
 window.connectWalletUI = connectWalletUI;
-window.connectWallet = connectWalletUI;
+
+window.connectWallet = () => {
+  const menu =
+    document.getElementById('walletDropdown') ||
+    document.getElementById('walletMenu');
+
+  if (!menu) {
+    showNotification?.('Wallet menu not found in DOM', 'error');
+    return;
+  }
+
+  const isOpen = menu.style.display === 'block';
+  menu.style.display = isOpen ? 'none' : 'block';
+
+  if (!isOpen) {
+    renderWallets();
+
+    const hasAny = (getAvailableWallets() || []).length > 0;
+    if (!hasAny) {
+      showNotification?.(
+        'Web3-гаманець не знайдено. Встановіть MetaMask/Trust або відкрийте сайт у dApp-браузері.',
+        'error'
+      );
+    }
+  }
+};
 
 
 // Для inline onclick="addTokenToWallet('ARUB')" из HTML
+
 window.addTokenToWallet = async (symbol) => {
   try {
-    // Важно: add token требует подключённого кошелька
-    await connectWalletUI(); 
-    return await addTokenToWallet(symbol);
+    if (!window.walletState?.signer) {
+      window.connectWallet?.();
+      showNotification?.('Спочатку оберіть гаманець і підключіться.', 'info');
+      return;
+    }
+
+    return await addTokenToWalletImpl(symbol);
   } catch (e) {
     console.error(e);
     showNotification?.(e?.message || 'Add token failed', 'error');
@@ -123,8 +188,18 @@ document.getElementById('disconnectWalletBtn')?.addEventListener('click', async 
   dropdown.style.display = 'none';
 });
 
+function renderWallets() {
+  const menu =
+    document.getElementById('walletDropdown') ||
+    document.getElementById('walletMenu');
 
-  // рендерим кнопки выбора кошелька
+  if (!menu) return;
+
+  // удалить старые элементы списка (кроме disconnect)
+  menu.querySelectorAll('[data-wallet-item="1"], [data-walletItem="1"]').forEach(n => n.remove());
+
+  const wallets = getAvailableWallets();
+
   wallets.forEach((w) => {
     const btn = document.createElement('button');
     btn.dataset.walletItem = '1';
@@ -136,15 +211,17 @@ document.getElementById('disconnectWalletBtn')?.addEventListener('click', async 
 
     btn.onclick = async () => {
       try {
-        await connectWalletUI(w.id);   // <-- КЛЮЧ: выбор по id
-        dropdown.style.display = 'none';
+        await connectWalletUI(w.id);
+        menu.style.display = 'none';
       } catch (e) {
-        console.error(e);
+        console.error('[UI] connect error:', e);
+        showNotification?.(e?.message || 'Wallet connect failed', 'error');
       }
     };
 
-    dropdown.prepend(btn);
+    menu.prepend(btn);
   });
+}
 
 connectBtn?.addEventListener('click', () => {
   if (!dropdown) return;
