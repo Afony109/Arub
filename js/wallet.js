@@ -115,21 +115,54 @@ export function initWalletModule() {
   setupEip6963Discovery();
   console.log('[WALLET] initWalletModule');
 }
-
 export function getAvailableWallets() {
-  const list = [...discoveredWallets.values()];
-  list.push(...getLegacyInjectedEntries());
+  const list = [];
+  const seen = new Set();
+
+  // EIP-6963 discovered wallets
+  for (const w of discoveredWallets.values()) {
+    const rdns = w?.rdns || w?.info?.rdns || w?.metadata?.rdns || '';
+    const name = w?.name || w?.info?.name || w?.metadata?.name || 'Wallet';
+    const provider = w?.provider || w?.info?.provider || w?.eip1193Provider;
+
+    const key = rdns ? `eip6963:${rdns}` : `eip6963:${name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    list.push({
+      id: key,                 // уникальный id
+      name,
+      type: 'eip6963',
+      _provider: provider,
+      _meta: { rdns, name }
+    });
+  }
+
+  // Legacy injected (metamask/bybit/etc), уже должен отдавать _provider
+  for (const w of getLegacyInjectedEntries()) {
+    const name = (w?.name || 'Injected').trim();
+    const nameKey = `name:${name.toLowerCase()}`;
+
+    // если такой же кошелёк уже есть из EIP-6963 — пропускаем legacy-дубликат
+    if (seen.has(nameKey)) continue;
+    seen.add(nameKey);
+
+    list.push({
+      id: `legacy:${w.id || name.toLowerCase()}`,
+      name,
+      type: w.type || 'injected',
+      _provider: w._provider || w.provider || null,
+      _meta: { name }
+    });
+  }
 
   if (CONFIG?.WALLETCONNECT_PROJECT_ID) {
-    list.push({
-      id: 'walletconnect',
-      name: 'WalletConnect',
-      type: 'walletconnect'
-    });
+    list.push({ id: 'walletconnect', name: 'WalletConnect', type: 'walletconnect' });
   }
 
   return list;
 }
+
 
  export async function connectWallet({ walletId = null } = {}) {
   if (isConnecting) {
@@ -142,7 +175,6 @@ export function getAvailableWallets() {
   try {
     const wallets = getAvailableWallets();
 
-    // Если walletId не передан — не пытаемся "подключаться в пустоту"
     if (!walletId) throw new Error('No wallet selected');
 
     const entry = wallets.find(w => w.id === walletId);
@@ -162,16 +194,16 @@ export function getAvailableWallets() {
       await wcProvider.connect();
       selectedEip1193 = wcProvider;
     } else {
-      // Поддерживаем и entry.provider, и entry._provider (как у вас было в getAvailableWallets)
-      const prov = entry.provider || entry._provider;
+      const prov = entry._provider || entry.provider;
       if (!prov) throw new Error('Selected wallet provider not found');
 
       selectedEip1193 = prov;
 
-      // Важно: запрос аккаунтов делаем через выбранный провайдер
+      // ВАЖНО: request на выбранном провайдере
       await selectedEip1193.request({ method: 'eth_requestAccounts' });
     }
 
+    // <-- эти строки должны быть ПОСЛЕ if/else, а не внутри else
     ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
     signer = ethersProvider.getSigner();
     currentAddress = ethers.utils.getAddress(await signer.getAddress());
@@ -188,6 +220,7 @@ export function getAvailableWallets() {
     isConnecting = false;
   }
 }
+
 
 // UI-обёртка: сюда должен приходить walletId из клика по пункту кошелька
 export function connectWalletUI(walletId) {
