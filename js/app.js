@@ -18,6 +18,15 @@ import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contr
 
 window.CONFIG = window.CONFIG || CONFIG;
 
+let uiConnecting = false;
+
+function setWalletMenuDisabled(menuEl, disabled) {
+  if (!menuEl) return;
+  menuEl.querySelectorAll('button[data-wallet-item="1"]').forEach(b => {
+    b.disabled = disabled;
+  });
+}
+
 function renderWallets() {
   const menu =
     document.getElementById('walletDropdown') ||
@@ -29,58 +38,88 @@ function renderWallets() {
   menu.querySelectorAll('[data-wallet-item="1"], [data-walletItem="1"]').forEach(n => n.remove());
 
   const wallets = getAvailableWallets();
-}
 
-  let uiConnecting = false;
+  wallets.forEach((w) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.walletItem = '1';
+    btn.textContent = w.name;
 
+    btn.onclick = async () => {
+      if (uiConnecting) {
+        showNotification?.('Connection is already in progress. Close the wallet popup or wait.', 'error');
+        return;
+      }
 
-function setWalletMenuDisabled(menuEl, disabled) {
-  if (!menuEl) return;
-  menuEl.querySelectorAll('button[data-wallet-item="1"]').forEach(b => {
-    b.disabled = disabled;
+      uiConnecting = true;
+      setWalletMenuDisabled(menu, true);
+
+      try {
+        await connectWalletUI(w.id);
+        menu.style.display = 'none';
+      } catch (e) {
+        const msg = e?.message || 'Wallet connect failed';
+
+        if (msg.toLowerCase().includes('rejected')) {
+          showNotification?.('Request rejected. Please choose a wallet again.', 'error');
+        } else if (msg.toLowerCase().includes('already in progress')) {
+          showNotification?.('Connection is still pending in the wallet popup.', 'error');
+        } else {
+          showNotification?.(msg, 'error');
+        }
+
+        console.error('[UI] connect error:', e);
+      } finally {
+        uiConnecting = false;
+        setWalletMenuDisabled(menu, false);
+      }
+    };
+
+    menu.prepend(btn);
   });
 }
 
-wallets.forEach((w) => {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.dataset.walletItem = '1';
-  btn.textContent = w.name;
+function renderWalletButtons(menu) {
+  const wallets = getAvailableWallets(); // <-- здесь объявили и здесь используем
 
-  btn.onclick = async () => {
-    if (uiConnecting) {
-      showNotification?.('Connection is already in progress. Close the wallet popup or wait.', 'error');
-      return;
-    }
+  wallets.forEach((w) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.walletItem = '1';
+    btn.textContent = w.name;
 
-    uiConnecting = true;
-    setWalletMenuDisabled(menu, true);
-
-    try {
-      await connectWalletUI(w.id);
-      menu.style.display = 'none';
-    } catch (e) {
-      // Важно: НЕ делаем return раньше finally
-      const msg = e?.message || 'Wallet connect failed';
-
-      // “User rejected” — это нормальный сценарий, не блокируем дальнейшие попытки
-      if (msg.toLowerCase().includes('rejected')) {
-        showNotification?.('Request rejected. Please choose a wallet again.', 'error');
-      } else if (msg.toLowerCase().includes('already in progress')) {
-        showNotification?.('Connection is still pending in the wallet popup.', 'error');
-      } else {
-        showNotification?.(msg, 'error');
+    btn.onclick = async () => {
+      if (uiConnecting) {
+        showNotification?.('Connection is already in progress. Close the wallet popup or wait.', 'error');
+        return;
       }
 
-      console.error('[UI] connect error:', e);
-    } finally {
-      uiConnecting = false;
-      setWalletMenuDisabled(menu, false);
-    }
-  };
+      uiConnecting = true;
+      setWalletMenuDisabled(menu, true);
 
-  menu.prepend(btn);
-});
+      try {
+        await connectWalletUI(w.id);
+        menu.style.display = 'none';
+      } catch (e) {
+        const msg = e?.message || 'Wallet connect failed';
+        if (msg.toLowerCase().includes('rejected')) {
+          showNotification?.('Request rejected. Please choose a wallet again.', 'error');
+        } else if (msg.toLowerCase().includes('already in progress')) {
+          showNotification?.('Connection is still pending in the wallet popup.', 'error');
+        } else {
+          showNotification?.(msg, 'error');
+        }
+        console.error('[UI] connect error:', e);
+      } finally {
+        uiConnecting = false;
+        setWalletMenuDisabled(menu, false);
+      }
+    };
+
+    menu.prepend(btn);
+  });
+}
+
 
 window.CONFIG = window.CONFIG || CONFIG;
 
