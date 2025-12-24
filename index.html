@@ -1,4 +1,4 @@
-<DOCUMENT filename="index.html">
+<DOCUMENT filename="index (8).html">
 <!DOCTYPE html>
 
 <html lang="uk" class="dark some-other-class">
@@ -1028,37 +1028,20 @@
   const prevOnWalletDisconnected = window.onWalletDisconnected;
 
   window.onWalletDisconnected = function(meta) {
-  try { prevOnWalletDisconnected?.(meta); } catch (_) {}
-  walletConnected = false;
-
-  connectBtn && (connectBtn.textContent = "Підключити гаманець");
-  connectBtn?.classList.remove("connected");
-
-  if (dropdown) {
+    try { prevOnWalletDisconnected?.(meta); } catch (_) {}
+    walletConnected = false;
+    connectBtn.textContent = "Підключити гаманець";
+    connectBtn.classList.remove("connected");
     dropdown.classList.remove("show");
-    dropdown.style.display = 'none';
-  }
-};
-
-
-  // ✅ FIX: на клик вызываем connectWallet (она внутри сама покажет селектор кошелька)
- connectBtn?.addEventListener('click', () => {
-  if (!dropdown) {
-    console.warn('[UI] wallet dropdown not found');
-    return;
-  }
-
-  const isOpen = dropdown.style.display === 'block';
-  dropdown.style.display = isOpen ? 'none' : 'block';
-
-  if (!isOpen) renderWallets();
-});
-
-    alert("Web3-гаманець не знайдено. Відкрийте сайт у браузері MetaMask.");
+  };
 
 
 </script>
-
+<!-- Ethers -->
+<!-- WalletConnect Provider (v1) -->
+<script src="https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script>
+<!-- Web3Modal (v1) -->
+<script src="https://cdn.jsdelivr.net/npm/web3modal@1.9.12/dist/index.js"></script>
 <!-- Nav active -->
 <script>
   document.querySelectorAll('.main-nav-link').forEach(btn => {
@@ -1221,3 +1204,4 @@
 </body>
 </html>
 
+  
