@@ -404,10 +404,6 @@ function initWithSigner() {
     console.log('[TRADING] decimals synced (RW):', { DECIMALS_ARUB, DECIMALS_USDT });
   })();
 }
-function setText(id, val) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = val;
-}
 
 // === ВСТАВИТЬ СЮДА ===
 function ensurePresaleUI() {
