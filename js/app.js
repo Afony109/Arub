@@ -28,6 +28,28 @@ function getReadProvider() {
   return _readProvider;
 }
 
+async function debugPresaleMath(address) {
+  const provider = getReadProvider();
+
+  const arub = new ethers.Contract(
+    CONFIG.TOKEN_ADDRESS,
+    ["function decimals() view returns (uint8)"],
+    provider
+  );
+
+  const oracle = new ethers.Contract(
+    CONFIG.ORACLE_ADDRESS,
+    ["function rate() view returns (uint256)"],
+    provider
+  );
+
+  const arubDecimals = await arub.decimals();
+  const oracleRateRaw = await oracle.rate();
+
+  console.log("[DEBUG] ARUB decimals =", arubDecimals);
+  console.log("[DEBUG] Oracle rate raw =", oracleRateRaw.toString());
+}
+
 
 // чтобы старый onclick="connectWallet()" продолжал работать:
 
@@ -247,7 +269,14 @@ async function refreshPresaleUI(address) {
 
 // Слушаем ваш event: wallet:connected
 window.addEventListener("wallet:connected", (e) => {
-  refreshPresaleUI(e.detail.address).catch(err => console.error("[PRESALE/ORACLE]", err));
+  const addr = e.detail.address;
+
+  refreshPresaleUI(addr).catch(err =>
+    console.error("[PRESALE/ORACLE]", err)
+  );
+
+  // ⬇⬇⬇ ВСТАВИТЬ ЭТУ СТРОКУ
+  debugPresaleMath(addr).catch(console.error);
 });
 
 window.addEventListener("wallet:disconnected", () => {
