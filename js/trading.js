@@ -250,73 +250,73 @@ function renderTradingUI() {
   const host = getTradingHost();
   if (!host) return;
 
-  host.innerHTML = `
-    <div class="trade-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-      <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
-        <h3 style="margin:0 0 10px 0;">Купівля</h3>
+ host.innerHTML = `
+  <div class="trade-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+    <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
+      <h3 style="margin:0 0 10px 0;">Купівля</h3>
 
-        
-        <div style="display:flex; flex-direction:column; gap:6px; margin:8px 0 10px 0; font-size:14px; opacity:0.95;">
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="buyMode" value="instant" checked>
-            <span>Buy ARUB (Instant)</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="buyMode" value="discount">
-            <span>Buy ARUB (Discount, 90 days lock)</span>
-          </label>
-        </div>
-<div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-          <input id="buyAmount" type="number" inputmode="decimal" placeholder="USDT amount"
-                 style="flex:1; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
-          <button id="maxBuyBtn" type="button"
-                  style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-            MAX
-          </button>
-        </div>
-
-        <button id="buyBtn" type="button"
-                style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
-          Buy ARUB
-        </button>
-
-        <div style="margin-top:10px; font-size:14px; opacity:0.9;">
-          USDT balance: <span id="usdtBalance">—</span>
-        </div>
-
-        <div id="lockPanel" style="display:none; margin-top:12px; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.18); font-size:14px;">
-          <div style="font-weight:600; margin-bottom:6px;">Lock status</div>
-          <div>Locked principal: <span id="lockedPrincipal">—</span> ARUB</div>
-          <div>Locked bonus: <span id="lockedBonus">—</span> ARUB</div>
-          <div>Unlock date: <span id="unlockDate">—</span></div>
-          <div>Remaining: <span id="unlockRemaining">—</span></div>
-          <button id="unlockBtn" type="button" style="display:none; margin-top:10px; width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer;">Unlock</button>
-        </div>
+      <div style="display:flex; flex-direction:column; gap:6px; margin:8px 0 10px 0; font-size:14px; opacity:0.95;">
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input type="radio" name="buyMode" value="instant" checked>
+          <span>Купити ARUB (миттєво)</span>
+        </label>
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input type="radio" name="buyMode" value="discount">
+          <span>Купити ARUB (зі знижкою, блокування 90 днів)</span>
+        </label>
       </div>
 
-      <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
-        <h3 style="margin:0 0 10px 0;">Продаж</h3>
-
-        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-          <input id="sellAmount" type="number" inputmode="decimal" placeholder="ARUB amount"
-                 style="flex:1; padding:12px; border-radius:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
-          <button id="maxSellBtn" type="button"
-                  style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-            MAX
-          </button>
-        </div>
-
-        <button id="sellBtn" type="button"
-                style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
-          Sell ARUB
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+        <input id="buyAmount" type="number" inputmode="decimal" placeholder="Сума USDT"
+               style="flex:1; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
+        <button id="maxBuyBtn" type="button"
+                style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
+          МАКС
         </button>
+      </div>
 
-        <div style="margin-top:10px; font-size:14px; opacity:0.9;">
-          ARUB balance: <span id="arubBalance">—</span>
-        </div>
+      <button id="buyBtn" type="button"
+              style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+        Купити ARUB
+      </button>
+
+      <div style="margin-top:10px; font-size:14px; opacity:0.9;">
+        Баланс USDT: <span id="usdtBalance">—</span>
+      </div>
+
+      <div id="lockPanel" style="display:none; margin-top:12px; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.18); font-size:14px;">
+        <div style="font-weight:600; margin-bottom:6px;">Статус блокування</div>
+        <div>Заблокований основний: <span id="lockedPrincipal">—</span> ARUB</div>
+        <div>Заблокований бонус: <span id="lockedBonus">—</span> ARUB</div>
+        <div>Дата розблокування: <span id="unlockDate">—</span></div>
+        <div>Залишилось: <span id="unlockRemaining">—</span></div>
+        <button id="unlockBtn" type="button" style="display:none; margin-top:10px; width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer;">Розблокувати</button>
       </div>
     </div>
-  `;
+
+    <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
+      <h3 style="margin:0 0 10px 0;">Продаж</h3>
+
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+        <input id="sellAmount" type="number" inputmode="decimal" placeholder="Сума ARUB"
+               style="flex:1; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
+        <button id="maxSellBtn" type="button"
+                style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
+          МАКС
+        </button>
+      </div>
+
+      <button id="sellBtn" type="button"
+              style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+        Продати ARUB
+      </button>
+
+      <div style="margin-top:10px; font-size:14px; opacity:0.9;">
+        Баланс ARUB: <span id="arubBalance">—</span>
+      </div>
+    </div>
+  </div>
+`;
 
   bindUiOncePerRender();
   hardUnlock();
@@ -419,11 +419,11 @@ function ensurePresaleUI() {
   box.style.fontSize = '13px';
   box.style.opacity = '0.85';
   box.innerHTML = `
-    <div>Presale purchased: <span id="presalePurchased">—</span> ARUB</div>
-    <div>Presale paid: <span id="presalePaid">—</span> USDT</div>
-    <div>Avg buy price: <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
-    <div>Discount vs current: <span id="presaleDiscount">—</span></div>
-  `;
+  <div>Куплено на пресейлі: <span id="presalePurchased">—</span> ARUB</div>
+  <div>Сплачено: <span id="presalePaid">—</span> USDT</div>
+  <div>Середня ціна купівлі: <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
+  <div>Знижка від поточної ціни: <span id="presaleDiscount">—</span></div>
+`;
 
   // вставляем прямо под баланс
   bal.parentElement.appendChild(box);
