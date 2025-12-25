@@ -193,8 +193,6 @@ function renderWalletButtons(menu) {
 // вставить сразу после renderWalletButtons(...)
 // =======================
 
-const ARUB_DECIMALS = 6;
-const USDT_DECIMALS = 6;
 
 const PRESALE_ABI_MIN = [
   "function totalDeposited(address) view returns (uint256)",
@@ -251,13 +249,96 @@ async function loadCurrentArubPrice(provider) {
   return Number(ethers.utils.formatUnits(rateRaw, d));
 }
 
+// Event ABI: Purchased(buyer, usdtAmount, arubTotal, bonusArub, ...)
+const PRESALE_EVENTS_ABI = [
+  "event Purchased(address indexed buyer, uint256 usdtAmount, uint256 arubTotal, uint256 bonusArub, uint256 discountPercent, uint256 discountAppliedEq)"
+];
+
+const USDT_DECIMALS = 6;
+const ARUB_DECIMALS = 6;
+
+// 2025-12-15 16:30:03 UTC (ваш деплой)
+const PRESALE_DEPLOY_UTC_MS = Date.parse("2025-12-15T16:30:03Z");
+
+// Находим ближайший блок по timestamp (бинарный поиск)
+async function findBlockByTimestamp(provider, targetTsSec) {
+  const latest = await provider.getBlockNumber();
+  let lo = 1;
+  let hi = latest;
+
+  // быстрые границы
+  const bLo = await provider.getBlock(lo);
+  if (bLo && bLo.timestamp >= targetTsSec) return lo;
+
+  const bHi = await provider.getBlock(hi);
+  if (bHi && bHi.timestamp <= targetTsSec) return hi;
+
+  while (lo + 1 < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const b = await provider.getBlock(mid);
+    if (!b) { hi = mid; continue; }
+
+    if (b.timestamp < targetTsSec) lo = mid;
+    else hi = mid;
+  }
+  return lo; // ближайший <= target
+}
+
+// Сканируем Purchased в чанках, чтобы не упираться в лимиты RPC
+async function loadPresaleStatsFromEvents(user, provider) {
+  const presale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_EVENTS_ABI, provider);
+
+  const targetTsSec = Math.floor(PRESALE_DEPLOY_UTC_MS / 1000);
+  const startBlock = Math.max(1, (await findBlockByTimestamp(provider, targetTsSec)) - 1000); // небольшой запас
+  const endBlock = await provider.getBlockNumber();
+
+  const filter = presale.filters.Purchased(user);
+
+  let paidRaw = ethers.BigNumber.from(0);
+  let arubTotalRaw = ethers.BigNumber.from(0);
+  let bonusRaw = ethers.BigNumber.from(0);
+
+  // Размер чанка можно менять (на публичных RPC обычно 20k–50k ок)
+  const STEP = 40_000;
+
+  for (let from = startBlock; from <= endBlock; from += STEP) {
+    const to = Math.min(endBlock, from + STEP - 1);
+    const logs = await presale.queryFilter(filter, from, to);
+
+    for (const ev of logs) {
+      // ev.args: buyer, usdtAmount, arubTotal, bonusArub, ...
+      const usdtAmount = ev.args.usdtAmount;
+      const arubTotal = ev.args.arubTotal;
+      const bonusArub = ev.args.bonusArub;
+
+      paidRaw = paidRaw.add(usdtAmount);
+      arubTotalRaw = arubTotalRaw.add(arubTotal);
+      bonusRaw = bonusRaw.add(bonusArub);
+    }
+  }
+
+  const paidUSDT = Number(ethers.utils.formatUnits(paidRaw, USDT_DECIMALS));
+  const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
+  const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
+
+  // ВАЖНО: не всегда ясно, включает ли arubTotal бонус.
+  // Часто arubTotal = principal+bonus, а bonusArub отдельно для удобства.
+  // Поэтому principal считаем безопасно:
+  const principalARUB = Math.max(0, totalARUB - bonusARUB);
+
+  const avgPrice = totalARUB > 0 ? (paidUSDT / totalARUB) : null;
+
+  return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice, startBlock };
+}
+
+
 async function refreshPresaleUI(address) {
   const provider = getReadProvider();
 
-  const [presale, currentPrice] = await Promise.all([
-    loadPresaleStats(address, provider),
-    loadCurrentArubPrice(provider),
-  ]);
+ const [presale, currentPrice] = await Promise.all([
+  loadPresaleStatsFromEvents(address, provider),
+  loadCurrentArubPrice(provider),
+]);
 
   const discount = calcDiscount(presale.avgPrice, currentPrice);
 
