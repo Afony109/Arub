@@ -6,7 +6,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import {initWalletModule, getAvailableWallets, connectWalletUI, disconnectWallet} from './wallet.js';
+import {initWalletModule, getEthersProvider, getAvailableWallets, connectWalletUI, disconnectWallet} from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
@@ -149,6 +149,102 @@ function renderWalletButtons(menu) {
     menu.prepend(btn);
   });
 }
+
+// =======================
+// PRESALE / ORACLE STATS
+// вставить сразу после renderWalletButtons(...)
+// =======================
+
+const ARUB_DECIMALS = 6;
+const USDT_DECIMALS = 6;
+
+const PRESALE_ABI_MIN = [
+  "function totalDeposited(address) view returns (uint256)",
+  "function lockedPrincipalArub(address) view returns (uint256)",
+  "function lockedBonusArub(address) view returns (uint256)"
+];
+
+const ORACLE_ABI_MIN = [
+  "function getRate() view returns (uint256,uint256)",
+  "function rate() view returns (uint256)"
+];
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function calcDiscount(avgPrice, currentPrice) {
+  if (!avgPrice || !currentPrice || currentPrice <= 0) return null;
+  return (1 - avgPrice / currentPrice) * 100;
+}
+
+async function loadPresaleStats(user, provider) {
+  const c = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_ABI_MIN, provider);
+
+  const [paidRaw, principalRaw, bonusRaw] = await Promise.all([
+    c.totalDeposited(user),
+    c.lockedPrincipalArub(user),
+    c.lockedBonusArub(user),
+  ]);
+
+  const paidUSDT = Number(ethers.utils.formatUnits(paidRaw, USDT_DECIMALS));
+  const principalARUB = Number(ethers.utils.formatUnits(principalRaw, ARUB_DECIMALS));
+  const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
+  const totalARUB = principalARUB + bonusARUB;
+
+  const avgPrice = totalARUB > 0 ? (paidUSDT / totalARUB) : null;
+
+  return { paidUSDT, totalARUB, avgPrice };
+}
+
+async function loadCurrentArubPrice(provider) {
+  const oracle = new ethers.Contract(CONFIG.ORACLE_ADDRESS, ORACLE_ABI_MIN, provider);
+
+  let rateRaw;
+  try {
+    const res = await oracle.getRate();
+    rateRaw = res[0];
+  } catch (_) {
+    rateRaw = await oracle.rate();
+  }
+
+  const d = Number(CONFIG.ORACLE_RATE_DECIMALS ?? 6);
+  return Number(ethers.utils.formatUnits(rateRaw, d));
+}
+
+async function refreshPresaleUI(address) {
+  const provider = getEthersProvider();
+  if (!provider) throw new Error("Provider not initialized");
+
+  const [presale, currentPrice] = await Promise.all([
+    loadPresaleStats(address, provider),
+    loadCurrentArubPrice(provider),
+  ]);
+
+  const discount = calcDiscount(presale.avgPrice, currentPrice);
+
+  setText("presalePurchased", presale.totalARUB.toFixed(6));
+  setText("presalePaid", presale.paidUSDT.toFixed(2));
+  setText("presaleAvgPrice", presale.avgPrice ? presale.avgPrice.toFixed(6) : "—");
+  setText("presaleDiscount", discount !== null ? discount.toFixed(2) + "%" : "—");
+}
+
+// Слушаем ваш event: wallet:connected
+window.addEventListener("wallet:connected", (e) => {
+  refreshPresaleUI(e.detail.address).catch(err => console.error("[PRESALE/ORACLE]", err));
+});
+
+window.addEventListener("wallet:disconnected", () => {
+  setText("presalePurchased", "—");
+  setText("presalePaid", "—");
+  setText("presaleAvgPrice", "—");
+  setText("presaleDiscount", "—");
+});
+
+// =======================
+// END PRESALE / ORACLE STATS
+// =======================
 
 
 window.CONFIG = window.CONFIG || CONFIG;
