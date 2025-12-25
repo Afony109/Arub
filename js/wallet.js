@@ -108,8 +108,6 @@ function getLegacyInjectedEntries() {
   }];
 }
 
-export function getEthersProvider() { return ethersProvider; }
-
 // -----------------------------
 // Public API
 // -----------------------------
