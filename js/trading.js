@@ -404,6 +404,34 @@ function initWithSigner() {
     console.log('[TRADING] decimals synced (RW):', { DECIMALS_ARUB, DECIMALS_USDT });
   })();
 }
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+// === ВСТАВИТЬ СЮДА ===
+function ensurePresaleUI() {
+  const bal = document.getElementById('arubBalance');
+  if (!bal) return;
+
+  // защита от повторной вставки
+  if (document.getElementById('presaleStats')) return;
+
+  const box = document.createElement('div');
+  box.id = 'presaleStats';
+  box.style.marginTop = '8px';
+  box.style.fontSize = '13px';
+  box.style.opacity = '0.85';
+  box.innerHTML = `
+    <div>Presale purchased: <span id="presalePurchased">—</span> ARUB</div>
+    <div>Presale paid: <span id="presalePaid">—</span> USDT</div>
+    <div>Avg buy price: <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
+    <div>Discount vs current: <span id="presaleDiscount">—</span></div>
+  `;
+
+  // вставляем прямо под баланс
+  bal.parentElement.appendChild(box);
+}
 
 // -----------------------------
 // Data refresh
@@ -418,7 +446,9 @@ async function refreshBalances() {
     ]);
 
     setText('arubBalance', formatTokenAmount(arubBal, DECIMALS_ARUB, 6));
+    ensurePresaleUI();
     setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 2));
+
   } catch (e) {
     console.warn('[TRADING] refreshBalances error:', e);
   }
