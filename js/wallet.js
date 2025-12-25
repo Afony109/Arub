@@ -108,6 +108,8 @@ function getLegacyInjectedEntries() {
   }];
 }
 
+export function getEthersProvider() { return ethersProvider; }
+
 // -----------------------------
 // Public API
 // -----------------------------
@@ -376,9 +378,6 @@ export function getSigner() {
   return signer;
 }
 
-export function getEthersProvider() {
-  return ethersProvider;
-}
 
 // Добавление токена в кошелёк (MetaMask/Trust/Rabby и т.п.)
 export async function addTokenToWallet(symbol) {
@@ -431,5 +430,19 @@ export async function addTokenToWallet(symbol) {
   } catch (_) {}
 
   return ok;
+}
+
+const ORACLE_ABI_MIN = [
+  "function getRate() view returns (uint256,uint256)",
+  "function rate() view returns (uint256)"
+];
+
+function calcDiscount(avgPrice, currentPrice) {
+  if (!avgPrice || !currentPrice || currentPrice <= 0) return null;
+  return (1 - avgPrice / currentPrice) * 100;
+}
+
+export function getEthersProvider() {
+  return ethersProvider;
 }
 
