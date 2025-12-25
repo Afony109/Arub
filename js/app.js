@@ -218,7 +218,7 @@ function shortAddr(addr) {
 }
 
 function setWalletUIConnected(address) {
-  if (connectBtn) connectBtn.textContent = `Wallet: ${shortAddr(address)}`;
+  if (connectBtn) connectBtn.textContent = shortAddr(address);
   if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
   if (dropdown) dropdown.style.display = 'none';
 }
