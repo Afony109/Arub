@@ -12,6 +12,22 @@ import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from 
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
 //------------
 
+// -----------------------------
+// Read-only provider (stable RPC)
+// -----------------------------
+let _readProvider = null;
+
+function getReadProvider() {
+  if (_readProvider) return _readProvider;
+
+  const urls = CONFIG?.NETWORK?.rpcUrls || [];
+  if (!urls.length) throw new Error('No RPC URLs in CONFIG.NETWORK.rpcUrls');
+
+  // Берём первый (у вас это https://arb1.arbitrum.io/rpc)
+  _readProvider = new ethers.providers.JsonRpcProvider(urls[0]);
+  return _readProvider;
+}
+
 
 // чтобы старый onclick="connectWallet()" продолжал работать:
 
@@ -214,8 +230,7 @@ async function loadCurrentArubPrice(provider) {
 }
 
 async function refreshPresaleUI(address) {
-  const provider = getEthersProvider();
-  if (!provider) throw new Error("Provider not initialized");
+  const provider = getReadProvider();
 
   const [presale, currentPrice] = await Promise.all([
     loadPresaleStats(address, provider),
