@@ -305,33 +305,68 @@ async function loadPresaleStatsFromEvents(user, provider) {
 
   const STEP = 120_000;
 
-  for (let from = startBlock; from <= endBlock; from += STEP) {
-    const to = Math.min(endBlock, from + STEP - 1);
-    const logs = await presale.queryFilter(filter, from, to);
+  // --- progress setup ---
+  const totalRanges = Math.max(1, Math.ceil((endBlock - startBlock + 1) / STEP));
+  let doneRanges = 0;
 
-    for (const ev of logs) {
-      // ✅ ЛОГ ИМЕННО ЗДЕСЬ
-      console.log("[PURCHASED]", {
-        block: ev.blockNumber,
-        tx: ev.transactionHash,
-        usdt: ethers.utils.formatUnits(ev.args.usdtAmount, USDT_DECIMALS),
-        arub: ethers.utils.formatUnits(ev.args.arubTotal, ARUB_DECIMALS),
-        bonus: ethers.utils.formatUnits(ev.args.bonusArub, ARUB_DECIMALS),
-      });
+  setPresaleScanVisible(true);
+  setPresaleScanProgress(0);
 
-      paidRaw = paidRaw.add(ev.args.usdtAmount);
-      arubTotalRaw = arubTotalRaw.add(ev.args.arubTotal);
-      bonusRaw = bonusRaw.add(ev.args.bonusArub);
+  try {
+    for (let from = startBlock; from <= endBlock; from += STEP) {
+      const to = Math.min(endBlock, from + STEP - 1);
+
+      const logs = await presale.queryFilter(filter, from, to);
+
+      for (const ev of logs) {
+        console.log("[PURCHASED]", {
+          block: ev.blockNumber,
+          tx: ev.transactionHash,
+          usdt: ethers.utils.formatUnits(ev.args.usdtAmount, USDT_DECIMALS),
+          arub: ethers.utils.formatUnits(ev.args.arubTotal, ARUB_DECIMALS),
+          bonus: ethers.utils.formatUnits(ev.args.bonusArub, ARUB_DECIMALS),
+        });
+
+        paidRaw = paidRaw.add(ev.args.usdtAmount);
+        arubTotalRaw = arubTotalRaw.add(ev.args.arubTotal);
+        bonusRaw = bonusRaw.add(ev.args.bonusArub);
+      }
+
+      // --- progress update per range ---
+      doneRanges += 1;
+      setPresaleScanProgress((doneRanges / totalRanges) * 100);
     }
+
+    setPresaleScanProgress(100);
+
+    const paidUSDT = Number(ethers.utils.formatUnits(paidRaw, USDT_DECIMALS));
+    const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
+    const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, USDT_DECIMALS)); // <-- нет, см. ниже
+    const bonusARUB2 = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
+    const principalARUB = Math.max(0, totalARUB - bonusARUB2);
+    const avgPrice = totalARUB > 0 ? paidUSDT / totalARUB : null;
+
+    return { paidUSDT, totalARUB, principalARUB, bonusARUB: bonusARUB2, avgPrice };
+  } finally {
+    // даже если упадёт RPC — UI не зависнет “на загрузке”
+    setPresaleScanVisible(false);
   }
+}
 
-  const paidUSDT = Number(ethers.utils.formatUnits(paidRaw, USDT_DECIMALS));
-  const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
-  const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
-  const principalARUB = Math.max(0, totalARUB - bonusARUB);
-  const avgPrice = totalARUB > 0 ? paidUSDT / totalARUB : null;
+function setPresaleScanVisible(visible) {
+  const wrap = document.getElementById('presaleScanWrap');
+  if (!wrap) return;
+  wrap.style.display = visible ? 'block' : 'none';
+}
 
-  return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice };
+function setPresaleScanProgress(pct) {
+  const bar = document.getElementById('presaleScanBar');
+  const label = document.getElementById('presaleScanPct');
+  if (!bar || !label) return;
+
+  const p = Math.max(0, Math.min(100, Math.floor(pct)));
+  label.textContent = `${p}%`;
+  bar.style.width = `${p}%`;
 }
 
 async function refreshPresaleUI(address) {
