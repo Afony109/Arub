@@ -423,6 +423,19 @@ function ensurePresaleUI() {
   <div>Сплачено: <span id="presalePaid">—</span> USDT</div>
   <div>Середня ціна купівлі: <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
   <div>Знижка від поточної ціни: <span id="presaleDiscount">—</span></div>
+
+  <!-- Presale scan progress -->
+  <div id="presaleScanWrap" style="display:none; margin-top:10px;">
+    <div style="display:flex; justify-content:space-between; font-size:12px; opacity:.85;">
+      <span>Завантаження історії пресейлу…</span>
+      <span id="presaleScanPct">0%</span>
+    </div>
+    <div style="height:8px; background:rgba(255,255,255,.12); border-radius:999px; overflow:hidden; margin-top:6px;">
+      <div id="presaleScanBar"
+           style="height:100%; width:0%; background:rgba(255,255,255,.65);">
+      </div>
+    </div>
+  </div>
 `;
 
   // вставляем прямо под баланс
