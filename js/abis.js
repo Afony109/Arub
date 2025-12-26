@@ -110,3 +110,18 @@ export const PRESALE_ABI = [
   "function paused() view returns (bool)",
   "function getTokenAmount(uint256 usdtAmount) view returns (uint256)"
 ];
+export const PRESALE_READ_ABI = [
+  "function totalDeposited(address) view returns (uint256)",
+  "function lockedPrincipalArub(address) view returns (uint256)",
+  "function lockedBonusArub(address) view returns (uint256)",
+  "function lockedDepositUntil(address) view returns (uint256)",
+  "function getRemainingLockTime(address) view returns (uint256)",
+  "function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)",
+  "function getDiscountPercent() view returns (uint256)",
+];
+
+export const PRESALE_WRITE_ABI = [
+  "function buyWithUSDT(uint256 amount, bool withBonus) external",
+  "function unlockDeposit() external",
+  "function paused() view returns (bool)",
+];
