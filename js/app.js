@@ -304,7 +304,7 @@ async function loadPresaleStatsFromEvents(user, provider) {
   console.log("[EVENTS] targetTsSec =", targetTsSec, "guessedBlock =", guessed);
   console.log("[EVENTS] startBlock =", startBlock, "endBlock =", endBlock);
 
-  const filter = presale.filters.Purchased(user);
+  const filter = presale.filters.Purchased();
 
   let paidRaw = ethers.BigNumber.from(0);
   let arubTotalRaw = ethers.BigNumber.from(0);
