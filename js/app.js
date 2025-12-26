@@ -286,66 +286,48 @@ async function findBlockByTimestamp(provider, targetTsSec) {
 
 // Сканируем Purchased в чанках, чтобы не упираться в лимиты RPC
 async function loadPresaleStatsFromEvents(user, provider) {
-  const cached = loadPresaleCache(user);
+  const presale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_EVENTS_ABI, provider);
 
-  const presale = new ethers.Contract(
-    CONFIG.PRESALE_ADDRESS,
-    PRESALE_EVENTS_ABI,
-    provider
-  );
-
+  const targetTsSec = Math.floor(PRESALE_DEPLOY_UTC_MS / 1000);
+  const guessed = await findBlockByTimestamp(provider, targetTsSec);
+  const startBlock = Math.max(1, guessed - 1000);
   const endBlock = await provider.getBlockNumber();
 
-  // 🔹 стартуем либо с кэша, либо с деплоя
-  let startBlock;
-  if (cached?.lastScannedBlock) {
-    startBlock = Math.max(1, cached.lastScannedBlock - 5000); // overlap
-  } else {
-    const targetTsSec = Math.floor(PRESALE_DEPLOY_UTC_MS / 1000);
-    const guessed = await findBlockByTimestamp(provider, targetTsSec);
-    startBlock = Math.max(1, guessed - 1000);
-  }
+  const filter = presale.filters.Purchased(user); // ✅ строго только этот юзер
 
-  let paidRaw = ethers.BigNumber.from(cached?.paidRaw || 0);
-  let arubTotalRaw = ethers.BigNumber.from(cached?.arubTotalRaw || 0);
-  let bonusRaw = ethers.BigNumber.from(cached?.bonusRaw || 0);
+  let paidRaw = ethers.BigNumber.from(0);
+  let arubTotalRaw = ethers.BigNumber.from(0);
+  let bonusRaw = ethers.BigNumber.from(0);
 
   const STEP = 120_000;
-  const filter = presale.filters.Purchased();
-
   for (let from = startBlock; from <= endBlock; from += STEP) {
     const to = Math.min(endBlock, from + STEP - 1);
     const logs = await presale.queryFilter(filter, from, to);
 
     for (const ev of logs) {
-      if (ev.args?.buyer?.toLowerCase() !== user.toLowerCase()) continue;
-
       paidRaw = paidRaw.add(ev.args.usdtAmount);
       arubTotalRaw = arubTotalRaw.add(ev.args.arubTotal);
       bonusRaw = bonusRaw.add(ev.args.bonusArub);
     }
   }
 
+  for (const ev of logs) {
+  console.log("[PURCHASED]", {
+    block: ev.blockNumber,
+    tx: ev.transactionHash,
+    usdt: ethers.utils.formatUnits(ev.args.usdtAmount, 6),
+    arub: ethers.utils.formatUnits(ev.args.arubTotal, 6),
+    bonus: ethers.utils.formatUnits(ev.args.bonusArub, 6),
+  });
+}
+
   const paidUSDT = Number(ethers.utils.formatUnits(paidRaw, USDT_DECIMALS));
   const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
   const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
   const principalARUB = Math.max(0, totalARUB - bonusARUB);
-  const avgPrice = totalARUB > 0 ? paidUSDT / totalARUB : null;
+  const avgPrice = totalARUB > 0 ? (paidUSDT / totalARUB) : null;
 
-  const result = {
-    paidUSDT,
-    totalARUB,
-    principalARUB,
-    bonusARUB,
-    avgPrice,
-    lastScannedBlock: endBlock,
-    paidRaw: paidRaw.toString(),
-    arubTotalRaw: arubTotalRaw.toString(),
-    bonusRaw: bonusRaw.toString(),
-  };
-
-  savePresaleCache(user, result);
-  return result;
+  return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice, startBlock, endBlock };
 }
 
 async function refreshPresaleUI(address) {
