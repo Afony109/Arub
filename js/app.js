@@ -286,11 +286,23 @@ async function findBlockByTimestamp(provider, targetTsSec) {
 
 // Сканируем Purchased в чанках, чтобы не упираться в лимиты RPC
 async function loadPresaleStatsFromEvents(user, provider) {
-  const presale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_EVENTS_ABI, provider);
+  const presale = new ethers.Contract(
+    CONFIG.PRESALE_ADDRESS,
+    PRESALE_EVENTS_ABI,
+    provider
+  );
 
   const targetTsSec = Math.floor(PRESALE_DEPLOY_UTC_MS / 1000);
-  const startBlock = Math.max(1, (await findBlockByTimestamp(provider, targetTsSec)) - 1000); // небольшой запас
+
+  // 1) вычисляем стартовый блок (как у вас), но логируем
+  const guessed = await findBlockByTimestamp(provider, targetTsSec);
+  const startBlock = Math.max(1, guessed - 1000);
   const endBlock = await provider.getBlockNumber();
+
+  console.log("[EVENTS] user =", user);
+  console.log("[EVENTS] presale address =", CONFIG.PRESALE_ADDRESS);
+  console.log("[EVENTS] targetTsSec =", targetTsSec, "guessedBlock =", guessed);
+  console.log("[EVENTS] startBlock =", startBlock, "endBlock =", endBlock);
 
   const filter = presale.filters.Purchased(user);
 
@@ -298,18 +310,36 @@ async function loadPresaleStatsFromEvents(user, provider) {
   let arubTotalRaw = ethers.BigNumber.from(0);
   let bonusRaw = ethers.BigNumber.from(0);
 
-  // Размер чанка можно менять (на публичных RPC обычно 20k–50k ок)
   const STEP = 40_000;
+  let totalLogs = 0;
 
   for (let from = startBlock; from <= endBlock; from += STEP) {
     const to = Math.min(endBlock, from + STEP - 1);
-    const logs = await presale.queryFilter(filter, from, to);
+
+    console.log("[EVENTS] querying", { from, to });
+
+    let logs = [];
+    try {
+      logs = await presale.queryFilter(filter, from, to);
+    } catch (err) {
+      console.error("[EVENTS] queryFilter failed", { from, to, err });
+      // чтобы UI не “умирал”, возвращаем 0 и пусть сработает fallback
+      return { paidUSDT: 0, totalARUB: 0, principalARUB: 0, bonusARUB: 0, avgPrice: null, startBlock };
+    }
+
+    console.log("[EVENTS] logs in chunk =", logs.length);
+    totalLogs += logs.length;
 
     for (const ev of logs) {
-      // ev.args: buyer, usdtAmount, arubTotal, bonusArub, ...
-      const usdtAmount = ev.args.usdtAmount;
-      const arubTotal = ev.args.arubTotal;
-      const bonusArub = ev.args.bonusArub;
+      const usdtAmount = ev?.args?.usdtAmount;
+      const arubTotal = ev?.args?.arubTotal;
+      const bonusArub = ev?.args?.bonusArub;
+
+      // страховка на случай несовпадения ABI/аргументов
+      if (!usdtAmount || !arubTotal || bonusArub === undefined) {
+        console.warn("[EVENTS] unexpected event args", ev?.args);
+        continue;
+      }
 
       paidRaw = paidRaw.add(usdtAmount);
       arubTotalRaw = arubTotalRaw.add(arubTotal);
@@ -317,29 +347,34 @@ async function loadPresaleStatsFromEvents(user, provider) {
     }
   }
 
+  console.log("[EVENTS] total logs =", totalLogs);
+  console.log("[EVENTS] sums raw =", {
+    paidRaw: paidRaw.toString(),
+    arubTotalRaw: arubTotalRaw.toString(),
+    bonusRaw: bonusRaw.toString(),
+  });
+
   const paidUSDT = Number(ethers.utils.formatUnits(paidRaw, USDT_DECIMALS));
   const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
   const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
 
-  // ВАЖНО: не всегда ясно, включает ли arubTotal бонус.
-  // Часто arubTotal = principal+bonus, а bonusArub отдельно для удобства.
-  // Поэтому principal считаем безопасно:
   const principalARUB = Math.max(0, totalARUB - bonusARUB);
-
   const avgPrice = totalARUB > 0 ? (paidUSDT / totalARUB) : null;
+
+  console.log("[EVENTS] parsed =", { paidUSDT, totalARUB, bonusARUB, principalARUB, avgPrice });
 
   return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice, startBlock };
 }
 
-
 async function refreshPresaleUI(address) {
   const provider = getReadProvider();
 
- const [presale, currentPrice] = await Promise.all([
-  loadPresaleStatsFromEvents(address, provider),
-  loadCurrentArubPrice(provider),
-]);
+  let presale = await loadPresaleStatsFromEvents(address, provider);
+  if (!presale || !presale.totalARUB || presale.totalARUB <= 0) {
+    presale = await loadPresaleStats(address, provider);
+  }
 
+  const currentPrice = await loadCurrentArubPrice(provider);
   const discount = calcDiscount(presale.avgPrice, currentPrice);
 
   setText("presalePurchased", presale.totalARUB.toFixed(6));
@@ -348,19 +383,33 @@ async function refreshPresaleUI(address) {
   setText("presaleDiscount", discount !== null ? discount.toFixed(2) + "%" : "—");
 }
 
-// Слушаем ваш event: wallet:connected
+// Единственная подписка на события wallet.js
 window.addEventListener("wallet:connected", (e) => {
-  const addr = e.detail.address;
+  const addr = e?.detail?.address;
+  const chainId = e?.detail?.chainId;
 
-  refreshPresaleUI(addr).catch(err =>
-    console.error("[PRESALE/ORACLE]", err)
-  );
+  // 1) UI кошелька
+  if (addr) setWalletUIConnected(addr);
 
-  // ⬇⬇⬇ ВСТАВИТЬ ЭТУ СТРОКУ
-  debugPresaleMath(addr).catch(console.error);
+  // 2) лог сети (если нужен)
+  console.log("[APP] walletState chainId:", window.walletState?.chainId ?? chainId ?? "(unknown)");
+
+  // 3) пресейл/оракул
+  if (addr) {
+    refreshPresaleUI(addr).catch(err =>
+      console.error("[PRESALE/ORACLE]", err)
+    );
+
+    // временно для диагностики — потом можно удалить
+    debugPresaleMath(addr).catch(console.error);
+  }
 });
 
 window.addEventListener("wallet:disconnected", () => {
+  // UI кошелька
+  setWalletUIDisconnected();
+
+  // пресейл блок
   setText("presalePurchased", "—");
   setText("presalePaid", "—");
   setText("presaleAvgPrice", "—");
@@ -421,9 +470,6 @@ window.addTokenToWallet = async (symbol) => {
   }
 };
 
-window.addEventListener('wallet:connected', () => {
-  console.log('[APP] walletState chainId:', window.walletState?.chainId ?? '(unknown)');
-});
 // ------------------------------
 initWalletModule?.();
 
@@ -448,16 +494,6 @@ function setWalletUIDisconnected() {
   if (connectBtn) connectBtn.textContent = 'Підключити гаманець';
   if (disconnectBtn) disconnectBtn.style.display = 'none';
 }
-
-// Подписка на события wallet.js
-window.addEventListener('wallet:connected', (e) => {
-  const address = e?.detail?.address;
-  if (address) setWalletUIConnected(address);
-});
-
-window.addEventListener('wallet:disconnected', () => {
-  setWalletUIDisconnected();
-});
 
 // На старте страницы — привести UI в корректное состояние
 setWalletUIDisconnected();
