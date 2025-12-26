@@ -286,84 +286,66 @@ async function findBlockByTimestamp(provider, targetTsSec) {
 
 // Сканируем Purchased в чанках, чтобы не упираться в лимиты RPC
 async function loadPresaleStatsFromEvents(user, provider) {
+  const cached = loadPresaleCache(user);
+
   const presale = new ethers.Contract(
     CONFIG.PRESALE_ADDRESS,
     PRESALE_EVENTS_ABI,
     provider
   );
 
-  const targetTsSec = Math.floor(PRESALE_DEPLOY_UTC_MS / 1000);
-
-  // 1) вычисляем стартовый блок (как у вас), но логируем
-  const guessed = await findBlockByTimestamp(provider, targetTsSec);
-  const startBlock = Math.max(1, guessed - 1000);
   const endBlock = await provider.getBlockNumber();
 
-  console.log("[EVENTS] user =", user);
-  console.log("[EVENTS] presale address =", CONFIG.PRESALE_ADDRESS);
-  console.log("[EVENTS] targetTsSec =", targetTsSec, "guessedBlock =", guessed);
-  console.log("[EVENTS] startBlock =", startBlock, "endBlock =", endBlock);
+  // 🔹 стартуем либо с кэша, либо с деплоя
+  let startBlock;
+  if (cached?.lastScannedBlock) {
+    startBlock = Math.max(1, cached.lastScannedBlock - 5000); // overlap
+  } else {
+    const targetTsSec = Math.floor(PRESALE_DEPLOY_UTC_MS / 1000);
+    const guessed = await findBlockByTimestamp(provider, targetTsSec);
+    startBlock = Math.max(1, guessed - 1000);
+  }
 
+  let paidRaw = ethers.BigNumber.from(cached?.paidRaw || 0);
+  let arubTotalRaw = ethers.BigNumber.from(cached?.arubTotalRaw || 0);
+  let bonusRaw = ethers.BigNumber.from(cached?.bonusRaw || 0);
+
+  const STEP = 120_000;
   const filter = presale.filters.Purchased();
-
-  let paidRaw = ethers.BigNumber.from(0);
-  let arubTotalRaw = ethers.BigNumber.from(0);
-  let bonusRaw = ethers.BigNumber.from(0);
-
-  const STEP = 40_000;
-  let totalLogs = 0;
 
   for (let from = startBlock; from <= endBlock; from += STEP) {
     const to = Math.min(endBlock, from + STEP - 1);
-
-    console.log("[EVENTS] querying", { from, to });
-
-    let logs = [];
-    try {
-      logs = await presale.queryFilter(filter, from, to);
-    } catch (err) {
-      console.error("[EVENTS] queryFilter failed", { from, to, err });
-      // чтобы UI не “умирал”, возвращаем 0 и пусть сработает fallback
-      return { paidUSDT: 0, totalARUB: 0, principalARUB: 0, bonusARUB: 0, avgPrice: null, startBlock };
-    }
-
-    console.log("[EVENTS] logs in chunk =", logs.length);
-    totalLogs += logs.length;
+    const logs = await presale.queryFilter(filter, from, to);
 
     for (const ev of logs) {
-      const usdtAmount = ev?.args?.usdtAmount;
-      const arubTotal = ev?.args?.arubTotal;
-      const bonusArub = ev?.args?.bonusArub;
+      if (ev.args?.buyer?.toLowerCase() !== user.toLowerCase()) continue;
 
-      // страховка на случай несовпадения ABI/аргументов
-      if (!usdtAmount || !arubTotal || bonusArub === undefined) {
-        console.warn("[EVENTS] unexpected event args", ev?.args);
-        continue;
-      }
-
-      paidRaw = paidRaw.add(usdtAmount);
-      arubTotalRaw = arubTotalRaw.add(arubTotal);
-      bonusRaw = bonusRaw.add(bonusArub);
+      paidRaw = paidRaw.add(ev.args.usdtAmount);
+      arubTotalRaw = arubTotalRaw.add(ev.args.arubTotal);
+      bonusRaw = bonusRaw.add(ev.args.bonusArub);
     }
   }
-
-  console.log("[EVENTS] total logs =", totalLogs);
-  console.log("[EVENTS] sums raw =", {
-    paidRaw: paidRaw.toString(),
-    arubTotalRaw: arubTotalRaw.toString(),
-    bonusRaw: bonusRaw.toString(),
-  });
 
   const paidUSDT = Number(ethers.utils.formatUnits(paidRaw, USDT_DECIMALS));
   const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
   const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
-
   const principalARUB = Math.max(0, totalARUB - bonusARUB);
-  const avgPrice = totalARUB > 0 ? (paidUSDT / totalARUB) : null;
+  const avgPrice = totalARUB > 0 ? paidUSDT / totalARUB : null;
 
-  console.log("[EVENTS] parsed =", { paidUSDT, totalARUB, bonusARUB, principalARUB, avgPrice });
+  const result = {
+    paidUSDT,
+    totalARUB,
+    principalARUB,
+    bonusARUB,
+    avgPrice,
+    lastScannedBlock: endBlock,
+    paidRaw: paidRaw.toString(),
+    arubTotalRaw: arubTotalRaw.toString(),
+    bonusRaw: bonusRaw.toString(),
+  };
 
-  return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice, startBlock };
+  savePresaleCache(user, result);
+  return result;
 }
 
 async function refreshPresaleUI(address) {
@@ -415,6 +397,28 @@ window.addEventListener("wallet:disconnected", () => {
   setText("presaleAvgPrice", "—");
   setText("presaleDiscount", "—");
 });
+
+function presaleCacheKey(addr) {
+  return `presaleStats:${CONFIG.PRESALE_ADDRESS}:${addr.toLowerCase()}`;
+}
+
+function loadPresaleCache(addr) {
+  try {
+    const raw = localStorage.getItem(presaleCacheKey(addr));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePresaleCache(addr, data) {
+  try {
+    localStorage.setItem(
+      presaleCacheKey(addr),
+      JSON.stringify({ ...data, cachedAt: Date.now() })
+    );
+  } catch {}
+}
 
 // =======================
 // END PRESALE / ORACLE STATS
