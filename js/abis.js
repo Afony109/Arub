@@ -62,14 +62,6 @@ export const ORACLE_ABI = [
 export const USDT_ABI = [
   ...ERC20_MINIMAL_ABI,
 ];
-
-// --------------------------------------------------
-// ARUB Token ABI (ERC20, 18 decimals)
-// --------------------------------------------------
-export const TOKEN_ABI = [
-  ...ERC20_MINIMAL_ABI,
-];
-
 // --------------------------------------------------
 // ARUBVault ABI
 // Based on ARUBVault.sol
@@ -117,7 +109,10 @@ export const PRESALE_READ_ABI = [
   "function lockedDepositUntil(address) view returns (uint256)",
   "function getRemainingLockTime(address) view returns (uint256)",
   "function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)",
-  "function getDiscountPercent() view returns (uint256)",
+  "function getDiscountPercent() view returns (uint256)", "function getDiscountPercent() view returns (uint256)",
+  "function totalDiscountBuyers() view returns (uint256)",
+  "function isDiscountBuyer(address) view returns (bool)",
+  "function DISCOUNT_MAX_BUYERS() view returns (uint256)",
 ];
 
 export const PRESALE_WRITE_ABI = [
