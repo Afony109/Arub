@@ -139,55 +139,19 @@
 </section>
 <!-- Trading Interface -->
 <section class="staking-section">
-<div class="page-section">
-<div class="page-pill">
-            💱 <span>Торгівля</span>
-</div>
-<h2 class="page-section-title">Торгівля токенами</h2>
-<p class="page-section-subtitle">Купуйте та продавайте токени ARUB за поточним курсом</p>
-<div class="page-card fade-in-up" id="tradingInterface">
-<div style="text-align: center; padding: 60px; color: var(--gray);">
-<div style="font-size: 3em; margin-bottom: 20px;">🔒</div>
-<p style="font-size: 1.3em;">Підключіть гаманець для торгівлі токенами</p>
-<button class="btn-primary" onclick="document.getElementById('connectBtn').click()" style="margin-top: 30px;">
-                    Підключити гаманець
-                </button>
-</div>
-<div id="tradingUi" style="display:none;">
-<div class="info-card" style="margin-top: 20px;">
-<div class="info-card-header">
-<div class="info-card-icon">🧾</div>
-<h3>Режим купівлі</h3>
-</div>
-<div class="info-card-body">
-<div class="buy-mode" style="display:flex; gap:16px; flex-wrap:wrap;">
-<label style="display:flex; gap:10px; align-items:center; cursor:pointer;">
-<input checked="" id="buyModeInstant" name="buyMode" type="radio" value="instant"/>
-<span><strong>Buy ARUB (Instant)</strong> — ARUB одразу, можна продавати</span>
-</label>
-<label style="display:flex; gap:10px; align-items:center; cursor:pointer;">
-<input id="buyModeDiscount" name="buyMode" type="radio" value="discount"/>
-<span><strong>Buy ARUB (Discount, 90 days lock)</strong> — депозит лочиться, redeem недоступний</span>
-</label>
-</div>
-</div>
-</div>
-<div class="info-card" id="lockPanel" style="margin-top: 20px; display:none;">
-<div class="info-card-header">
-<div class="info-card-icon">🔒</div>
-<h3>Lock status</h3>
-</div>
-<div class="info-card-body">
-<div class="info-row"><span class="info-label">Locked principal:</span><span class="info-value"><span id="lockedPrincipal">—</span> ARUB</span></div>
-<div class="info-row"><span class="info-label">Locked bonus:</span><span class="info-value"><span id="lockedBonus">—</span> ARUB</span></div>
-<div class="info-row"><span class="info-label">Unlock date:</span><span class="info-value" id="unlockDate">—</span></div>
-<div class="info-row"><span class="info-label">Remaining:</span><span class="info-value" id="unlockRemaining">—</span></div>
-<button class="btn-primary" id="unlockBtn" style="margin-top:16px; display:none;" type="button">Unlock</button>
-</div>
-</div>
-</div>
-</div>
-</div>
+  <div class="page-section">
+    <div class="page-pill">
+      💱 <span>Торгівля</span>
+    </div>
+
+    <h2 class="page-section-title">Торгівля токенами</h2>
+    <p class="page-section-subtitle">
+      Купуйте та продавайте токени ARUB за поточним курсом
+    </p>
+
+    <!-- JS renders everything here -->
+    <div class="page-card fade-in-up" id="tradingInterface"></div>
+  </div>
 </section>
 <!-- Fee Explanation -->
 <section class="container" style="margin: 60px auto;">
