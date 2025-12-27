@@ -167,11 +167,16 @@ async function refreshLockPanel() {
     (bonus?.gt && bonus.gt(0));
 
   if (!hasLock) {
-    panel.style.display = 'none';
-    // allow sell if no lock
-    setDisabled('sellBtn', false);
-    return;
-  }
+  panel.style.display = 'none';
+
+  // Lock panel hidden; selling is governed by wallet balance/connection elsewhere.
+  // Do not disable/enable sell here.
+  const hint = el('sellLockHint');
+  if (hint) hint.style.display = 'none';
+
+  return;
+}
+
   // Bonus % = bonus / principal * 100
 const bonusInfo = el('buyBonusInfo');
 const bonusPctEl = el('buyBonusPct');
@@ -206,21 +211,25 @@ if (bonusInfo && bonusPctEl) {
     unlockBtn.onclick = async () => {
       await unlockDeposit();
       await refreshBalances();
-    await refreshLockPanel();
-    startLockAutoRefresh();
-      await refreshLockPanel();
-    };
+await refreshLockPanel();
+startLockAutoRefresh();
+    }
   }
 
-    // Sell lock hint
+   // Sell lock hint (informational only; selling is allowed for wallet-available ARUB)
   const hint = el('sellLockHint');
   const left = el('sellLockLeft');
+
   if (hint && left) {
-    if (Number(info.remaining) > 0) {
+    const now = Math.floor(Date.now() / 1000);
+    const unlockTime = Number(info.unlockTime || 0);
+
+    if (unlockTime > now) {
       hint.style.display = 'block';
-      left.textContent = formatRemaining(info.remaining);
+      left.textContent = formatRemaining(info.remaining || (unlockTime - now));
     } else {
       hint.style.display = 'none';
+      left.textContent = '—';
     }
   }
 
@@ -247,9 +256,6 @@ if (bonusInfo && bonusPctEl) {
       setText('sellFee', `${pct.toFixed(2)}%`);
     }
   } catch (_) {}
-
-  // Contract prohibits redeem while lock active; avoid user-facing revert.
-  setDisabled('sellBtn', !canUnlock);
 }
 
 function startLockAutoRefresh() {
@@ -410,7 +416,7 @@ function renderTradingUI() {
   Комісія при продажу: <span id="sellFee">—</span>
 </div>
 <div id="sellLockHint" style="display:none; margin-top:6px; font-size:13px; opacity:0.85;">
-  Продаж обмежено локом. Залишилось: <span id="sellLockLeft">—</span>
+  Активний лок бонусної покупки. Продаж вільних ARUB дозволено. Залишилось: <span id="sellLockLeft">—</span>
 </div>
       <div style="margin-top:10px; font-size:14px; opacity:0.9;">
         Баланс ARUB: <span id="arubBalance">—</span>
@@ -640,6 +646,13 @@ async function refreshBalances() {
     setText('arubBalance', formatTokenAmount(arubBal, DECIMALS_ARUB, 6));
     ensurePresaleUI();
     setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 2));
+
+    // Enable SELL based on actual wallet ARUB balance (lock does not restrict redeem)
+    setDisabled('sellBtn', arubBal.lte(0));
+    setDisabled('maxSellBtn', arubBal.lte(0));
+
+    const sellInp = el('sellAmount');
+    if (sellInp) sellInp.disabled = arubBal.lte(0);
 
   } catch (e) {
     console.warn('[TRADING] refreshBalances error:', e);
@@ -977,7 +990,6 @@ export async function sellTokens(arubAmount) {
     return;
   }
 
-  // ARUB = 6 (в вашем проекте)
   let amountBN;
   try {
     amountBN = parseTokenAmount(arubAmount, DECIMALS_ARUB);
@@ -994,8 +1006,18 @@ export async function sellTokens(arubAmount) {
   const arub = new ethers.Contract(ARUB_TOKEN_ADDRESS, ERC20_ABI_MIN, ws.signer);
   const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
 
+  // Мягкое предупреждение (не блокирует)
   try {
-    // approve ARUB (redeem uses transferFrom in presale.sol)
+    const info = await loadMyLockInfo();
+    if (info && Number(info.remaining) > 0) {
+      showNotification?.(
+        'Увага: у вас активний лок. Якщо контракт блокує redeem під час лока — транзакція може бути відхилена.',
+        'info'
+      );
+    }
+  } catch (_) {}
+
+  try {
     const allowance = await arub.allowance(ws.address, PRESALE_ADDRESS);
     if (allowance.lt(amountBN)) {
       showNotification?.('Approving ARUB...', 'success');
@@ -1008,8 +1030,8 @@ export async function sellTokens(arubAmount) {
     await tx.wait(1);
 
     showNotification?.('Redeem successful.', 'success');
-
     try { await refreshBalances?.(); } catch (_) {}
+
     console.log('[TRADING] redeem tx:', tx.hash);
     return tx;
   } catch (e) {
@@ -1022,6 +1044,7 @@ export async function sellTokens(arubAmount) {
     return;
   }
 }
+
 
 // Разблокировка ARUB после 90 дней (только для discounted режима)
 export async function unlockDeposit() {
