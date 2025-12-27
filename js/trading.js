@@ -20,7 +20,7 @@
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
 import { showNotification, formatTokenAmount } from './ui.js';
-import { ERC20_ABI } from './abis.js';
+import { ERC20_ABI, PRESALE_READ_ABI } from './abis.js';
 
 // -----------------------------
 // Addresses (presale + token proxies)
@@ -75,6 +75,31 @@ const PRESALE_ABI_MIN = [
   'function claimDebt() external',
   'function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)',
   'function debtUsdtEquivalent(address) view returns (uint256)',
+
+  // ✅ добавить для buy-панели
+  'function getDiscountPercent() view returns (uint256)',
+  'function totalDiscountBuyers() view returns (uint256)',
+  'function DISCOUNT_MAX_BUYERS() view returns (uint256)',
+  'function isDiscountBuyer(address) view returns (bool)',
+
+  // write
+  'function buyWithUSDT(uint256 amount, bool withBonus) external',
+  'function unlockDeposit() external',
+  'function redeemForUSDT(uint256 arubAmount) external',
+  'function claimDebt() external',
+
+  // lock (address-based; stable for RO calls)
+  'function lockedPrincipalArub(address) view returns (uint256)',
+  'function lockedBonusArub(address) view returns (uint256)',
+  'function lockedDepositUntil(address) view returns (uint256)',
+  'function getRemainingLockTime(address user) view returns (uint256)',
+
+  // sell fee (exists in your ABI)
+  'function getMySellFeeBps() view returns (uint256)',
+  'function getUserSellFeeBps(address user) view returns (uint256)',
+
+  // debt
+  'function debtUsdtEquivalent(address) view returns (uint256)',
 ];
 
 function pickEthersMessage(e) {
@@ -116,16 +141,6 @@ function formatJerusalemDate(unixSeconds) {
   }).format(d);
 }
 
-function formatRemaining(seconds) {
-  const s = Math.max(0, Math.floor(Number(seconds || 0)));
-  const days = Math.floor(s / 86400);
-  const hours = Math.floor((s % 86400) / 3600);
-  const mins = Math.floor((s % 3600) / 60);
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
-}
-
 let lockRefreshTimer = null;
 
 async function refreshLockPanel() {
@@ -157,13 +172,31 @@ async function refreshLockPanel() {
     setDisabled('sellBtn', false);
     return;
   }
+  // Bonus % = bonus / principal * 100
+const bonusInfo = el('buyBonusInfo');
+const bonusPctEl = el('buyBonusPct');
+
+if (bonusInfo && bonusPctEl) {
+  if (principal?.gt && principal.gt(0) && bonus?.gt && bonus.gt(0)) {
+    // bps = (bonus / principal) * 10000
+    const bpsBN = bonus.mul(10000).div(principal); // BigNumber
+    const pct = Number(bpsBN.toString()) / 100;    // 2 decimals
+
+    bonusInfo.style.display = '';
+    bonusPctEl.textContent = `${pct.toFixed(2)}%`;
+  } else {
+    // если бонуса нет — можно скрывать, либо показывать 0%
+    bonusInfo.style.display = '';
+    bonusPctEl.textContent = '0.00%';
+  }
+}
 
   panel.style.display = '';
 
-  setText('lockedPrincipal', formatTokenAmount(principal, DECIMALS_ARUB, DECIMALS_ARUB));
-  setText('lockedBonus', formatTokenAmount(bonus, DECIMALS_ARUB, DECIMALS_ARUB));
-  setText('unlockDate', formatJerusalemDate(info.unlockTime));
-  setText('unlockRemaining', formatRemaining(info.remaining));
+ setText('lockedPrincipal', formatTokenAmount(principal, DECIMALS_ARUB, 6));
+ setText('lockedBonus',     formatTokenAmount(bonus,     DECIMALS_ARUB, 6));
+ setText('unlockDate', formatJerusalemDate(info.unlockTime));
+ setText('unlockRemaining', formatRemaining(info.remaining));
 
   const canUnlock = Number(info.remaining) <= 0 && Number(info.unlockTime) > 0;
 
@@ -178,6 +211,42 @@ async function refreshLockPanel() {
       await refreshLockPanel();
     };
   }
+
+    // Sell lock hint
+  const hint = el('sellLockHint');
+  const left = el('sellLockLeft');
+  if (hint && left) {
+    if (Number(info.remaining) > 0) {
+      hint.style.display = 'block';
+      left.textContent = formatRemaining(info.remaining);
+    } else {
+      hint.style.display = 'none';
+    }
+  }
+
+  // Sell fee
+  try {
+    let feeBps = null;
+
+    // prefer "my" fee when signer exists
+    if (user.signer) {
+      const presaleAsSigner = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, user.signer);
+      if (presaleAsSigner.getMySellFeeBps) feeBps = await presaleAsSigner.getMySellFeeBps();
+    }
+
+    // fallback to address-based
+    if (feeBps == null) {
+      const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
+      const roProvider = rpc ? new ethers.providers.JsonRpcProvider(rpc) : user.provider;
+      const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, roProvider);
+      if (presaleRO.getUserSellFeeBps) feeBps = await presaleRO.getUserSellFeeBps(user.address);
+    }
+
+    if (feeBps != null) {
+      const pct = Number(feeBps.toString()) / 100; // bps -> %
+      setText('sellFee', `${pct.toFixed(2)}%`);
+    }
+  } catch (_) {}
 
   // Contract prohibits redeem while lock active; avoid user-facing revert.
   setDisabled('sellBtn', !canUnlock);
@@ -255,25 +324,52 @@ function renderTradingUI() {
     <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
       <h3 style="margin:0 0 10px 0;">Купівля</h3>
 
+      <!-- BUY MODE -->
       <div style="display:flex; flex-direction:column; gap:6px; margin:8px 0 10px 0; font-size:14px; opacity:0.95;">
         <label style="display:flex; gap:8px; align-items:center;">
           <input type="radio" name="buyMode" value="instant" checked>
           <span>Купити ARUB (миттєво)</span>
         </label>
+
         <label style="display:flex; gap:8px; align-items:center;">
           <input type="radio" name="buyMode" value="discount">
-          <span>Купити ARUB (зі знижкою, блокування 90 днів)</span>
+          <span>Купити ARUB (з бонусом, депозит блокується)</span>
         </label>
       </div>
 
+      <!-- BONUS INFO -->
+      <div id="buyBonusBox"
+           style="display:none; margin:6px 0 10px 0; padding:10px; border-radius:12px;
+                  border:1px solid rgba(255,255,255,0.10); background: rgba(0,0,0,0.18);
+                  font-size:13px; opacity:0.95;">
+        <div style="display:flex; justify-content:space-between; gap:12px;">
+          <div>
+            Бонус зараз: <span id="buyBonusPct">—</span>
+          </div>
+          <div style="opacity:0.85;">
+            Залишилось місць: <span id="buyBonusSlots">—</span>
+          </div>
+        </div>
+
+        <div id="buyBonusNote" style="margin-top:6px; opacity:0.85; display:none;">
+          Бонус доступний лише на першу покупку у режимі з бонусом.
+        </div>
+      </div>
+
+      <!-- AMOUNT -->
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
         <input id="buyAmount" type="number" inputmode="decimal" placeholder="Сума USDT"
-               style="flex:1; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
+               style="flex:1; padding:12px; border-radius:12px;
+                      border:1px solid rgba(255,255,255,0.12);
+                      background: rgba(0,0,0,0.25); color:#fff;">
         <button id="maxBuyBtn" type="button"
-                style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
+                style="padding:12px 14px; border-radius:12px;
+                       border:1px solid rgba(255,255,255,0.12);
+                       background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
           МАКС
         </button>
       </div>
+
 
       <button id="buyBtn" type="button"
               style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
@@ -310,7 +406,12 @@ function renderTradingUI() {
               style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
         Продати ARUB
       </button>
-
+<div style="margin-top:10px; font-size:13px; opacity:0.9;">
+  Комісія при продажу: <span id="sellFee">—</span>
+</div>
+<div id="sellLockHint" style="display:none; margin-top:6px; font-size:13px; opacity:0.85;">
+  Продаж обмежено локом. Залишилось: <span id="sellLockLeft">—</span>
+</div>
       <div style="margin-top:10px; font-size:14px; opacity:0.9;">
         Баланс ARUB: <span id="arubBalance">—</span>
       </div>
@@ -320,6 +421,88 @@ function renderTradingUI() {
 
   bindUiOncePerRender();
   hardUnlock();
+  refreshBuyBonusBox().catch(()=>{});
+}
+
+function formatRemaining(sec) {
+  sec = Math.max(0, sec);
+  const d = Math.floor(sec / 86400); sec -= d * 86400;
+  const h = Math.floor(sec / 3600);  sec -= h * 3600;
+  const m = Math.floor(sec / 60);
+  return `${d ? d + ' д ' : ''}${h ? h + ' год ' : ''}${m} хв`;
+}
+async function refreshBuyBonusBox() {
+  const box = el('buyBonusBox');
+  const pctEl = el('buyBonusPct');
+  const slotsEl = el('buyBonusSlots');
+  const noteEl = el('buyBonusNote');
+
+  if (!box || !pctEl || !slotsEl) return;
+
+  const isBonusMode = getBuyMode() === 'discount';
+  box.style.display = isBonusMode ? '' : 'none';
+  if (!isBonusMode) return;
+
+  if (!user.address) {
+    pctEl.textContent = '—';
+    slotsEl.textContent = '—';
+    if (noteEl) noteEl.style.display = 'none';
+    return;
+  }
+
+  try {
+    const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
+    const roProvider = rpc ? new ethers.providers.JsonRpcProvider(rpc) : user.provider;
+    const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_READ_ABI, roProvider);
+
+    // percent
+    let percent = null;
+    try {
+      const p = await presaleRO.getDiscountPercent();
+      percent = Number(p.toString());
+    } catch (_) {}
+
+    // already used
+    let already = false;
+    try {
+      already = await presaleRO.isDiscountBuyer(user.address);
+    } catch (_) {}
+
+    // slots left
+    let left = null;
+    try {
+      const usedBN = await presaleRO.totalDiscountBuyers();
+
+      let maxBN = null;
+      try { maxBN = await presaleRO.DISCOUNT_MAX_BUYERS(); } catch (_) { maxBN = null; }
+
+      const used = Number(usedBN.toString());
+
+      if (maxBN != null) {
+        const max = Number(maxBN.toString());
+        left = Math.max(0, max - used);
+      } else {
+        // fallback if getter not available
+        const FALLBACK_MAX = 100;
+        left = Math.max(0, FALLBACK_MAX - used);
+      }
+    } catch (_) {}
+
+    if (already) {
+      pctEl.textContent = '0%';
+      if (noteEl) noteEl.style.display = '';
+    } else {
+      pctEl.textContent = (percent != null ? `${percent}%` : '—');
+      if (noteEl) noteEl.style.display = 'none';
+    }
+
+    slotsEl.textContent = (left != null ? String(left) : '—');
+  } catch (e) {
+    console.warn('[TRADING] refreshBuyBonusBox failed:', e?.message || e);
+    pctEl.textContent = '—';
+    slotsEl.textContent = '—';
+    if (noteEl) noteEl.style.display = 'none';
+  }
 }
 
 // -----------------------------
@@ -485,6 +668,9 @@ function bindUiOncePerRender() {
         const amount = el('buyAmount')?.value ?? '';
         const withBonus = getBuyMode() === 'discount';
         await buyTokens(amount, withBonus);
+
+        // после успешной покупки обновим бонус-бокс
+        try { await refreshBuyBonusBox(); } catch (_) {}
       } catch (e) {
         console.error('[UI] buy click error:', e);
         showNotification?.(e?.message || 'Buy failed', 'error');
@@ -522,6 +708,14 @@ function bindUiOncePerRender() {
       catch (e) { showNotification?.(e?.message || 'Cannot set max sell', 'error'); }
     };
   }
+
+  // Buy mode change -> update bonus info
+  document.querySelectorAll('input[name="buyMode"]').forEach(r => {
+    r.onchange = () => { refreshBuyBonusBox().catch(() => {}); };
+  });
+
+  // Первичное обновление
+  refreshBuyBonusBox().catch(() => {});
 }
 
 // -----------------------------
@@ -728,19 +922,21 @@ export async function buyTokens(usdtAmount, withBonus = false) {
 
     // 2) buy
     showNotification?.(
-      withBonus ? 'Buying with discount (90d lock)...' : 'Buying ARUB...',
+      withBonus ? 'Buying with bonus (90d lock)...' : 'Buying ARUB...',
       'success'
     );
+
+    try { await refreshBuyBonusBox(); } catch (_) {}
 
     const tx = await presale.buyWithUSDT(amountBN, withBonus);
     await tx.wait(1);
 
     showNotification?.(
-      withBonus
-        ? 'Payment received. ARUB locked for 90 days.'
-        : 'Purchase successful. ARUB credited.',
-      'success'
-    );
+  withBonus
+    ? 'Payment received. ARUB is locked.'
+    : 'Purchase successful. ARUB credited.',
+  'success'
+);
 
     // опционально обновить UI
     try { await refreshBalances?.(); } catch (_) {}
@@ -864,16 +1060,21 @@ export async function loadMyLockInfo() {
 
   const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
   const roProvider = rpc ? new ethers.providers.JsonRpcProvider(rpc) : ws.provider;
+
   const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, roProvider);
 
   try {
-    const [principalLocked, bonusLocked, unlockTime, remaining] = await presaleRO.getMyLockedInfo();
-    return {
-      principalLocked,
-      bonusLocked,
-      unlockTime: Number(unlockTime?.toString?.() || unlockTime),
-      remaining: Number(remaining?.toString?.() || remaining),
-    };
+    const [principalLocked, bonusLocked, unlockUntilRaw, remainingRaw] = await Promise.all([
+      presaleRO.lockedPrincipalArub(ws.address),
+      presaleRO.lockedBonusArub(ws.address),
+      presaleRO.lockedDepositUntil(ws.address),
+      presaleRO.getRemainingLockTime(ws.address),
+    ]);
+
+    const unlockTime = Number(unlockUntilRaw.toString());
+    const remaining  = Number(remainingRaw.toString());
+
+    return { principalLocked, bonusLocked, unlockTime, remaining };
   } catch (e) {
     console.warn('[TRADING] loadMyLockInfo failed:', e?.message || e);
     return null;
