@@ -837,37 +837,64 @@
 </section>
 <!-- ADD TOKEN GUIDE -->
 <section class="page-section" id="add-token-guide">
-<div class="page-panel">
-<div class="page-pill">📋 <span>Додайте токени</span></div>
-<h2 class="page-section-title">Додайте ARUB та USDT</h2>
-<p class="page-section-subtitle">Щоб бачити токени в MetaMask</p>
-<div class="page-panel-grid">
-<div class="page-card">
-<div class="page-card-header">
-<div class="page-card-icon">🪙</div>
-<div>
-<div class="page-card-title">ARUB Token <span class="pool-badge arub">ARUB</span></div>
-<div class="page-card-text">Антируб — токен проти падіння рубля</div>
-</div>
-</div>
-<button class="action-btn" onclick="addTokenToWallet('ARUB')">
-<span class="icon-flip">₽</span> Додати ARUB <span class="icon-flip">₽</span>
-</button>
-</div>
-<div class="page-card">
-<div class="page-card-header">
-<div class="page-card-icon">💵</div>
-<div>
-<div class="page-card-title">USDT <span class="pool-badge usdt">Arbitrum</span></div>
-<div class="page-card-text">Офіційний USDT в мережі Arbitrum One</div>
-</div>
-</div>
-<button class="action-btn" onclick="addTokenToWallet('USDT')">
-<span class="icon-usdt">$</span> Додати USDT <span class="icon-usdt">$</span>
-</button>
-</div>
-</div>
-</div>
+  <div class="page-panel">
+    <div class="page-pill">📋 <span>Додайте токени</span></div>
+
+    <h2 class="page-section-title">Додайте ARUB та USDT</h2>
+    <p class="page-section-subtitle">Щоб бачити токени у вашому гаманці (MetaMask)</p>
+
+    <div class="page-panel-grid">
+
+      <!-- ARUB -->
+      <div class="page-card">
+        <div class="page-card-header">
+          <div class="page-card-icon">🪙</div>
+          <div>
+            <div class="page-card-title">
+              ARUB Token <span class="pool-badge arub">ARUB</span>
+            </div>
+            <div class="page-card-text">
+              Антируб — токен, прив’язаний до курсу USD/RUB
+            </div>
+          </div>
+        </div>
+
+        <button
+          class="action-btn"
+          type="button"
+          onclick="addTokenToWallet('ARUB')">
+          <span class="icon-flip">₽</span>
+          Додати ARUB
+          <span class="icon-flip">₽</span>
+        </button>
+      </div>
+
+      <!-- USDT -->
+      <div class="page-card">
+        <div class="page-card-header">
+          <div class="page-card-icon">💵</div>
+          <div>
+            <div class="page-card-title">
+              USDT <span class="pool-badge usdt">Arbitrum</span>
+            </div>
+            <div class="page-card-text">
+              Офіційний USDT у мережі Arbitrum One
+            </div>
+          </div>
+        </div>
+
+        <button
+          class="action-btn"
+          type="button"
+          onclick="addTokenToWallet('USDT')">
+          <span class="icon-usdt">$</span>
+          Додати USDT
+          <span class="icon-usdt">$</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
 </section>
 <!-- TRADING -->
 <section class="page-section" id="trading">
