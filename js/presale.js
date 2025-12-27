@@ -1,4 +1,4 @@
-﻿/**
+/**
  * presale.js — Write-layer for Presale BUY (USDT approve -> Presale.buy)
  *
  * Goals:
@@ -39,11 +39,20 @@ function toBN(amountHuman, decimals) {
 }
 
 
-function initFromSigner(signer) {
+async function initFromSigner(signer) {
   assertConfig();
   if (!signer) throw new Error('Signer is required');
+
   usdt = new ethers.Contract(CONFIG.USDT_ADDRESS, ERC20_ABI, signer);
   presale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_ABI, signer);
+
+  if (usdtDecimals == null) {
+    try {
+      usdtDecimals = await usdt.decimals();
+    } catch (_) {
+      usdtDecimals = 6;
+    }
+  }
 }
 // -----------------------------
 // Public
@@ -122,7 +131,7 @@ export async function buyWithUsdt(usdtAmountHuman, opts = {}) {
 
     const signer = opts?.signer || window.walletState?.signer || null;
   if (!signer) throw new Error('Wallet not connected or signer not ready');
-  initFromSigner(signer);
+  await initFromSigner(signer);
   const user = await signer.getAddress();
   const amt = Number(usdtAmountHuman);
   if (!Number.isFinite(amt) || amt <= 0) throw new Error('Invalid USDT amount');
@@ -204,4 +213,8 @@ export async function quoteArubFormatted(usdtAmountHuman, maxFrac = 6) {
 
   return `${trimmed} ARUB`;
 }
+
+
+
+
 
