@@ -4,7 +4,7 @@
  * Centralized ABIs for frontend
  * Compatible with:
  *  - USDT (ERC20, 6 decimals)
- *  - ARUB token (ERC20, 18 decimals)
+ *  - ARUB token (ERC20, 6 decimals)
  *  - ARUBVault (ERC20 shares + deposit/withdraw)
  *
  * IMPORTANT:

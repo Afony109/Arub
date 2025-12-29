@@ -26,7 +26,7 @@ import { ERC20_ABI, PRESALE_READ_ABI } from './abis.js';
 // Addresses (presale + token proxies)
 // -----------------------------
 // Keep defaults here as a safety net; prefer setting these in config.js.
-const PRESALE_ADDRESS = CONFIG?.PRESALE_ADDRESS || '0x44960eDa62860Fb54C143f742122619c25a129d1';
+const PRESALE_ADDRESS = CONFIG?.PRESALE_ADDRESS || '0x409cd8D02982220Be805e59570BB3f0cBB0443B2';
 const ARUB_TOKEN_ADDRESS = CONFIG?.ARUB_TOKEN_ADDRESS || CONFIG?.TOKEN_ADDRESS || '0x161296CD7F742220f727e1B4Ccc02cAEc71Ed2C6';
 const USDT_ADDRESS = CONFIG?.USDT_ADDRESS || '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
 
