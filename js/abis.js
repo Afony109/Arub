@@ -1,19 +1,17 @@
 /**
  * abis.js
  *
- * Centralized ABIs for frontend
- * Compatible with:
- *  - USDT (ERC20, 6 decimals)
- *  - ARUB token (ERC20, 6 decimals)
- *  - ARUBVault (ERC20 shares + deposit/withdraw)
+ * Centralized ABIs for frontend (ES module)
+ * Must be accessible at /js/abis.js
  *
- * IMPORTANT:
- *  - This file MUST be an ES module
- *  - It MUST be accessible at /js/abis.js
+ * Notes:
+ *  - USDT decimals = 6
+ *  - ARUB decimals = 6
+ *  - UI flow: Presale-centric (buy/redeem/locks/fees)
  */
 
 // --------------------------------------------------
-// Minimal ERC20 ABI (balance, approve, allowance)
+// Minimal ERC20 ABI (balance/allowance/approve + transfers)
 // --------------------------------------------------
 const ERC20_MINIMAL_ABI = [
   // Read
@@ -34,26 +32,29 @@ const ERC20_MINIMAL_ABI = [
   'event Approval(address indexed owner, address indexed spender, uint256 value)',
 ];
 
-// js/abis.js
-// Minimal ABIs needed by app/contracts/trading
-
+// --------------------------------------------------
+// Exported ERC20 ABI (used by trading.js / generic token reads)
+// --------------------------------------------------
 export const ERC20_ABI = [
-  "function name() view returns (string)",
-  "function symbol() view returns (string)",
-  "function decimals() view returns (uint8)",
-  "function totalSupply() view returns (uint256)",
-  "function balanceOf(address) view returns (uint256)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function approve(address spender, uint256 amount) returns (bool)"
+  'function name() view returns (string)',
+  'function symbol() view returns (string)',
+  'function decimals() view returns (uint8)',
+  'function totalSupply() view returns (uint256)',
+  'function balanceOf(address) view returns (uint256)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
 ];
 
-// ArubOracle @ 0xC15f... (rate = USD/RUB * 1e6)
+// --------------------------------------------------
+// Oracle ABI (oracl.sol)
+// contracts.js uses: getRate()
+// --------------------------------------------------
 export const ORACLE_ABI = [
-  "function rate() view returns (uint256)",
-  "function updatedAt() view returns (uint256)",
-  "function usdRub() view returns (uint256)",
-  "function currentRate() view returns (uint256)",
-  "function getRate() view returns (uint256,uint256)"
+  'function getRate() view returns (uint256,uint256)',   // (rate, updatedAt)
+  'function currentRate() view returns (uint256)',       // optional
+  'function usdRub() view returns (uint256)',            // optional
+  'function lastRate() view returns (uint256)',          // optional
+  'function lastUpdatedAt() view returns (uint256)',     // optional
 ];
 
 // --------------------------------------------------
@@ -62,14 +63,33 @@ export const ORACLE_ABI = [
 export const USDT_ABI = [
   ...ERC20_MINIMAL_ABI,
 ];
+
 // --------------------------------------------------
-// ARUBVault ABI
-// Based on ARUBVault.sol
-//
-// Key facts:
-//  - Vault itself is ERC20 (shares)
-//  - deposit(uint256 arubAmount)
-//  - withdraw(uint256 shares)
+// ARUB Token ABI (token.sol) — for UI integrations
+// Decimals: 6
+// --------------------------------------------------
+export const ARUB_ABI = [
+  ...ERC20_MINIMAL_ABI,
+
+  // Oracle-linked conversion helpers
+  'function calculateArubAmount(uint256 usdtAmount) view returns (uint256)',
+  'function calculateUsdtAmount(uint256 arubAmount) view returns (uint256)',
+
+  // Mint/Burn (restricted; UI normally won't call directly, but contracts do)
+  'function mintTo(address to, uint256 amount) external',
+  'function burnFrom(address from, uint256 amount) external',
+
+  // Presale wrappers (used by presale.sol)
+  'function mint(address to, uint256 amount) external',
+  'function burn(address from, uint256 amount) external',
+
+  // Optional reads
+  'function oracle() view returns (address)',
+  'function maxSupply() view returns (uint256)',
+];
+
+// --------------------------------------------------
+// ARUBVault ABI (ERC20 shares + deposit/withdraw)
 // --------------------------------------------------
 export const VAULT_ABI = [
   // ---- ERC20 (shares) ----
@@ -87,36 +107,53 @@ export const VAULT_ABI = [
   'function deposit(uint256 arubAmount)',
   'function withdraw(uint256 shares)',
 
-  // ---- View helpers (from ARUBVault.sol, safe if unused) ----
+  // ---- View helpers ----
   'function totalAssetsArubEq() view returns (uint256)',
   'function asset() view returns (address)',
 
-  // ---- Events (optional, but useful) ----
+  // ---- Events ----
   'event Deposit(address indexed user, uint256 arubAmount, uint256 shares)',
   'event Withdraw(address indexed user, uint256 shares, uint256 arubAmount)',
 ];
 
-// Presale (custom)
-export const PRESALE_ABI = [
-  "function buy(uint256 usdtAmount) external",
-  "function paused() view returns (bool)",
-  "function getTokenAmount(uint256 usdtAmount) view returns (uint256)"
-];
+// --------------------------------------------------
+// Presale READ ABI (precale.sol) — used by trading.js (read-only)
+// trading.js calls:
+//  - getDiscountPercent(), totalDiscountBuyers(), DISCOUNT_MAX_BUYERS()
+//  - lockedPrincipalArub(), lockedBonusArub(), lockedDepositUntil()
+//  - getRemainingLockTime(), getUserSellFeeBps()
+// --------------------------------------------------
 export const PRESALE_READ_ABI = [
-  "function totalDeposited(address) view returns (uint256)",
-  "function lockedPrincipalArub(address) view returns (uint256)",
-  "function lockedBonusArub(address) view returns (uint256)",
-  "function lockedDepositUntil(address) view returns (uint256)",
-  "function getRemainingLockTime(address) view returns (uint256)",
-  "function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)",
-  "function getDiscountPercent() view returns (uint256)", "function getDiscountPercent() view returns (uint256)",
-  "function totalDiscountBuyers() view returns (uint256)",
-  "function isDiscountBuyer(address) view returns (bool)",
-  "function DISCOUNT_MAX_BUYERS() view returns (uint256)",
+  'function paused() view returns (bool)',
+
+  // discount
+  'function getDiscountPercent() view returns (uint256)',
+  'function totalDiscountBuyers() view returns (uint256)',
+  'function DISCOUNT_MAX_BUYERS() view returns (uint256)',
+
+  // locks
+  'function lockedPrincipalArub(address) view returns (uint256)',
+  'function lockedBonusArub(address) view returns (uint256)',
+  'function lockedDepositUntil(address) view returns (uint256)',
+  'function getRemainingLockTime(address) view returns (uint256)',
+
+  // sell fee
+  'function getUserSellFeeBps(address user) view returns (uint256)',
+
+  // optional helpers
+  'function totalDeposited(address) view returns (uint256)',
+  'function isDiscountBuyer(address) view returns (bool)',
+  'function debtUsdtEquivalent(address) view returns (uint256)',
+  'function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)',
 ];
 
+// (Optional) Presale write ABI — not required by your current trading.js import,
+// but kept here for consistency if you later unify ABIs.
 export const PRESALE_WRITE_ABI = [
-  "function buyWithUSDT(uint256 amount, bool withBonus) external",
-  "function unlockDeposit() external",
-  "function paused() view returns (bool)",
+  'function buyWithUSDT(uint256 amount, bool withBonus) external',
+  'function unlockDeposit() external',
+  'function redeemForUSDT(uint256 arubAmount) external',
+  'function claimDebt(bool preferredUSDT) external',
+  'function getMySellFeeBps() view returns (uint256)',
 ];
+
