@@ -358,7 +358,7 @@ function renderTradingUI() {
         </div>
 
         <div id="buyBonusNote" style="margin-top:6px; opacity:0.85; display:none;">
-          Бонус доступний лише на першу покупку у режимі з бонусом.
+          Ліміти: мінімум 10 USDT · максимум 1000 USDT за покупку · 3000 USDT на гаманець
         </div>
       </div>
 
@@ -381,6 +381,10 @@ function renderTradingUI() {
               style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
         Купити ARUB
       </button>
+
+            <div style="margin-top:6px; font-size:12px; opacity:0.75; text-align:center;">
+        Minimum $10
+      </div>
 
       <div style="margin-top:10px; font-size:14px; opacity:0.9;">
         Баланс USDT: <span id="usdtBalance">—</span>
@@ -468,12 +472,6 @@ async function refreshBuyBonusBox() {
       percent = Number(p.toString());
     } catch (_) {}
 
-    // already used
-    let already = false;
-    try {
-      already = await presaleRO.isDiscountBuyer(user.address);
-    } catch (_) {}
-
     // slots left
     let left = null;
     try {
@@ -494,15 +492,13 @@ async function refreshBuyBonusBox() {
       }
     } catch (_) {}
 
-    if (already) {
-      pctEl.textContent = '0%';
-      if (noteEl) noteEl.style.display = '';
-    } else {
-      pctEl.textContent = (percent != null ? `${percent}%` : '—');
-      if (noteEl) noteEl.style.display = 'none';
-    }
+        pctEl.textContent = (percent != null ? `${percent}%` : '—');
+    if (noteEl) noteEl.style.display = '';
 
-    slotsEl.textContent = (left != null ? String(left) : '—');
+    // Mirror the same bonus % in the presale stats block (under Sell)
+    const bonusOut = document.getElementById('presaleBonusPct');
+    if (bonusOut) bonusOut.textContent = (percent != null ? `${percent}%` : '—');
+slotsEl.textContent = (left != null ? String(left) : '—');
   } catch (e) {
     console.warn('[TRADING] refreshBuyBonusBox failed:', e?.message || e);
     pctEl.textContent = '—';
@@ -611,7 +607,7 @@ function ensurePresaleUI() {
   <div>Куплено на пресейлі: <span id="presalePurchased">—</span> ARUB</div>
   <div>Сплачено: <span id="presalePaid">—</span> USDT</div>
   <div>Середня ціна купівлі: <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
-  <div>Знижка від поточної ціни: <span id="presaleDiscount">—</span></div>
+  <div>Бонус: <span id="presaleBonusPct">—</span></div>
 
   <!-- Presale scan progress -->
   <div id="presaleScanWrap" style="display:none; margin-top:10px;">
@@ -913,6 +909,13 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     amountBN = parseTokenAmount(usdtAmount, DECIMALS_USDT);
   } catch (e) {
     showNotification?.(e?.message || 'Invalid amount', 'error');
+    return;
+  }
+
+  // UI guard: contract enforces MIN_PURCHASE_PER_TX = 10 USDT, but we prevent reverts here
+  const MIN_USDT = ethers.utils.parseUnits('10', DECIMALS_USDT);
+  if (amountBN.lt(MIN_USDT)) {
+    showNotification?.('Minimum purchase is $10', 'error');
     return;
   }
 
