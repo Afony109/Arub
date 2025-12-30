@@ -1048,6 +1048,24 @@ try {
 }
 await tx.wait(1);
 
+    showNotification?.('Redeem successful. USDT credited.', 'success');
+
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await loadMyLockInfo?.(); } catch (_) {}
+
+    console.log('[TRADING] redeem tx:', tx.hash);
+    return tx;
+  } catch (e) {
+    console.error('[TRADING] sellTokens error:', e);
+    if (isUserRejectedTx(e)) {
+      showNotification?.('Transaction rejected in wallet', 'error');
+      return;
+    }
+    showNotification?.(pickEthersMessage(e), 'error');
+    return;
+  }
+}
+
 // Разблокировка ARUB после 90 дней (только для discounted режима)
 export async function unlockDeposit() {
   const ws = window.walletState;
