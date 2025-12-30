@@ -1022,32 +1022,31 @@ export async function sellTokens(arubAmount) {
 
   try {
     const allowance = await arub.allowance(ws.address, PRESALE_ADDRESS);
-    if (allowance.lt(amountBN)) {
-      showNotification?.('Approving ARUB...', 'success');
-      const txA = await arub.approve(PRESALE_ADDRESS, amountBN);
-      await txA.wait(1);
-    }
+if (allowance.lt(amountBN)) {
+  showNotification?.('Approving ARUB...', 'success');
 
-    showNotification?.('Redeeming for USDT...', 'success');
-    const tx = await presale.redeemForUSDT(amountBN);
-    await tx.wait(1);
-
-    showNotification?.('Redeem successful.', 'success');
-    try { await refreshBalances?.(); } catch (_) {}
-
-    console.log('[TRADING] redeem tx:', tx.hash);
-    return tx;
+  try {
+    const txA = await arub.approve(PRESALE_ADDRESS, amountBN);
+    await txA.wait(1);
   } catch (e) {
-    console.error('[TRADING] sellTokens error:', e);
-    if (isUserRejectedTx(e)) {
-      showNotification?.('Transaction rejected in wallet', 'error');
-      return;
-    }
-    showNotification?.(pickEthersMessage(e), 'error');
-    return;
+    // Trust Wallet часто падает на estimateGas → повторяем с ручным gasLimit
+    console.warn('[TRADING] approve failed, retry with gasLimit:', e?.message || e);
+    const txA = await arub.approve(PRESALE_ADDRESS, amountBN, { gasLimit: 150000 });
+    await txA.wait(1);
   }
 }
 
+showNotification?.('Redeeming for USDT...', 'success');
+
+let tx;
+try {
+  tx = await presale.redeemForUSDT(amountBN);
+} catch (e) {
+  // Trust Wallet estimateGas bug workaround
+  console.warn('[TRADING] redeem failed, retry with gasLimit:', e?.message || e);
+  tx = await presale.redeemForUSDT(amountBN, { gasLimit: 900000 });
+}
+await tx.wait(1);
 
 // Разблокировка ARUB после 90 дней (только для discounted режима)
 export async function unlockDeposit() {
