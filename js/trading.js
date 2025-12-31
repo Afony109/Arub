@@ -996,6 +996,10 @@ export async function buyTokens(usdtAmount, withBonus = false) {
 
     let tx;
     try {
+<<<<<<< HEAD
+=======
+      // Для Trust Wallet часто падает eth_estimateGas -> даём ручной gasLimit
+>>>>>>> 8d5efa7 (Fix RPC fallback and read-only initialization)
       if (typeof isTrustWalletProvider === 'function' && isTrustWalletProvider()) {
         tx = await presale.buyWithUSDT(amountBN, withBonus, { gasLimit: 900000 });
       } else {
@@ -1015,7 +1019,11 @@ export async function buyTokens(usdtAmount, withBonus = false) {
       'success'
     );
 
+<<<<<<< HEAD
     // UI updates after tx
+=======
+    // обновления UI после транзакции
+>>>>>>> 8d5efa7 (Fix RPC fallback and read-only initialization)
     try { await refreshBalances?.(); } catch (_) {}
     try { await loadMyLockInfo?.(); } catch (_) {}
     try { await refreshBuyBonusBox?.(); } catch (_) {}
@@ -1044,8 +1052,19 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     showNotification?.(pickEthersMessage(e), 'error');
     return;
   }
+  console.error('[BUY] reverted raw:', e);
+console.error('[BUY] reverted details:', {
+  code: e?.code,
+  reason: e?.reason,
+  message: e?.message,
+  shortMessage: e?.shortMessage,
+  dataMessage: e?.data?.message,
+  errorMessage: e?.error?.message,
+  errorData: e?.error?.data,
+  data: e?.data,
+  body: e?.error?.body,
+});
 }
-
 // Продажа (redeem) ARUB -> USDT через presale.
 // ВАЖНО: если у пользователя активен lock (покупка со скидкой), контракт будет revert.
 export async function sellTokens(arubAmount) {

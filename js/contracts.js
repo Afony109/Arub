@@ -39,40 +39,72 @@ async function callWithRetry(fn, tries = 3, delayMs = 350) {
   throw lastErr;
 }
 
+function withTimeout(promise, ms, label = 'timeout') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))
+  ]);
+}
+
+async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
+  let lastErr = null;
+
+  for (const url of rpcUrls) {
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(url);
+
+      await callWithRetry(
+        () => withTimeout(provider.getBlockNumber(), 2500, `RPC timeout: ${url}`),
+        triesPerRpc,
+        250
+      );
+
+      return { url, provider };
+    } catch (e) {
+      lastErr = e;
+      console.warn('[RPC] failed', url, e?.message || e);
+    }
+  }
+
+  throw lastErr || new Error('No working RPC endpoints');
+}
+
 function assertConfig() {
-  const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
-  if (!rpc) throw new Error('CONFIG.NETWORK.rpcUrls[0] missing');
+  const rpcs = CONFIG?.NETWORK?.rpcUrls;
+  if (!Array.isArray(rpcs) || rpcs.length === 0) {
+    throw new Error('CONFIG.NETWORK.rpcUrls missing/empty');
+  }
 
   if (!CONFIG?.TOKEN_ADDRESS) throw new Error('CONFIG.TOKEN_ADDRESS missing');
   if (!CONFIG?.ORACLE_ADDRESS) throw new Error('CONFIG.ORACLE_ADDRESS missing');
   if (!CONFIG?.PRESALE_ADDRESS) throw new Error('CONFIG.PRESALE_ADDRESS missing');
 
-  return rpc;
+  return rpcs;
 }
 
 // -----------------------------
 // Public: init read-only contracts
 // -----------------------------
-export function initReadOnlyContracts() {
+export async function initReadOnlyContracts() {
   if (roProvider && roToken && roOracle && roPresale) return true;
 
-  const rpc = assertConfig();
+  const rpcUrls = assertConfig();
 
-  roProvider = new ethers.providers.JsonRpcProvider(rpc);
+  const { url, provider } = await pickWorkingRpc(rpcUrls, 2);
+  roProvider = provider;
 
-  roToken = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, roProvider);
-  roOracle = new ethers.Contract(CONFIG.ORACLE_ADDRESS, ORACLE_ABI, roProvider);
+  roToken   = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, roProvider);
+  roOracle  = new ethers.Contract(CONFIG.ORACLE_ADDRESS, ORACLE_ABI, roProvider);
   roPresale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_READ_ABI, roProvider);
 
   console.log('[CONTRACTS] read-only initialized', {
-    rpc,
+    rpc: url,
     token: CONFIG.TOKEN_ADDRESS,
     oracle: CONFIG.ORACLE_ADDRESS,
     presale: CONFIG.PRESALE_ADDRESS
   });
 
   try { window.dispatchEvent(new Event('contractsInitialized')); } catch (_) {}
-
   return true;
 }
 
