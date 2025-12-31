@@ -1018,11 +1018,6 @@ export async function buyTokens(usdtAmount, withBonus = false) {
       'success'
     );
 
-<<<<<<< HEAD
-    // UI updates after tx
-=======
-    // обновления UI после транзакции
->>>>>>> 8d5efa7 (Fix RPC fallback and read-only initialization)
     try { await refreshBalances?.(); } catch (_) {}
     try { await loadMyLockInfo?.(); } catch (_) {}
     try { await refreshBuyBonusBox?.(); } catch (_) {}
