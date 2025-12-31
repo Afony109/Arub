@@ -468,7 +468,7 @@ const ORACLE_ABI_MIN = [
   "function rate() view returns (uint256)"
 ];
 
-await eth.request({ method: 'eth_requestAccounts' });
+await selectedEip1193?.request({ method: 'eth_chainId' });
 
 const web3 = new ethers.providers.Web3Provider(eth, 'any'); // важно: 'any'
 const network = await web3.getNetwork(); // после accounts обычно уже норм
