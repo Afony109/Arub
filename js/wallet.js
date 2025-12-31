@@ -89,12 +89,41 @@ function getLegacyInjectedEntries() {
 }
 
 // -----------------------------
+// EIP-6963 discovery
+// -----------------------------
+let discoveryReady = false;
+
+function setupEip6963Discovery() {
+  if (discoveryReady) return;
+  discoveryReady = true;
+
+  window.addEventListener('eip6963:announceProvider', (event) => {
+    const { info, provider } = event.detail || {};
+    if (!info?.rdns || !provider) return;
+
+    discoveredWallets.set(info.rdns, {
+      id: info.rdns,
+      name: info.name || info.rdns,
+      icon: info.icon || null,
+      type: 'eip6963',
+      provider
+    });
+  });
+
+  // Ask wallets to announce themselves
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+}
+
+// -----------------------------
 // Public API
 // -----------------------------
 export function initWalletModule() {
-  setupEip6963Discovery();
+  try { setupEip6963Discovery(); } catch (e) {
+    console.warn('[WALLET] EIP-6963 discovery skipped:', e);
+  }
   console.log('[WALLET] initWalletModule');
 }
+
 function detectWalletBrand(provider, fallbackName = 'Wallet') {
   // EIP-1193 vendor hints (order matters)
   if (provider?.isBybitWallet) return 'Bybit Wallet';
