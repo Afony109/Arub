@@ -29,6 +29,14 @@ const discoveredWallets = new Map();
 // -----------------------------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+async function readChainIdHex(eth) {
+  // вернёт строку вида "0xa4b1"
+  return await eth.request({ method: 'eth_chainId' });
+}
+
+function hexToInt(hex) {
+  return parseInt(hex, 16);
+}
 
 async function publishGlobals() {
   if (!selectedEip1193) {
@@ -36,12 +44,13 @@ async function publishGlobals() {
     return;
   }
 
-  let chainId = currentChainId;
+    let chainId = currentChainId;
 
   if (!Number.isFinite(chainId)) {
     try {
       const hex = await selectedEip1193.request({ method: 'eth_chainId' });
-      chainId = parseInt(hex, 16);
+      const parsed = parseInt(hex, 16);
+      chainId = Number.isFinite(parsed) ? parsed : null;
     } catch (e) {
       console.warn('[wallet] failed to fetch chainId from provider', e);
       chainId = null;
@@ -50,16 +59,23 @@ async function publishGlobals() {
 
   currentChainId = chainId;
 
-  window.walletState = {
-    provider: ethersProvider,
-    signer,
-    address: currentAddress,
-    chainId,
-    eip1193: selectedEip1193
-  };
+  const safeChainId = Number.isFinite(chainId) ? chainId : null;
+
+window.walletState = {
+  provider: ethersProvider || null,
+  signer: signer || null,
+  address: currentAddress || null,
+  chainId: Number.isFinite(chainId) ? chainId : null,
+  eip1193: selectedEip1193
+};
 
   console.log('[wallet] publishGlobals', window.walletState);
 }
+
+selectedEip1193.on?.('chainChanged', (hex) => {
+  currentChainId = parseInt(hex, 16);
+  publishGlobals().catch(()=>{});
+});
 
 function dispatchConnected() {
   const cid = window.walletState?.chainId ?? currentChainId ?? null;
@@ -300,6 +316,9 @@ export function getAvailableWallets() {
       );
     }
 
+    await publishGlobals();
+
+
     // сохраняем в глобальные только после успешного requestAccounts
     selectedEip1193 = localSelected;
     wcProvider = localWc || wcProvider;
@@ -447,6 +466,27 @@ const ORACLE_ABI_MIN = [
   "function getRate() view returns (uint256,uint256)",
   "function rate() view returns (uint256)"
 ];
+
+await eth.request({ method: 'eth_requestAccounts' });
+
+const web3 = new ethers.providers.Web3Provider(eth, 'any'); // важно: 'any'
+const network = await web3.getNetwork(); // после accounts обычно уже норм
+walletState.chainId = network.chainId;
+
+function attachEthereumListeners(eth) {
+  if (!eth?.on) return;
+
+  eth.on('chainChanged', (chainIdHex) => {
+    const chainId = parseInt(chainIdHex, 16);
+    walletState.chainId = chainId;
+    console.log('[WALLET] chainChanged', chainId);
+  });
+
+  eth.on('accountsChanged', (accounts) => {
+    walletState.account = accounts?.[0] || null;
+    console.log('[WALLET] accountsChanged', walletState.account);
+  });
+}
 
 function calcDiscount(avgPrice, currentPrice) {
   if (!avgPrice || !currentPrice || currentPrice <= 0) return null;
