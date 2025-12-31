@@ -996,10 +996,9 @@ export async function buyTokens(usdtAmount, withBonus = false) {
 
     let tx;
     try {
-<<<<<<< HEAD
-=======
+
       // Для Trust Wallet часто падает eth_estimateGas -> даём ручной gasLimit
->>>>>>> 8d5efa7 (Fix RPC fallback and read-only initialization)
+      
       if (typeof isTrustWalletProvider === 'function' && isTrustWalletProvider()) {
         tx = await presale.buyWithUSDT(amountBN, withBonus, { gasLimit: 900000 });
       } else {
