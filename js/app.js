@@ -6,7 +6,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import {initWalletModule, getEthersProvider, getAvailableWallets, connectWalletUI, disconnectWallet} from './wallet.js';
+import { initWalletModule, getEthersProvider, getAvailableWallets, connectWalletUI, disconnectWallet, addTokenToWallet } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
@@ -145,47 +145,6 @@ function normalizeWalletError(e) {
   if (/No wallet selected/i.test(m)) return 'Оберіть гаманець зі списку.';
 
   return 'Не вдалося підключити гаманець: ' + m;
-}
-
-function renderWalletButtons(menu) {
-  const wallets = getAvailableWallets(); // <-- здесь объявили и здесь используем
-
-  wallets.forEach((w) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.dataset.walletItem = '1';
-    btn.textContent = w.name;
-
-    btn.onclick = async () => {
-      if (uiConnecting) {
-        showNotification?.('Connection is already in progress. Close the wallet popup or wait.', 'error');
-        return;
-      }
-
-      uiConnecting = true;
-      setWalletMenuDisabled(menu, true);
-
-      try {
-        await connectWalletUI(w.id);
-        menu.style.display = 'none';
-      } catch (e) {
-        const msg = e?.message || 'Wallet connect failed';
-        if (msg.toLowerCase().includes('rejected')) {
-          showNotification?.('Request rejected. Please choose a wallet again.', 'error');
-        } else if (msg.toLowerCase().includes('already in progress')) {
-          showNotification?.('Connection is still pending in the wallet popup.', 'error');
-        } else {
-          showNotification?.(msg, 'error');
-        }
-        console.error('[UI] connect error:', e);
-      } finally {
-        uiConnecting = false;
-        setWalletMenuDisabled(menu, false);
-      }
-    };
-
-    menu.prepend(btn);
-  });
 }
 
 // =======================
@@ -827,13 +786,12 @@ console.log('[APP] Chain ID:', chainId);
 // -------------------------
 
 // Wallet
-window.connectWallet = connectWallet;
+
+// Wallet (globals)
 window.disconnectWallet = disconnectWallet;
-window.addTokenToWallet = addTokenToWallet;
+window.addTokenToWallet = addTokenToWallet; // только если импортировал
 window.addArubToMetaMask = () => addTokenToWallet('ARUB');
 window.addUsdtToMetaMask = () => addTokenToWallet('USDT');
-window.copyTokenAddress = () =>
-  copyToClipboard(CONFIG.TOKEN_ADDRESS, '✅ Адресу токена скопійовано!');
 
 // Trading
 window.buyTokens = buyTokens;
