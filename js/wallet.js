@@ -59,22 +59,23 @@ async function publishGlobals() {
 
   currentChainId = chainId;
 
-  const safeChainId = Number.isFinite(chainId) ? chainId : null;
+const safeChainId = Number.isFinite(chainId) ? chainId : null;
 
 window.walletState = {
   provider: ethersProvider || null,
   signer: signer || null,
   address: currentAddress || null,
-  chainId: Number.isFinite(chainId) ? chainId : null,
+  chainId: safeChainId,
   eip1193: selectedEip1193
 };
 
   console.log('[wallet] publishGlobals', window.walletState);
 }
 
-selectedEip1193.on?.('chainChanged', (hex) => {
-  currentChainId = parseInt(hex, 16);
-  publishGlobals().catch(()=>{});
+selectedEip1193?.on?.('chainChanged', (hex) => {
+  const parsed = parseInt(hex, 16);
+  currentChainId = Number.isFinite(parsed) ? parsed : null;
+  publishGlobals().catch(() => {});
 });
 
 function dispatchConnected() {
@@ -473,18 +474,24 @@ const web3 = new ethers.providers.Web3Provider(eth, 'any'); // важно: 'any'
 const network = await web3.getNetwork(); // после accounts обычно уже норм
 walletState.chainId = network.chainId;
 
-function attachEthereumListeners(eth) {
-  if (!eth?.on) return;
+let listenersAttached = false;
 
-  eth.on('chainChanged', (chainIdHex) => {
-    const chainId = parseInt(chainIdHex, 16);
-    walletState.chainId = chainId;
-    console.log('[WALLET] chainChanged', chainId);
+function attachProviderListeners() {
+  if (!selectedEip1193) return;
+  if (listenersAttached) return;
+  if (typeof selectedEip1193.on !== 'function') return;
+
+  listenersAttached = true;
+
+  selectedEip1193.on('chainChanged', (hex) => {
+    const parsed = parseInt(hex, 16);
+    currentChainId = Number.isFinite(parsed) ? parsed : null;
+    publishGlobals().catch(() => {});
   });
 
-  eth.on('accountsChanged', (accounts) => {
-    walletState.account = accounts?.[0] || null;
-    console.log('[WALLET] accountsChanged', walletState.account);
+  selectedEip1193.on('accountsChanged', (accounts) => {
+    currentAddress = accounts?.[0] || null;
+    publishGlobals().catch(() => {});
   });
 }
 
