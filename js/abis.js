@@ -13,7 +13,7 @@
 // --------------------------------------------------
 // Minimal ERC20 ABI (balance/allowance/approve + transfers)
 // --------------------------------------------------
-const ERC20_MINIMAL_ABI = [
+export const ERC20_ABI_MIN = [
   // Read
   "function name() view returns (string)",
   "function symbol() view returns (string)",

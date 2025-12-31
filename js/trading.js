@@ -20,7 +20,7 @@
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
 import { showNotification, formatTokenAmount } from './ui.js';
-import { ERC20_ABI, PRESALE_READ_ABI } from './abis.js';
+import { ERC20_ABI, ERC20_ABI_MIN, PRESALE_READ_ABI } from './abis.js';
 import { getReadOnlyPresale } from './contracts.js';
 
 // -----------------------------
