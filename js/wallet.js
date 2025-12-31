@@ -28,7 +28,7 @@ const discoveredWallets = new Map();
 // -----------------------------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-aasync function publishGlobals() {
+async function publishGlobals() {
   if (!selectedEip1193) {
     window.walletState = null;
     return;
