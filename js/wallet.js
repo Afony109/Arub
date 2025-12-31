@@ -59,6 +59,23 @@ async function publishGlobals() {
   console.log('[wallet] publishGlobals', window.walletState);
 }
 
+function dispatchConnected() {
+  const cid = window.walletState?.chainId ?? currentChainId ?? null;
+
+  window.dispatchEvent(
+    new CustomEvent('wallet:connected', {
+      detail: {
+        address: currentAddress,
+        chainId: cid
+      }
+    })
+  );
+}
+
+function dispatchDisconnected() {
+  window.dispatchEvent(new Event('wallet:disconnected'));
+}
+
 function clearGlobals() {
   window.walletState = null;
 }
@@ -359,7 +376,7 @@ export async function disconnectWallet() {
 }
 
 export function isWalletConnected() {
-  return !!currentAddress;
+  return !!window.walletState?.address;
 }
 
 export function getAddress() {
