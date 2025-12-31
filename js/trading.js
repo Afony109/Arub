@@ -819,6 +819,15 @@ export async function setMaxBuy() {
   if (inp) inp.value = v;
 }
 
+console.log('[MAX SELL]', {
+  addr: user.address,
+  arubBal: ethers.utils.formatUnits(bal, DECIMALS_ARUB),
+  redeemable: ethers.utils.formatUnits(redeemable, DECIMALS_ARUB),
+  token: tokenRO?.address,
+  presale: presaleRO?.address,
+  chainId: (await tokenRO.provider.getNetwork()).chainId
+});
+
 export async function setMaxSell() {
   if (!user.address || !tokenRO) throw new Error("Wallet not connected");
 
