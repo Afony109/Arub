@@ -968,7 +968,27 @@ export async function buyTokens(usdtAmount, withBonus = false) {
       }
     }
 
-    // 2) buy
+    // 2) preflight callStatic: получаем точный revert ДО отправки tx
+    try {
+      await presale.callStatic.buyWithUSDT(amountBN, withBonus);
+    } catch (e) {
+      console.error('[BUY] callStatic reverted:', e);
+      console.error('[BUY] callStatic details:', {
+        code: e?.code,
+        reason: e?.reason,
+        message: e?.message,
+        dataMessage: e?.data?.message,
+        errorMessage: e?.error?.message,
+        errorData: e?.error?.data,
+        data: e?.data,
+        body: e?.error?.body,
+      });
+
+      showNotification?.(pickEthersMessage(e), 'error');
+      return;
+    }
+
+    // 3) buy tx
     showNotification?.(
       withBonus ? 'Buying with bonus (90d lock)...' : 'Buying ARUB...',
       'success'
@@ -976,7 +996,6 @@ export async function buyTokens(usdtAmount, withBonus = false) {
 
     let tx;
     try {
-      // Для Trust Wallet часто падает eth_estimateGas -> даём ручной gasLimit
       if (typeof isTrustWalletProvider === 'function' && isTrustWalletProvider()) {
         tx = await presale.buyWithUSDT(amountBN, withBonus, { gasLimit: 900000 });
       } else {
@@ -996,7 +1015,7 @@ export async function buyTokens(usdtAmount, withBonus = false) {
       'success'
     );
 
-    // обновления UI после транзакции
+    // UI updates after tx
     try { await refreshBalances?.(); } catch (_) {}
     try { await loadMyLockInfo?.(); } catch (_) {}
     try { await refreshBuyBonusBox?.(); } catch (_) {}
@@ -1005,26 +1024,28 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     return tx;
   } catch (e) {
     console.error('[TRADING] buyTokens error:', e);
+    console.error('[BUY] reverted details:', {
+      code: e?.code,
+      reason: e?.reason,
+      message: e?.message,
+      shortMessage: e?.shortMessage,
+      dataMessage: e?.data?.message,
+      errorMessage: e?.error?.message,
+      errorData: e?.error?.data,
+      data: e?.data,
+      body: e?.error?.body,
+    });
+
     if (isUserRejectedTx(e)) {
       showNotification?.('Transaction rejected in wallet', 'error');
       return;
     }
+
     showNotification?.(pickEthersMessage(e), 'error');
     return;
   }
-  console.error('[BUY] reverted raw:', e);
-console.error('[BUY] reverted details:', {
-  code: e?.code,
-  reason: e?.reason,
-  message: e?.message,
-  shortMessage: e?.shortMessage,
-  dataMessage: e?.data?.message,
-  errorMessage: e?.error?.message,
-  errorData: e?.error?.data,
-  data: e?.data,
-  body: e?.error?.body,
-});
 }
+
 // Продажа (redeem) ARUB -> USDT через presale.
 // ВАЖНО: если у пользователя активен lock (покупка со скидкой), контракт будет revert.
 export async function sellTokens(arubAmount) {
