@@ -9,7 +9,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import { ERC20_ABI, ORACLE_ABI } from './abis.js';
+import { ERC20_ABI, ORACLE_ABI, PRESALE_READ_ABI } from './abis.js';
 
 console.log('[CONTRACTS] contracts.js loaded, build:', Date.now());
 
@@ -19,6 +19,7 @@ console.log('[CONTRACTS] contracts.js loaded, build:', Date.now());
 let roProvider = null;
 let roToken = null;
 let roOracle = null;
+let roPresale = null;
 
 // -----------------------------
 // Helpers
@@ -44,6 +45,7 @@ function assertConfig() {
 
   if (!CONFIG?.TOKEN_ADDRESS) throw new Error('CONFIG.TOKEN_ADDRESS missing');
   if (!CONFIG?.ORACLE_ADDRESS) throw new Error('CONFIG.ORACLE_ADDRESS missing');
+  if (!CONFIG?.PRESALE_ADDRESS) throw new Error('CONFIG.PRESALE_ADDRESS missing');
 
   return rpc;
 }
@@ -52,7 +54,7 @@ function assertConfig() {
 // Public: init read-only contracts
 // -----------------------------
 export function initReadOnlyContracts() {
-  if (roProvider && roToken && roOracle) return true;
+  if (roProvider && roToken && roOracle && roPresale) return true;
 
   const rpc = assertConfig();
 
@@ -60,14 +62,15 @@ export function initReadOnlyContracts() {
 
   roToken = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, roProvider);
   roOracle = new ethers.Contract(CONFIG.ORACLE_ADDRESS, ORACLE_ABI, roProvider);
+  roPresale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_READ_ABI, roProvider);
 
   console.log('[CONTRACTS] read-only initialized', {
     rpc,
     token: CONFIG.TOKEN_ADDRESS,
-    oracle: CONFIG.ORACLE_ADDRESS
+    oracle: CONFIG.ORACLE_ADDRESS,
+    presale: CONFIG.PRESALE_ADDRESS
   });
 
-  // Optional compatibility event if you rely on it elsewhere
   try { window.dispatchEvent(new Event('contractsInitialized')); } catch (_) {}
 
   return true;
@@ -127,3 +130,9 @@ export async function getTotalSupplyArub() {
     return await roToken.totalSupply();
   }, 3, 350);
 }
+
+export function getReadOnlyPresale() {
+  if (!roPresale) initReadOnlyContracts();
+  return roPresale;
+}
+

@@ -21,6 +21,7 @@ import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.es
 import { CONFIG } from './config.js';
 import { showNotification, formatTokenAmount } from './ui.js';
 import { ERC20_ABI, PRESALE_READ_ABI } from './abis.js';
+import { getReadOnlyPresale } from './contracts.js';
 
 // -----------------------------
 // Addresses (presale + token proxies)
@@ -59,42 +60,30 @@ const user = {
   chainId: null
 };
 
-const ERC20_ABI_MIN = [
-  'function decimals() view returns (uint8)',
-  'function balanceOf(address) view returns (uint256)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function transfer(address to, uint256 amount) returns (bool)',
-  'event Transfer(address indexed from, address indexed to, uint256 value)',
-];
-
 const PRESALE_ABI_MIN = [
-  'function buyWithUSDT(uint256 amount, bool withBonus) external',
-  'function unlockDeposit() external',
-  'function redeemForUSDT(uint256 arubAmount) external',
-  'function claimDebt() external',
-  'function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)',
-  'function debtUsdtEquivalent(address) view returns (uint256)',
-
-  // ✅ добавить для buy-панели
-  'function getDiscountPercent() view returns (uint256)',
-  'function totalDiscountBuyers() view returns (uint256)',
-  'function DISCOUNT_MAX_BUYERS() view returns (uint256)',
-  'function isDiscountBuyer(address) view returns (bool)',
-
   // write
   'function buyWithUSDT(uint256 amount, bool withBonus) external',
   'function unlockDeposit() external',
   'function redeemForUSDT(uint256 arubAmount) external',
   'function claimDebt() external',
 
-  // lock (address-based; stable for RO calls)
+  // key redeem limiter
+  'function redeemableBalance(address) view returns (uint256)',
+
+  // lock info
+  'function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)',
   'function lockedPrincipalArub(address) view returns (uint256)',
   'function lockedBonusArub(address) view returns (uint256)',
   'function lockedDepositUntil(address) view returns (uint256)',
   'function getRemainingLockTime(address user) view returns (uint256)',
 
-  // sell fee (exists in your ABI)
+  // discount
+  'function getDiscountPercent() view returns (uint256)',
+  'function totalDiscountBuyers() view returns (uint256)',
+  'function DISCOUNT_MAX_BUYERS() view returns (uint256)',
+  'function isDiscountBuyer(address) view returns (bool)',
+
+  // sell fee
   'function getMySellFeeBps() view returns (uint256)',
   'function getUserSellFeeBps(address user) view returns (uint256)',
 
@@ -831,10 +820,18 @@ export async function setMaxBuy() {
 }
 
 export async function setMaxSell() {
-  if (!user.address || !tokenRO) throw new Error('Wallet not connected');
+  if (!user.address || !tokenRO) throw new Error("Wallet not connected");
+
+  const presaleRO = getReadOnlyPresale(); // <-- вот так
+
   const bal = await tokenRO.balanceOf(user.address);
-  const v = ethers.utils.formatUnits(bal, DECIMALS_ARUB);
-  const inp = el('sellAmount');
+  const redeemable = await presaleRO.redeemableBalance(user.address);
+
+  // maxSell = min(balance, redeemableBalance)
+  const maxSell = redeemable.lt(bal) ? redeemable : bal;
+
+  const v = ethers.utils.formatUnits(maxSell, DECIMALS_ARUB); // DECIMALS_ARUB = 6
+  const inp = el("sellAmount");
   if (inp) inp.value = v;
 }
 
@@ -1008,6 +1005,15 @@ export async function sellTokens(arubAmount) {
 
   const arub = new ethers.Contract(ARUB_TOKEN_ADDRESS, ERC20_ABI_MIN, ws.signer);
   const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
+  // Guard: redeem is limited by presale redeemableBalance
+const redeemable = await presale.redeemableBalance(ws.address);
+if (amountBN.gt(redeemable)) {
+  showNotification?.(
+    `Exceeds redeemable balance. Max: ${ethers.utils.formatUnits(redeemable, DECIMALS_ARUB)} ARUB`,
+    'error'
+  );
+  return;
+}
 
   // Мягкое предупреждение (не блокирует)
   try {
@@ -1099,12 +1105,9 @@ export async function unlockDeposit() {
 // Данные лока для UI
 export async function loadMyLockInfo() {
   const ws = window.walletState;
-  if (!ws?.provider || !ws?.address) return null;
+  if (!ws?.address) return null;
 
-  const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
-  const roProvider = rpc ? new ethers.providers.JsonRpcProvider(rpc) : ws.provider;
-
-  const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, roProvider);
+  const presaleRO = getReadOnlyPresale(); // <-- берём один раз, нормально
 
   try {
     const [principalLocked, bonusLocked, unlockUntilRaw, remainingRaw] = await Promise.all([
@@ -1123,7 +1126,6 @@ export async function loadMyLockInfo() {
     return null;
   }
 }
-
 // -----------------------------
 // Public init (event-driven)
 // -----------------------------
