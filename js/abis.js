@@ -60,14 +60,16 @@ export const ORACLE_ABI = [
 // USDT ABI (ERC20, 6 decimals)
 // --------------------------------------------------
 export const USDT_ABI = [
-  ...ERC20_MINIMAL_ABI,
+  ...ERC20_ABI_MIN,
 ];
-
+// --------------------------------------------------
+// ARUB Token ABI (6 decimals + conversions)
+// --------------------------------------------------
 // --------------------------------------------------
 // ARUB Token ABI (6 decimals + conversions)
 // --------------------------------------------------
 export const ARUB_ABI = [
-  ...ERC20_MINIMAL_ABI,
+  ...ERC20_ABI_MIN,
 
   // Conversion helpers (USDT 6dec <-> ARUB 6dec)
   "function calculateArubAmount(uint256 usdtAmount) view returns (uint256)",
