@@ -668,26 +668,31 @@ function parseTokenAmount(value, decimals) {
 // -----------------------------
 function bindUiOncePerRender() {
   // BUY
-  const buyBtn = el('buyBtn');
-  if (buyBtn) {
-    buyBtn.onclick = async () => {
-      try {
-        // --- TERMS NOTICE (UA / EN) ---
-        const lang = getUiLang(); // 'ua' | 'en'
-        showNotification?.(TERMS_NOTICE[lang] || TERMS_NOTICE.ua, 'info');
+  // BUY
+const buyBtn = el('buyBtn');
+if (buyBtn) {
+  buyBtn.onclick = async () => {
+    try {
+      // --- TERMS CONFIRM (UA / EN) ---
+      const lang = getUiLang(); // 'ua' | 'en'
+      const msg = TERMS_NOTICE[lang] || TERMS_NOTICE.ua;
 
-        const amount = el('buyAmount')?.value ?? '';
-        const withBonus = getBuyMode() === 'discount';
-        await buyTokens(amount, withBonus);
+      const ok = confirm(msg);
+      if (!ok) return;
 
-        // после успешной покупки обновим бонус-бокс
-        try { await refreshBuyBonusBox(); } catch (_) {}
-      } catch (e) {
-        console.error('[UI] buy click error:', e);
-        showNotification?.(e?.message || 'Buy failed', 'error');
-      }
-    };
-  }
+      const amount = el('buyAmount')?.value ?? '';
+      const withBonus = getBuyMode() === 'discount';
+      await buyTokens(amount, withBonus);
+
+      // после успешной покупки обновим бонус-бокс
+      try { await refreshBuyBonusBox(); } catch (_) {}
+    } catch (e) {
+      console.error('[UI] buy click error:', e);
+      showNotification?.(e?.message || 'Buy failed', 'error');
+    }
+  };
+}
+
 
   // SELL
   const sellBtn = el('sellBtn');
