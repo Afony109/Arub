@@ -30,6 +30,10 @@ import { getReadOnlyPresale } from './contracts.js';
 const PRESALE_ADDRESS = CONFIG?.PRESALE_ADDRESS || '0x986833160f8E9636A6383BfAb5BeF35739edA1eC';
 const ARUB_TOKEN_ADDRESS = CONFIG?.ARUB_TOKEN_ADDRESS || CONFIG?.TOKEN_ADDRESS || '0x161296CD7F742220f727e1B4Ccc02cAEc71Ed2C6';
 const USDT_ADDRESS = CONFIG?.USDT_ADDRESS || '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
+const TERMS_NOTICE = {
+  ua: 'Натискаючи кнопку, ви підтверджуєте, що ознайомилися та погоджуєтеся з умовами і правилами смарт-контракту.',
+  en: 'By clicking the button, you confirm that you have read and agree to the smart contract terms and rules.',
+};
 
 
 console.log('[TRADING] trading.js loaded, build:', Date.now());
@@ -90,6 +94,11 @@ const PRESALE_ABI_MIN = [
   // debt
   'function debtUsdtEquivalent(address) view returns (uint256)',
 ];
+
+function getUiLang() {
+  const l = String(navigator.language || '').toLowerCase();
+  return l.startsWith('en') ? 'en' : 'ua';
+}
 
 function pickEthersMessage(e) {
   return (
@@ -663,6 +672,10 @@ function bindUiOncePerRender() {
   if (buyBtn) {
     buyBtn.onclick = async () => {
       try {
+        // --- TERMS NOTICE (UA / EN) ---
+        const lang = getUiLang(); // 'ua' | 'en'
+        showNotification?.(TERMS_NOTICE[lang] || TERMS_NOTICE.ua, 'info');
+
         const amount = el('buyAmount')?.value ?? '';
         const withBonus = getBuyMode() === 'discount';
         await buyTokens(amount, withBonus);
@@ -827,13 +840,13 @@ export async function setMaxSell() {
   const bal = await tokenRO.balanceOf(user.address);
   const redeemable = await presaleRO.redeemableBalance(user.address);
 
-  console.log('[MAX SELL DEBUG]', {
-    address: user.address,
-    walletBalance: ethers.utils.formatUnits(bal, DECIMALS_ARUB),
-    redeemable: ethers.utils.formatUnits(redeemable, DECIMALS_ARUB),
-    token: tokenRO.address,
-    presale: presaleRO.address,
-  });
+  // Уведомление, если ARUB есть, но redeem запрещён
+  if (redeemable.isZero() && !bal.isZero()) {
+    showNotification?.(
+      'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
+      'info'
+    );
+  }
 
   // maxSell = min(balance, redeemableBalance)
   const maxSell = redeemable.lt(bal) ? redeemable : bal;
