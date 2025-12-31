@@ -29,12 +29,6 @@ const discoveredWallets = new Map();
 // -----------------------------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-<<<<<<< HEAD
-=======
-export function connectWalletUI({ walletId } = {}) {
-  return connectWallet({ walletId });
-}
->>>>>>> 8d5efa7 (Fix RPC fallback and read-only initialization)
 
 async function publishGlobals() {
   if (!selectedEip1193) {
