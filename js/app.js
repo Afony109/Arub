@@ -6,7 +6,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import { initWalletModule, getEthersProvider, getAvailableWallets, connectWalletUI, disconnectWallet, addTokenToWallet } from './wallet.js';
+import { initWalletModule, getEthersProvider, getAvailableWallets, connectWalletUI, disconnectWallet } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
@@ -784,14 +784,6 @@ console.log('[APP] Chain ID:', chainId);
 // -------------------------
 // Глобальные функции для HTML
 // -------------------------
-
-// Wallet
-
-// Wallet (globals)
-window.disconnectWallet = disconnectWallet;
-window.addTokenToWallet = addTokenToWallet; // только если импортировал
-window.addArubToMetaMask = () => addTokenToWallet('ARUB');
-window.addUsdtToMetaMask = () => addTokenToWallet('USDT');
 
 // Trading
 window.buyTokens = buyTokens;
