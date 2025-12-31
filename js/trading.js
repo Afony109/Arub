@@ -880,6 +880,11 @@ function isUserRejectedTx(e) {
   );
 }
 
+function isTrustWalletProvider() {
+  const p = window.walletState?.eip1193 || window.ethereum;
+  return !!(p && (p.isTrust || p.isTrustWallet));
+}
+
 function explainEthersError(e) {
   const bodyMsg = e?.error?.body ? parseRpcErrorBody(e.error.body) : null;
 
@@ -900,7 +905,6 @@ function explainEthersError(e) {
       /user rejected|user denied|rejected/i.test(e?.message || e?.error?.message || ''),
   };
 }
-
 
 // Покупка ARUB за USDT через presale
 // withBonus=false => ARUB выдаётся сразу
@@ -926,7 +930,6 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     return;
   }
 
-  // USDT = 6
   let amountBN;
   try {
     amountBN = parseTokenAmount(usdtAmount, DECIMALS_USDT);
@@ -935,7 +938,6 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     return;
   }
 
-  // UI guard: contract enforces MIN_PURCHASE_PER_TX = 10 USDT, but we prevent reverts here
   const MIN_USDT = ethers.utils.parseUnits('10', DECIMALS_USDT);
   if (amountBN.lt(MIN_USDT)) {
     showNotification?.('Minimum purchase is $10', 'error');
@@ -951,12 +953,19 @@ export async function buyTokens(usdtAmount, withBonus = false) {
   const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
 
   try {
-    // 1) allowance/approve
+    // 1) allowance / approve (Trust Wallet safe)
     const allowance = await usdt.allowance(ws.address, PRESALE_ADDRESS);
     if (allowance.lt(amountBN)) {
       showNotification?.('Approving USDT...', 'success');
-      const txA = await usdt.approve(PRESALE_ADDRESS, amountBN);
-      await txA.wait(1);
+
+      try {
+        const txA = await usdt.approve(PRESALE_ADDRESS, amountBN);
+        await txA.wait(1);
+      } catch (e) {
+        console.warn('[TRADING] approve failed, retry with gasLimit:', e?.message || e);
+        const txA = await usdt.approve(PRESALE_ADDRESS, amountBN, { gasLimit: 150000 });
+        await txA.wait(1);
+      }
     }
 
     // 2) buy
@@ -965,21 +974,32 @@ export async function buyTokens(usdtAmount, withBonus = false) {
       'success'
     );
 
-    try { await refreshBuyBonusBox(); } catch (_) {}
+    let tx;
+    try {
+      // Для Trust Wallet часто падает eth_estimateGas -> даём ручной gasLimit
+      if (typeof isTrustWalletProvider === 'function' && isTrustWalletProvider()) {
+        tx = await presale.buyWithUSDT(amountBN, withBonus, { gasLimit: 900000 });
+      } else {
+        tx = await presale.buyWithUSDT(amountBN, withBonus);
+      }
+    } catch (e) {
+      console.warn('[TRADING] buyWithUSDT failed, retry with gasLimit:', e?.message || e);
+      tx = await presale.buyWithUSDT(amountBN, withBonus, { gasLimit: 900000 });
+    }
 
-    const tx = await presale.buyWithUSDT(amountBN, withBonus);
     await tx.wait(1);
 
     showNotification?.(
-  withBonus
-    ? 'Payment received. ARUB is locked.'
-    : 'Purchase successful. ARUB credited.',
-  'success'
-);
+      withBonus
+        ? 'Payment received. ARUB is locked.'
+        : 'Purchase successful. ARUB credited.',
+      'success'
+    );
 
-    // опционально обновить UI
+    // обновления UI после транзакции
     try { await refreshBalances?.(); } catch (_) {}
     try { await loadMyLockInfo?.(); } catch (_) {}
+    try { await refreshBuyBonusBox?.(); } catch (_) {}
 
     console.log('[TRADING] buy tx:', tx.hash);
     return tx;
@@ -993,7 +1013,6 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     return;
   }
 }
-
 // Продажа (redeem) ARUB -> USDT через presale.
 // ВАЖНО: если у пользователя активен lock (покупка со скидкой), контракт будет revert.
 export async function sellTokens(arubAmount) {
