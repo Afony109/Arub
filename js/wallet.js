@@ -28,61 +28,41 @@ const discoveredWallets = new Map();
 // -----------------------------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-function publishGlobals() {
+aasync function publishGlobals() {
+  if (!selectedEip1193) {
+    window.walletState = null;
+    return;
+  }
+
+  let chainId = currentChainId;
+
+  if (!Number.isFinite(chainId)) {
+    try {
+      const hex = await selectedEip1193.request({ method: 'eth_chainId' });
+      chainId = parseInt(hex, 16);
+    } catch (e) {
+      console.warn('[wallet] failed to fetch chainId from provider', e);
+      chainId = null;
+    }
+  }
+
+  currentChainId = chainId;
+
   window.walletState = {
     provider: ethersProvider,
     signer,
     address: currentAddress,
-    chainId: currentChainId,
+    chainId,
     eip1193: selectedEip1193
   };
+
+  console.log('[wallet] publishGlobals', window.walletState);
 }
 
 function clearGlobals() {
   window.walletState = null;
 }
 
-function dispatchConnected() {
-  window.dispatchEvent(new CustomEvent('wallet:connected', {
-    detail: { address: currentAddress, chainId: currentChainId }
-  }));
-}
-
-function dispatchDisconnected() {
-  window.dispatchEvent(new Event('wallet:disconnected'));
-}
-
-async function pRequest(method, params = []) {
-  if (!selectedEip1193?.request) {
-    throw new Error('No selected EIP-1193 provider');
-  }
-  return selectedEip1193.request({ method, params });
-}
-
-// -----------------------------
-// EIP-6963 discovery
-// -----------------------------
-let discoveryReady = false;
-
-function setupEip6963Discovery() {
-  if (discoveryReady) return;
-  discoveryReady = true;
-
-  window.addEventListener('eip6963:announceProvider', (event) => {
-    const { info, provider } = event.detail || {};
-    if (!info?.rdns || !provider) return;
-
-    discoveredWallets.set(info.rdns, {
-      id: info.rdns,
-      name: info.name || info.rdns,
-      icon: info.icon || null,
-      type: 'eip6963',
-      provider
-    });
-  });
-
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
-}
 
 // -----------------------------
 // Legacy injected
@@ -223,18 +203,11 @@ export function getAvailableWallets() {
  export async function connectWallet({ walletId = null } = {}) {
   if (isConnecting) {
     if (currentAddress) return currentAddress;
-
-    // Вариант A (рекомендую для UX): не кидать ошибку, а сказать “занято”
-    // throw new Error('Wallet connection already in progress');
-
-    // Вариант B: мягко вернуть null, а UI покажет уведомление
     throw new Error('Wallet connection already in progress');
   }
 
   isConnecting = true;
 
-  // важно: локально запоминаем какой провайдер начали подключать,
-  // чтобы в catch можно было корректно “прибраться”
   let localSelected = null;
   let localWc = null;
 
@@ -257,23 +230,21 @@ export function getAvailableWallets() {
         rpcMap: { [CONFIG.NETWORK.chainId]: CONFIG.NETWORK.rpcUrls[0] }
       });
 
-      // ключевое: connect может “висеть”, поэтому ограничиваем по времени
-     await withTimeout(
-  localSelected.request({ method: 'eth_requestAccounts' }),
-  20000,
-  'eth_requestAccounts timeout'
-);
-
-
+      // ВАЖНО: сначала присваиваем, потом request (раньше тут был баг: localSelected был null)
       localSelected = localWc;
+
+      // connect может “висеть” → ограничиваем по времени
+      await withTimeout(
+        localSelected.request({ method: 'eth_requestAccounts' }),
+        20000,
+        'eth_requestAccounts timeout'
+      );
     } else {
       const prov = entry._provider || entry.provider;
       if (!prov) throw new Error('Selected wallet provider not found');
 
       localSelected = prov;
 
-      // тоже ограничиваем по времени — иногда Metamask/Trust могут зависнуть,
-      // если пользователь просто закрыл окно
       await withTimeout(
         localSelected.request({ method: 'eth_requestAccounts' }),
         20000,
@@ -281,7 +252,7 @@ export function getAvailableWallets() {
       );
     }
 
-    // сохраняем в глобальные только после успешного connect/requestAccounts
+    // сохраняем в глобальные только после успешного requestAccounts
     selectedEip1193 = localSelected;
     wcProvider = localWc || wcProvider;
 
@@ -292,22 +263,20 @@ export function getAvailableWallets() {
     const net = await ethersProvider.getNetwork();
     currentChainId = net.chainId;
 
-    publishGlobals();
+    // ВАЖНО: publishGlobals async — обязательно await
+    await publishGlobals();
+
+    // Подстрахуемся: если publishGlobals получил chainId напрямую из провайдера
+    currentChainId = window.walletState?.chainId ?? currentChainId;
+
     showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
     dispatchConnected();
 
+    // для совместимости со старым кодом, который слушает "walletChanged"
+    window.dispatchEvent(new Event('walletChanged'));
+
     return currentAddress;
   } catch (e) {
-    // Определяем "user rejected" (MetaMask/Trust/EIP-1193)
-    const msg = (e?.message || '').toLowerCase();
-    const code = e?.code;
-    const isUserRejected =
-      code === 4001 ||
-      msg.includes('user rejected') ||
-      msg.includes('rejected the request') ||
-      msg.includes('request rejected') ||
-      msg.includes('action_rejected');
-
     // Уборка WalletConnect инстанса, если он был создан в этой попытке
     try {
       if (localWc) {
@@ -316,22 +285,19 @@ export function getAvailableWallets() {
       }
     } catch (_) {}
 
-    // ВАЖНО: при любой неуспешной попытке не оставляем "полуподключённое" состояние
+    // При любой неуспешной попытке не оставляем "полуподключённое" состояние
     selectedEip1193 = null;
     ethersProvider = null;
     signer = null;
     currentChainId = null;
     currentAddress = null;
-
-    // При любой неуспешной попытке лучше начинать WalletConnect с чистого листа
     wcProvider = null;
 
     throw e;
   } finally {
     isConnecting = false;
   }
- }
-
+}
 
 function withTimeout(promise, ms, label = 'operation') {
   let t;
@@ -346,7 +312,6 @@ function withTimeout(promise, ms, label = 'operation') {
 export function connectWalletUI({ walletId } = {}) {
   return connectWallet({ walletId });
 }
-
 
 export async function disconnectWallet() {
   try {
