@@ -819,27 +819,26 @@ export async function setMaxBuy() {
   if (inp) inp.value = v;
 }
 
-console.log('[MAX SELL]', {
-  addr: user.address,
-  arubBal: ethers.utils.formatUnits(bal, DECIMALS_ARUB),
-  redeemable: ethers.utils.formatUnits(redeemable, DECIMALS_ARUB),
-  token: tokenRO?.address,
-  presale: presaleRO?.address,
-  chainId: (await tokenRO.provider.getNetwork()).chainId
-});
-
 export async function setMaxSell() {
   if (!user.address || !tokenRO) throw new Error("Wallet not connected");
 
-  const presaleRO = getReadOnlyPresale(); // <-- вот так
+  const presaleRO = getReadOnlyPresale();
 
   const bal = await tokenRO.balanceOf(user.address);
   const redeemable = await presaleRO.redeemableBalance(user.address);
 
+  console.log('[MAX SELL DEBUG]', {
+    address: user.address,
+    walletBalance: ethers.utils.formatUnits(bal, DECIMALS_ARUB),
+    redeemable: ethers.utils.formatUnits(redeemable, DECIMALS_ARUB),
+    token: tokenRO.address,
+    presale: presaleRO.address,
+  });
+
   // maxSell = min(balance, redeemableBalance)
   const maxSell = redeemable.lt(bal) ? redeemable : bal;
 
-  const v = ethers.utils.formatUnits(maxSell, DECIMALS_ARUB); // DECIMALS_ARUB = 6
+  const v = ethers.utils.formatUnits(maxSell, DECIMALS_ARUB);
   const inp = el("sellAmount");
   if (inp) inp.value = v;
 }
