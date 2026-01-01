@@ -60,11 +60,29 @@ async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
         250
       );
 
-      return { url, provider };
+      console.log('[RPC] selected', url);
+      return { url, provider, via: 'rpc' };
     } catch (e) {
       lastErr = e;
-      console.warn('[RPC] failed', url, e?.message || e);
+      const msg = String(e?.message || e);
+
+      // Эти сообщения характерны для CORS/браузерных блокировок fetch
+      const isBrowserBlocked =
+        msg.includes('CORS') ||
+        msg.includes('Access-Control-Allow-Origin') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('ERR_FAILED') ||
+        msg.includes('NetworkError');
+
+      console.warn(isBrowserBlocked ? '[RPC] skipped (browser blocked)' : '[RPC] failed', url, msg);
     }
+  }
+
+  // Fallback: если ни один публичный RPC не доступен из браузера, но кошелёк есть
+  if (window.ethereum?.request) {
+    console.warn('[RPC] no public RPC worked; fallback to injected provider');
+    const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+    return { url: null, provider, via: 'wallet' };
   }
 
   throw lastErr || new Error('No working RPC endpoints');
@@ -91,14 +109,17 @@ export async function initReadOnlyContracts() {
 
   const rpcUrls = assertConfig();
 
-  const { url, provider } = await pickWorkingRpc(rpcUrls, 2);
-  roProvider = provider;
+const { provider: roProvider, via } = await pickWorkingRpc(CONFIG.NETWORK.rpcUrls);
+const presaleSim = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, roProvider);
+
+// если via === 'wallet' и вы ловите missing revert data — можно отключить preflight на мобилках
 
   roToken   = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, roProvider);
   roOracle  = new ethers.Contract(CONFIG.ORACLE_ADDRESS, ORACLE_ABI, roProvider);
   roPresale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_READ_ABI, roProvider);
 
   console.log('[CONTRACTS] read-only initialized', {
+    via,
     rpc: url,
     token: CONFIG.TOKEN_ADDRESS,
     oracle: CONFIG.ORACLE_ADDRESS,
@@ -108,14 +129,6 @@ export async function initReadOnlyContracts() {
   try { window.dispatchEvent(new Event('contractsInitialized')); } catch (_) {}
   return true;
 }
-
-// -----------------------------
-// Required by app.js: getArubPrice()
-// Oracle: function getRate() returns (rate, updatedAt)
-// We return ONLY "rate" as BigNumber (rate is scaled by 1e6).
-// -----------------------------
-// contracts.js
-let lastGoodArubPriceInfo = null;
 
 export async function getArubPrice() {
   // ВАЖНО: initReadOnlyContracts() почти наверняка async -> нужен await

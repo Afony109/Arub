@@ -972,11 +972,11 @@ export async function buyTokens(usdtAmount, withBonus = false) {
   const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
 
   // contract for simulation (RPC)
- const presaleSim = new ethers.Contract(
-  PRESALE_ADDRESS,
-  PRESALE_ABI_MIN,
-  rpcProvider
-);
+ const { provider: readProvider, via } = await pickWorkingRpc(CONFIG.NETWORK.rpcUrls);
+
+const presaleSim = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, readProvider);
+
+// Если via === 'wallet', можно (опционально) отключить preflight или принять, что revert data может быть хуже
 
   try {
     // 1) allowance / approve
