@@ -72,12 +72,6 @@ window.walletState = {
   console.log('[wallet] publishGlobals', window.walletState);
 }
 
-selectedEip1193?.on?.('chainChanged', (hex) => {
-  const parsed = parseInt(hex, 16);
-  currentChainId = Number.isFinite(parsed) ? parsed : null;
-  publishGlobals().catch(() => {});
-});
-
 function dispatchConnected() {
   const cid = window.walletState?.chainId ?? currentChainId ?? null;
 
@@ -320,19 +314,22 @@ export function getAvailableWallets() {
     await publishGlobals();
 
 
-    // сохраняем в глобальные только после успешного requestAccounts
-    selectedEip1193 = localSelected;
-    wcProvider = localWc || wcProvider;
+   // сохраняем выбранный провайдер только после успешного requestAccounts
+selectedEip1193 = localSelected;
+wcProvider = localWc || wcProvider;
 
-    ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
-    signer = ethersProvider.getSigner();
-    currentAddress = ethers.utils.getAddress(await signer.getAddress());
+ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+signer = ethersProvider.getSigner();
+currentAddress = ethers.utils.getAddress(await signer.getAddress());
 
-    const net = await ethersProvider.getNetwork();
-    currentChainId = net.chainId;
+const net = await ethersProvider.getNetwork();
+currentChainId = net.chainId;
 
-    // ВАЖНО: publishGlobals async — обязательно await
-    await publishGlobals();
+// Ставим слушателей ПОСЛЕ того, как selectedEip1193 уже задан
+attachProviderListeners();
+
+// Публикуем глобальное состояние
+await publishGlobals();
 
     // Подстрахуемся: если publishGlobals получил chainId напрямую из провайдера
     currentChainId = window.walletState?.chainId ?? currentChainId;
@@ -468,17 +465,6 @@ const ORACLE_ABI_MIN = [
   "function rate() view returns (uint256)"
 ];
 
-const eth = selectedEip1193 || window.ethereum;
-
-const eip1193 = selectedEip1193 || window.ethereum;
-if (!eip1193) throw new Error('No EIP-1193 provider');
-
-await eip1193.request({ method: 'eth_chainId' });
-
-const web3 = new ethers.providers.Web3Provider(eip1193, 'any'); // важно: 'any'
-const network = await web3.getNetwork();
-window.walletState.chainId = network.chainId;
-
 let listenersAttached = false;
 
 function attachProviderListeners() {
@@ -495,9 +481,10 @@ function attachProviderListeners() {
   });
 
   selectedEip1193.on('accountsChanged', (accounts) => {
-    currentAddress = accounts?.[0] || null;
-    publishGlobals().catch(() => {});
-  });
+  const a = accounts?.[0] || null;
+  currentAddress = a ? ethers.utils.getAddress(a) : null;
+  publishGlobals().catch(() => {});
+});
 }
 
 function calcDiscount(avgPrice, currentPrice) {
