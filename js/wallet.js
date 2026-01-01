@@ -477,8 +477,7 @@ await eip1193.request({ method: 'eth_chainId' });
 
 const web3 = new ethers.providers.Web3Provider(eip1193, 'any'); // важно: 'any'
 const network = await web3.getNetwork();
-walletState.chainId = network.chainId;
-
+window.walletState.chainId = network.chainId;
 
 let listenersAttached = false;
 
