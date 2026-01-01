@@ -468,11 +468,17 @@ const ORACLE_ABI_MIN = [
   "function rate() view returns (uint256)"
 ];
 
-await selectedEip1193?.request({ method: 'eth_chainId' });
+const eth = selectedEip1193 || window.ethereum;
 
-const web3 = new ethers.providers.Web3Provider(eth, 'any'); // важно: 'any'
-const network = await web3.getNetwork(); // после accounts обычно уже норм
+const eip1193 = selectedEip1193 || window.ethereum;
+if (!eip1193) throw new Error('No EIP-1193 provider');
+
+await eip1193.request({ method: 'eth_chainId' });
+
+const web3 = new ethers.providers.Web3Provider(eip1193, 'any'); // важно: 'any'
+const network = await web3.getNetwork();
 walletState.chainId = network.chainId;
+
 
 let listenersAttached = false;
 
