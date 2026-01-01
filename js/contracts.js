@@ -51,7 +51,8 @@ async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
 
   for (const url of rpcUrls) {
     try {
-      const provider = new ethers.providers.JsonRpcProvider(url);
+      const ARB_ONE = { name: 'arbitrum', chainId: 42161 };
+      const provider = new ethers.providers.JsonRpcProvider(url, ARB_ONE);
 
       await callWithRetry(
         () => withTimeout(provider.getBlockNumber(), 2500, `RPC timeout: ${url}`),

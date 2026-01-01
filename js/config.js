@@ -27,12 +27,13 @@ export const CONFIG = {
       decimals: 18,
     },
 
-    rpcUrls: [
-  'https://arb1.arbitrum.io/rpc',
+   rpcUrls: [
   'https://arbitrum-one.publicnode.com',
+  'https://arbitrum.blockpi.network/v1/rpc/public',
   'https://1rpc.io/arb',
-  'https://arbitrum.blockpi.network/v1/rpc/public'
+  'https://arb1.arbitrum.io/rpc'
 ],
+
 
     blockExplorerUrls: ['https://arbiscan.io'],
   },

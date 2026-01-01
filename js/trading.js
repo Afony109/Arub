@@ -18,10 +18,16 @@
  */
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
-import { CONFIG } from './config.js';
 import { showNotification, formatTokenAmount } from './ui.js';
 import { ERC20_ABI, ERC20_ABI_MIN, PRESALE_READ_ABI } from './abis.js';
 import { getReadOnlyPresale } from './contracts.js';
+import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
+import { CONFIG } from './config.js';
+
+const rpcProvider = new ethers.providers.JsonRpcProvider(
+  CONFIG.NETWORK.rpcUrls[0],
+  CONFIG.NETWORK.chainId
+);
 
 // -----------------------------
 // Addresses (presale + token proxies)
@@ -63,6 +69,19 @@ const user = {
   signer: null,
   chainId: null
 };
+
+// ТЕКУЩИЙ вариант (через кошелёк)
+const buyContract = new ethers.Contract(
+  BUY_CONTRACT_ADDRESS,
+  BUY_ABI,
+  signer // или ethersProvider
+);
+
+const buyContractSim = new ethers.Contract(
+  BUY_CONTRACT_ADDRESS,
+  BUY_ABI,
+  rpcProvider
+);
 
 const PRESALE_ABI_MIN = [
   // write
@@ -906,9 +925,6 @@ function explainEthersError(e) {
   };
 }
 
-// Покупка ARUB за USDT через presale
-// withBonus=false => ARUB выдаётся сразу
-// withBonus=true  => ARUB лочится на 90 дней, разблокировка через unlockDeposit()
 export async function buyTokens(usdtAmount, withBonus = false) {
   const ws = window.walletState;
 
@@ -943,18 +959,29 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     showNotification?.('Minimum purchase is $10', 'error');
     return;
   }
-
   if (amountBN.isZero?.() === true) {
     showNotification?.('Enter amount greater than 0', 'error');
     return;
   }
 
+  // contracts (wallet/signer)
   const usdt = new ethers.Contract(USDT_ADDRESS, ERC20_ABI_MIN, ws.signer);
+
+  // ВАЖНО: ABI должен содержать buyWithUSDT
+  // Если у вас есть только PRESALE_ABI_MIN, убедитесь что там есть сигнатура buyWithUSDT
   const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
 
+  // contract for simulation (RPC)
+ const presaleSim = new ethers.Contract(
+  PRESALE_ADDRESS,
+  PRESALE_ABI_MIN,
+  rpcProvider
+);
+
   try {
-    // 1) allowance / approve (Trust Wallet safe)
+    // 1) allowance / approve
     const allowance = await usdt.allowance(ws.address, PRESALE_ADDRESS);
+
     if (allowance.lt(amountBN)) {
       showNotification?.('Approving USDT...', 'success');
 
@@ -968,9 +995,13 @@ export async function buyTokens(usdtAmount, withBonus = false) {
       }
     }
 
-    // 2) preflight callStatic: получаем точный revert ДО отправки tx
+    // 2) preflight callStatic (RPC) — ДО покупки
     try {
-      await presale.callStatic.buyWithUSDT(amountBN, withBonus);
+      await presaleSim.callStatic.buyWithUSDT(
+        amountBN,
+        withBonus,
+        { from: ws.address }
+      );
     } catch (e) {
       console.error('[BUY] callStatic reverted:', e);
       console.error('[BUY] callStatic details:', {
@@ -988,7 +1019,7 @@ export async function buyTokens(usdtAmount, withBonus = false) {
       return;
     }
 
-    // 3) buy tx
+    // 3) buy tx (wallet)
     showNotification?.(
       withBonus ? 'Buying with bonus (90d lock)...' : 'Buying ARUB...',
       'success'
@@ -996,16 +1027,11 @@ export async function buyTokens(usdtAmount, withBonus = false) {
 
     let tx;
     try {
-
-      // Для Trust Wallet часто падает eth_estimateGas -> даём ручной gasLimit
-      
-      if (typeof isTrustWalletProvider === 'function' && isTrustWalletProvider()) {
-        tx = await presale.buyWithUSDT(amountBN, withBonus, { gasLimit: 900000 });
-      } else {
-        tx = await presale.buyWithUSDT(amountBN, withBonus);
-      }
+      // сначала пробуем без overrides
+      tx = await presale.buyWithUSDT(amountBN, withBonus);
     } catch (e) {
-      console.warn('[TRADING] buyWithUSDT failed, retry with gasLimit:', e?.message || e);
+      // если у Trust/MetaMask падает estimateGas — пробуем с gasLimit
+      console.warn('[BUY] buyWithUSDT failed, retry with gasLimit:', e?.message || e);
       tx = await presale.buyWithUSDT(amountBN, withBonus, { gasLimit: 900000 });
     }
 
@@ -1046,19 +1072,8 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     showNotification?.(pickEthersMessage(e), 'error');
     return;
   }
-  console.error('[BUY] reverted raw:', e);
-console.error('[BUY] reverted details:', {
-  code: e?.code,
-  reason: e?.reason,
-  message: e?.message,
-  shortMessage: e?.shortMessage,
-  dataMessage: e?.data?.message,
-  errorMessage: e?.error?.message,
-  errorData: e?.error?.data,
-  data: e?.data,
-  body: e?.error?.body,
-});
 }
+
 // Продажа (redeem) ARUB -> USDT через presale.
 // ВАЖНО: если у пользователя активен lock (покупка со скидкой), контракт будет revert.
 export async function sellTokens(arubAmount) {
