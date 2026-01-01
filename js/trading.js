@@ -28,6 +28,7 @@ const rpcProvider = new ethers.providers.JsonRpcProvider(
   CONFIG.NETWORK.chainId
 );
 
+
 // -----------------------------
 // Addresses (presale + token proxies)
 // -----------------------------
@@ -69,49 +70,52 @@ const user = {
   chainId: null
 };
 
-// ТЕКУЩИЙ вариант (через кошелёк)
-const buyContract = new ethers.Contract(
-  BUY_CONTRACT_ADDRESS,
-  BUY_ABI,
-  signer // или ethersProvider
-);
-
-const buyContractSim = new ethers.Contract(
-  BUY_CONTRACT_ADDRESS,
-  BUY_ABI,
-  rpcProvider
-);
-
 const PRESALE_ABI_MIN = [
-  // write
   'function buyWithUSDT(uint256 amount, bool withBonus) external',
   'function unlockDeposit() external',
   'function redeemForUSDT(uint256 arubAmount) external',
   'function claimDebt() external',
-
-  // key redeem limiter
   'function redeemableBalance(address) view returns (uint256)',
-
-  // lock info
   'function getMyLockedInfo() view returns (uint256 principalLocked, uint256 bonusLocked, uint256 unlockTime, uint256 remaining)',
   'function lockedPrincipalArub(address) view returns (uint256)',
   'function lockedBonusArub(address) view returns (uint256)',
   'function lockedDepositUntil(address) view returns (uint256)',
   'function getRemainingLockTime(address user) view returns (uint256)',
-
-  // discount
   'function getDiscountPercent() view returns (uint256)',
   'function totalDiscountBuyers() view returns (uint256)',
   'function DISCOUNT_MAX_BUYERS() view returns (uint256)',
   'function isDiscountBuyer(address) view returns (bool)',
-
-  // sell fee
   'function getMySellFeeBps() view returns (uint256)',
   'function getUserSellFeeBps(address user) view returns (uint256)',
-
-  // debt
   'function debtUsdtEquivalent(address) view returns (uint256)',
 ];
+
+// -----------------------------
+// Presale signer contract cache
+// -----------------------------
+let presaleSignerCached = null;
+let presaleSignerFor = null;
+
+function getPresaleAsSigner() {
+  if (!user.signer) return null;
+
+  // если signer не менялся — возвращаем кэш
+  if (presaleSignerCached && presaleSignerFor === user.signer) {
+    return presaleSignerCached;
+  }
+
+  // signer поменялся (или первый вызов)
+  presaleSignerFor = user.signer;
+  presaleSignerCached = new ethers.Contract(
+    PRESALE_ADDRESS,
+    PRESALE_ABI_MIN,
+    user.signer
+  );
+
+  return presaleSignerCached;
+}
+
+const presaleSim = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, rpcProvider);
 
 function getUiLang() {
   const l = String(navigator.language || '').toLowerCase();
@@ -248,31 +252,31 @@ startLockAutoRefresh();
       left.textContent = '—';
     }
   }
-
-  // Sell fee
-  try {
-    let feeBps = null;
-
-    // prefer "my" fee when signer exists
-    if (user.signer) {
-      const presaleAsSigner = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, user.signer);
-      if (presaleAsSigner.getMySellFeeBps) feeBps = await presaleAsSigner.getMySellFeeBps();
-    }
-
-    // fallback to address-based
-    if (feeBps == null) {
-      const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
-      const roProvider = rpc ? new ethers.providers.JsonRpcProvider(rpc) : user.provider;
-      const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, roProvider);
-      if (presaleRO.getUserSellFeeBps) feeBps = await presaleRO.getUserSellFeeBps(user.address);
-    }
-
-    if (feeBps != null) {
-      const pct = Number(feeBps.toString()) / 100; // bps -> %
-      setText('sellFee', `${pct.toFixed(2)}%`);
-    }
-  } catch (_) {}
 }
+ // Sell fee
+try {
+  let feeBps = null;
+
+  // 1) Prefer signer-based fee (cached)
+  const presaleAsSigner = getPresaleAsSigner();
+  if (presaleAsSigner?.getMySellFeeBps) {
+    feeBps = await presaleAsSigner.getMySellFeeBps();
+  }
+
+  // 2) Fallback to read-only presale (если signer нет)
+  if (feeBps == null) {
+    const presaleRO = await getReadOnlyPresale?.();
+    if (presaleRO?.getUserSellFeeBps) {
+      feeBps = await presaleRO.getUserSellFeeBps(user.address);
+    }
+  }
+
+  if (feeBps != null) {
+    const pct = Number(feeBps.toString()) / 100;
+    setText('sellFee', `${pct.toFixed(2)}%`);
+  }
+} catch (_) {}
+
 
 function startLockAutoRefresh() {
   if (lockRefreshTimer) clearInterval(lockRefreshTimer);
@@ -477,9 +481,8 @@ async function refreshBuyBonusBox() {
   }
 
   try {
-    const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
-    const roProvider = rpc ? new ethers.providers.JsonRpcProvider(rpc) : user.provider;
-    const presaleRO = new ethers.Contract(PRESALE_ADDRESS, PRESALE_READ_ABI, roProvider);
+    const presaleRO = await getReadOnlyPresale();
+  if (!presaleRO) throw new Error('Read-only presale not ready');
 
     // percent
     let percent = null;
@@ -858,7 +861,7 @@ export async function setMaxBuy() {
 export async function setMaxSell() {
   if (!user.address || !tokenRO) throw new Error("Wallet not connected");
 
-  const presaleRO = getReadOnlyPresale();
+ const presaleRO = await getReadOnlyPresale();
 
   const bal = await tokenRO.balanceOf(user.address);
   const redeemable = await presaleRO.redeemableBalance(user.address);
@@ -970,10 +973,6 @@ export async function buyTokens(usdtAmount, withBonus = false) {
   // Если у вас есть только PRESALE_ABI_MIN, убедитесь что там есть сигнатура buyWithUSDT
   const presale = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, ws.signer);
 
-  // contract for simulation (RPC)
- const { provider: readProvider, via } = await pickWorkingRpc(CONFIG.NETWORK.rpcUrls);
-
-const presaleSim = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, readProvider);
 
 // Если via === 'wallet', можно (опционально) отключить preflight или принять, что revert data может быть хуже
 
@@ -1212,7 +1211,12 @@ export async function loadMyLockInfo() {
   const ws = window.walletState;
   if (!ws?.address) return null;
 
-  const presaleRO = getReadOnlyPresale(); // <-- берём один раз, нормально
+  // Optional network guard (avoid wrong-chain reads when RPC falls back to injected)
+  const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
+  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) return null;
+
+  const presaleRO = await getReadOnlyPresale();
+  if (!presaleRO) return null;
 
   try {
     const [principalLocked, bonusLocked, unlockUntilRaw, remainingRaw] = await Promise.all([
@@ -1227,10 +1231,17 @@ export async function loadMyLockInfo() {
 
     return { principalLocked, bonusLocked, unlockTime, remaining };
   } catch (e) {
-    console.warn('[TRADING] loadMyLockInfo failed:', e?.message || e);
+    console.warn('[TRADING] loadMyLockInfo failed:', {
+      code: e?.code,
+      reason: e?.reason,
+      message: e?.message,
+      errorMessage: e?.error?.message,
+      body: e?.error?.body,
+    });
     return null;
   }
 }
+
 // -----------------------------
 // Public init (event-driven)
 // -----------------------------

@@ -5,6 +5,10 @@
  *   - initReadOnlyContracts()
  *   - getArubPrice()
  *   - getTotalSupplyArub()
+ *
+ * Optional exports for trading.js:
+ *   - getReadOnlyPresale()
+ *   - getReadOnlyProvider()
  */
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
@@ -20,6 +24,12 @@ let roProvider = null;
 let roToken = null;
 let roOracle = null;
 let roPresale = null;
+
+// init latch (prevents parallel init)
+let roInitPromise = null;
+
+// cached oracle value (fallback)
+let lastGoodArubPriceInfo = null;
 
 // -----------------------------
 // Helpers
@@ -66,7 +76,6 @@ async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
       lastErr = e;
       const msg = String(e?.message || e);
 
-      // Эти сообщения характерны для CORS/браузерных блокировок fetch
       const isBrowserBlocked =
         msg.includes('CORS') ||
         msg.includes('Access-Control-Allow-Origin') ||
@@ -78,7 +87,7 @@ async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
     }
   }
 
-  // Fallback: если ни один публичный RPC не доступен из браузера, но кошелёк есть
+  // Fallback: if no CORS-friendly RPC works, use injected provider (if present)
   if (window.ethereum?.request) {
     console.warn('[RPC] no public RPC worked; fallback to injected provider');
     const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
@@ -93,11 +102,9 @@ function assertConfig() {
   if (!Array.isArray(rpcs) || rpcs.length === 0) {
     throw new Error('CONFIG.NETWORK.rpcUrls missing/empty');
   }
-
   if (!CONFIG?.TOKEN_ADDRESS) throw new Error('CONFIG.TOKEN_ADDRESS missing');
   if (!CONFIG?.ORACLE_ADDRESS) throw new Error('CONFIG.ORACLE_ADDRESS missing');
   if (!CONFIG?.PRESALE_ADDRESS) throw new Error('CONFIG.PRESALE_ADDRESS missing');
-
   return rpcs;
 }
 
@@ -107,31 +114,65 @@ function assertConfig() {
 export async function initReadOnlyContracts() {
   if (roProvider && roToken && roOracle && roPresale) return true;
 
-  const rpcUrls = assertConfig();
+  // latch to prevent parallel inits
+  if (roInitPromise) {
+    await roInitPromise;
+    return true;
+  }
 
-const { provider: roProvider, via } = await pickWorkingRpc(CONFIG.NETWORK.rpcUrls);
-const presaleSim = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, roProvider);
+  roInitPromise = (async () => {
+    const rpcUrls = assertConfig();
+    const { url, provider, via } = await pickWorkingRpc(rpcUrls, 2);
 
-// если via === 'wallet' и вы ловите missing revert data — можно отключить preflight на мобилках
+    roProvider = provider;
 
-  roToken   = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20_ABI, roProvider);
-  roOracle  = new ethers.Contract(CONFIG.ORACLE_ADDRESS, ORACLE_ABI, roProvider);
-  roPresale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_READ_ABI, roProvider);
+    roToken   = new ethers.Contract(CONFIG.TOKEN_ADDRESS,   ERC20_ABI,        roProvider);
+    roOracle  = new ethers.Contract(CONFIG.ORACLE_ADDRESS,  ORACLE_ABI,       roProvider);
+    roPresale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_READ_ABI, roProvider);
 
-  console.log('[CONTRACTS] read-only initialized', {
-    via,
-    rpc: url,
-    token: CONFIG.TOKEN_ADDRESS,
-    oracle: CONFIG.ORACLE_ADDRESS,
-    presale: CONFIG.PRESALE_ADDRESS
-  });
+    console.log('[CONTRACTS] read-only initialized', { via, rpc: url });
+  })();
 
-  try { window.dispatchEvent(new Event('contractsInitialized')); } catch (_) {}
-  return true;
+  try {
+    await roInitPromise;
+    try { window.dispatchEvent(new Event('contractsInitialized')); } catch (_) {}
+    return true;
+  } finally {
+    // keep promise (optional). If you want re-init after failure, reset on error.
+    // Here we keep it if init succeeded; on failure it will throw before this line.
+  }
 }
 
+// -----------------------------
+// Optional getters for other modules
+// -----------------------------
+export function getReadOnlyProvider() {
+  return roProvider;
+}
+
+export async function getReadOnlyPresale() {
+  // Fast path
+  if (roPresale) return roPresale;
+
+  // Ensure single init in flight (no parallel init storms)
+  if (!roInitPromise) {
+    roInitPromise = initReadOnlyContracts().catch((e) => {
+      // allow retry on next call if init failed
+      roInitPromise = null;
+      throw e;
+    });
+  }
+
+  await roInitPromise;
+  return roPresale;
+}
+
+// -----------------------------
+// Required by app.js: getArubPrice()
+// Oracle: getRate() returns (rate, updatedAt)
+// We return rate as number (scaled by ORACLE_DECIMALS; default 6)
+// -----------------------------
 export async function getArubPrice() {
-  // ВАЖНО: initReadOnlyContracts() почти наверняка async -> нужен await
   if (!roOracle) await initReadOnlyContracts();
 
   try {
@@ -140,7 +181,7 @@ export async function getArubPrice() {
       return { rate, updatedAt: Number(updatedAt) };
     }, 3, 400);
 
-    const decimals = Number(CONFIG?.ORACLE_DECIMALS ?? 6); // у вас 1e6 scale
+    const decimals = Number(CONFIG?.ORACLE_DECIMALS ?? 6);
     const price = Number(ethers.utils.formatUnits(rate, decimals));
 
     const info = {
@@ -150,12 +191,12 @@ export async function getArubPrice() {
       isStale: false,
     };
 
-    // кэш последнего валидного
-    if (Number.isFinite(price) && price > 0) lastGoodArubPriceInfo = info;
+    if (Number.isFinite(price) && price > 0) {
+      lastGoodArubPriceInfo = info;
+    }
 
     return info;
   } catch (e) {
-    // если что-то “обвалилось” — показываем последний хороший курс как cached
     if (lastGoodArubPriceInfo) {
       return { ...lastGoodArubPriceInfo, isFallback: true };
     }
@@ -163,22 +204,14 @@ export async function getArubPrice() {
   }
 }
 
-
-
 // -----------------------------
 // Required by app.js: getTotalSupplyArub()
 // ERC20.totalSupply()
 // -----------------------------
 export async function getTotalSupplyArub() {
-  if (!roToken) initReadOnlyContracts();
+  if (!roToken) await initReadOnlyContracts();
 
   return await callWithRetry(async () => {
     return await roToken.totalSupply();
   }, 3, 350);
 }
-
-export function getReadOnlyPresale() {
-  if (!roPresale) initReadOnlyContracts();
-  return roPresale;
-}
-
