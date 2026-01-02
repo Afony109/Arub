@@ -235,14 +235,17 @@ export async function pickWorkingRpc(rpcUrls = [], triesPerRpc = 2, opts = {}) {
  * Async provider getter (preferred): always returns a provider (or throws)
  * Note: for read-only contracts we usually disable wallet fallback to avoid mixed data sources.
  */
+
+export function getReadOnlyProviderSync() {
+  return roProvider;
+}
+
 export async function getReadOnlyProviderAsync() {
   if (!roProvider) await initReadOnlyContracts();
   return roProvider;
 }
 
-export function getReadOnlyProviderSync() {
-  return roProvider;
-}
+
 
 function assertConfig() {
   const net = CONFIG?.NETWORK || {};
