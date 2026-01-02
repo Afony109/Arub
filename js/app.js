@@ -478,10 +478,7 @@ const connectBtn = document.getElementById('connectBtn');
 const dropdown   = document.getElementById('walletDropdown');
 const disconnectBtn = document.getElementById('disconnectWalletBtn');
 
-function shortAddr(addr) {
-  if (!addr) return '';
-  return addr.slice(0, 6) + '…' + addr.slice(-4);
-}
+
 
 function setWalletUIConnected(address) {
   if (connectBtn) connectBtn.textContent = shortAddr(address);
