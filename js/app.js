@@ -9,7 +9,7 @@ import { CONFIG } from './config.js';
 import {initWalletModule, getEthersProvider, getAvailableWallets, connectWalletUI, disconnectWallet} from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
-import { initReadOnlyContracts, getArubPrice, getTotalSupplyArub } from './contracts.js';
+import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
 
 // -----------------------------
 // Read-only provider (stable RPC)
@@ -18,19 +18,9 @@ let _readProvider = null;
 
 console.log('[APP] module loaded:', import.meta.url);
 
-function getReadProvider() {
-  if (_readProvider) return _readProvider;
-
-  const urls = CONFIG?.NETWORK?.rpcUrls || [];
-  if (!urls.length) throw new Error('No RPC URLs in CONFIG.NETWORK.rpcUrls');
-
-  // Берём первый (у вас это https://arb1.arbitrum.io/rpc)
-  _readProvider = new ethers.providers.JsonRpcProvider(urls[0]);
-  return _readProvider;
-}
 
 async function debugPresaleMath(address) {
-  const provider = getReadProvider();
+  const provider = await getReadOnlyProviderAsync();
 
   const arub = new ethers.Contract(
     CONFIG.TOKEN_ADDRESS,
@@ -330,7 +320,8 @@ function setPresaleScanProgress(pct) {
 }
 
 async function refreshPresaleUI(address) {
-  const provider = getReadProvider();
+  // Единый read-only провайдер (proxy-first) из contracts.js
+  const provider = await getReadOnlyProviderAsync();
 
   let presale = await loadPresaleStatsFromEvents(address, provider);
   if (!presale || !presale.totalARUB || presale.totalARUB <= 0) {
@@ -346,38 +337,6 @@ async function refreshPresaleUI(address) {
   setText("presaleDiscount", discount !== null ? discount.toFixed(2) + "%" : "—");
 }
 
-// Единственная подписка на события wallet.js
-window.addEventListener("wallet:connected", (e) => {
-  const addr = e?.detail?.address;
-  const chainId = e?.detail?.chainId;
-
-  // 1) UI кошелька
-  if (addr) setWalletUIConnected(addr);
-
-  // 2) лог сети (если нужен)
-  console.log("[APP] walletState chainId:", window.walletState?.chainId ?? chainId ?? "(unknown)");
-
-  // 3) пресейл/оракул
-  if (addr) {
-    refreshPresaleUI(addr).catch(err =>
-      console.error("[PRESALE/ORACLE]", err)
-    );
-
-    // временно для диагностики — потом можно удалить
-    debugPresaleMath(addr).catch(console.error);
-  }
-});
-
-window.addEventListener("wallet:disconnected", () => {
-  // UI кошелька
-  setWalletUIDisconnected();
-
-  // пресейл блок
-  setText("presalePurchased", "—");
-  setText("presalePaid", "—");
-  setText("presaleAvgPrice", "—");
-  setText("presaleDiscount", "—");
-});
 
 function presaleCacheKey(addr) {
   return `presaleStats:${CONFIG.PRESALE_ADDRESS}:${addr.toLowerCase()}`;
