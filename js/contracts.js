@@ -44,7 +44,8 @@ async function rpcFetch(payload) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-antirub-key": RPC_KEY, // 🔐 ключ добавляется ТОЛЬКО ЗДЕСЬ
+        // 🔴 ВОТ СЮДА
+        "x-antirub-key": String(RPC_PROXY_KEY).trim()
       },
       body: JSON.stringify(payload),
     });
@@ -53,13 +54,7 @@ async function rpcFetch(payload) {
       throw new Error(`RPC HTTP ${res.status}`);
     }
 
-    const json = await res.json();
-
-    if (json?.error) {
-      throw new Error(json.error.message || "RPC error");
-    }
-
-    return json.result;
+    return res.json();
   });
 }
 
