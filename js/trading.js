@@ -26,6 +26,7 @@ import {
   getReadOnlyPresale,
 } from './contracts.js';
 import { CONFIG } from './config.js';
+import { requireArbitrumOrThrow } from './wallet.js';
 
 console.log('[TRADING] trading.js loaded, build:', Date.now());
 
@@ -119,17 +120,57 @@ function getPresaleAsSigner() {
 // -----------------------------
 // Presale read-only simulator (callStatic) via unified provider
 // -----------------------------
+
 let presaleSim = null;
+let presaleSimChainId = null;
 
 async function getPresaleSim() {
-  if (presaleSim) return presaleSim;
+  const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
 
   // Ensure contracts.js selected RPC once
   await initReadOnlyContracts();
 
   const roProvider = await getReadOnlyProviderAsync();
+
+  // 1) Проверяем сеть read-only провайдера (обязательно)
+  let net;
+  try {
+    net = await roProvider.getNetwork();
+  } catch (e) {
+    throw new Error('Read-only RPC is not reachable (getNetwork failed)');
+  }
+
+  const roChainId = Number(net?.chainId ?? 0);
+  if (roChainId !== expectedChainId) {
+    throw new Error(
+      `Read-only RPC is on wrong network. Expected ${expectedChainId}, got ${roChainId}`
+    );
+  }
+
+  // 2) Кэш только если сеть совпадает и не менялась
+  if (presaleSim && presaleSimChainId === roChainId) return presaleSim;
+
   presaleSim = new ethers.Contract(PRESALE_ADDRESS, PRESALE_ABI_MIN, roProvider);
+  presaleSimChainId = roChainId;
+
   return presaleSim;
+}
+
+export function resetPresaleSimCache() {
+  presaleSim = null;
+  presaleSimChainId = null;
+}
+
+async function ensureAllowance(amount) {
+  requireArbitrumOrThrow();
+
+  const signer = window.walletState.signer;
+  const usdt = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, signer);
+
+  const allowance = await usdt.allowance(window.walletState.address, PRESALE_ADDRESS);
+  if (allowance.lt(amount)) {
+    await usdt.approve(PRESALE_ADDRESS, amount);
+  }
 }
 
 // -----------------------------
@@ -936,6 +977,7 @@ function explainEthersError(e) {
   };
 }
 
+
 export async function buyTokens(usdtAmount, withBonus = false) {
   const ws = window.walletState;
 
@@ -951,9 +993,11 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     return;
   }
 
-  const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
-  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
-    showNotification?.('Wrong network. Please switch to Arbitrum', 'error');
+  // ✅ единый гейтинг сети (и без дублей)
+  try {
+    requireArbitrumOrThrow(ws);
+  } catch (e) {
+    showNotification?.(e?.message || 'Wrong network. Please switch to Arbitrum', 'error');
     return;
   }
 
@@ -997,6 +1041,7 @@ export async function buyTokens(usdtAmount, withBonus = false) {
     // preflight callStatic via unified provider
     try {
       const sim = await getPresaleSim();
+      // ⚠️ ВАЖНО: симуляция должна быть в той же сети (Arbitrum).
       await sim.callStatic.buyWithUSDT(amountBN, withBonus, { from: ws.address });
     } catch (e) {
       console.error('[BUY] callStatic reverted:', e);
@@ -1025,18 +1070,10 @@ export async function buyTokens(usdtAmount, withBonus = false) {
       'success'
     );
 
-    try {
-      await refreshBalances?.();
-    } catch (_) {}
-    try {
-      await loadMyLockInfo?.();
-    } catch (_) {}
-    try {
-      await refreshBuyBonusBox?.();
-    } catch (_) {}
-    try {
-      await refreshSellFee?.();
-    } catch (_) {}
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await loadMyLockInfo?.(); } catch (_) {}
+    try { await refreshBuyBonusBox?.(); } catch (_) {}
+    try { await refreshSellFee?.(); } catch (_) {}
 
     console.log('[TRADING] buy tx:', tx.hash);
     return tx;
@@ -1054,6 +1091,7 @@ export async function buyTokens(usdtAmount, withBonus = false) {
   }
 }
 
+
 export async function sellTokens(arubAmount) {
   const ws = window.walletState;
 
@@ -1068,9 +1106,11 @@ export async function sellTokens(arubAmount) {
     return;
   }
 
-  const expectedChainId = Number(CONFIG?.NETWORK?.chainId ?? 42161);
-  if (ws?.chainId && Number(ws.chainId) !== expectedChainId) {
-    showNotification?.('Wrong network. Please switch to Arbitrum', 'error');
+  // ✅ единый гейтинг сети
+  try {
+    requireArbitrumOrThrow(ws);
+  } catch (e) {
+    showNotification?.(e?.message || 'Wrong network. Please switch to Arbitrum', 'error');
     return;
   }
 
@@ -1094,10 +1134,7 @@ export async function sellTokens(arubAmount) {
   const redeemable = await presale.redeemableBalance(ws.address);
   if (amountBN.gt(redeemable)) {
     showNotification?.(
-      `Exceeds redeemable balance. Max: ${ethers.utils.formatUnits(
-        redeemable,
-        DECIMALS_ARUB
-      )} ARUB`,
+      `Exceeds redeemable balance. Max: ${ethers.utils.formatUnits(redeemable, DECIMALS_ARUB)} ARUB`,
       'error'
     );
     return;
@@ -1142,15 +1179,9 @@ export async function sellTokens(arubAmount) {
 
     showNotification?.('Redeem successful. USDT credited.', 'success');
 
-    try {
-      await refreshBalances?.();
-    } catch (_) {}
-    try {
-      await loadMyLockInfo?.();
-    } catch (_) {}
-    try {
-      await refreshSellFee?.();
-    } catch (_) {}
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await loadMyLockInfo?.(); } catch (_) {}
+    try { await refreshSellFee?.(); } catch (_) {}
 
     console.log('[TRADING] redeem tx:', tx.hash);
     return tx;

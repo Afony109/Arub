@@ -7,7 +7,6 @@ import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.es
 import { CONFIG } from './config.js';
 import { showNotification } from './ui.js';
 
-
 // -----------------------------
 // Internal state (single source of truth)
 // -----------------------------
@@ -39,37 +38,132 @@ function hexToInt(hex) {
 }
 
 async function publishGlobals() {
+  // если провайдер не выбран — сброс состояния
   if (!selectedEip1193) {
     window.walletState = null;
     return;
   }
 
-    let chainId = currentChainId;
+  // ВАЖНО: 'any' позволяет ethers корректно переживать chainChanged
+  // и не фиксировать сеть на момент создания.
+  try {
+    ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+    signer = ethersProvider.getSigner();
+  } catch (e) {
+    console.warn('[wallet] failed to build Web3Provider/signer', e);
+    ethersProvider = null;
+    signer = null;
+  }
 
-  if (!Number.isFinite(chainId)) {
-    try {
-      const hex = await selectedEip1193.request({ method: 'eth_chainId' });
-      const parsed = parseInt(hex, 16);
-      chainId = Number.isFinite(parsed) ? parsed : null;
-    } catch (e) {
-      console.warn('[wallet] failed to fetch chainId from provider', e);
-      chainId = null;
-    }
+  // chainId: всегда пытаемся получить из провайдера
+  let chainId = null;
+  try {
+    const hex = await selectedEip1193.request({ method: 'eth_chainId' });
+    const parsed = Number.parseInt(hex, 16);
+    chainId = Number.isFinite(parsed) ? parsed : null;
+  } catch (e) {
+    console.warn('[wallet] failed to fetch chainId from provider', e);
+    chainId = null;
   }
 
   currentChainId = chainId;
 
-const safeChainId = Number.isFinite(chainId) ? chainId : null;
+  // address: если у вас currentAddress ведётся отдельно — ок.
+  // Но безопаснее синхронизировать из eth_accounts (не обязательно, но полезно).
+  // Если не хотите — уберите этот блок.
+  try {
+    const accs = await selectedEip1193.request({ method: 'eth_accounts' });
+    if (Array.isArray(accs) && accs[0]) currentAddress = accs[0];
+  } catch (e) {
+    // игнорируем
+  }
 
-window.walletState = {
-  provider: ethersProvider || null,
-  signer: signer || null,
-  address: currentAddress || null,
-  chainId: safeChainId,
-  eip1193: selectedEip1193
-};
+  window.walletState = {
+    provider: ethersProvider || null,
+    signer: signer || null,
+    address: currentAddress || null,
+    chainId: chainId,
+    eip1193: selectedEip1193
+  };
 
   console.log('[wallet] publishGlobals', window.walletState);
+}
+
+function isPermissionError(e) {
+  const msg = (e?.message || '').toLowerCase();
+  return msg.includes('does not have permission') || msg.includes('permission');
+}
+
+export async function trySwitchToArbitrum() {
+  if (!selectedEip1193) throw new Error('Wallet not connected');
+
+  const targetHex = CONFIG.NETWORK.chainIdHex.toLowerCase(); // '0xa4b1'
+  const currentHex = (await selectedEip1193.request({ method: 'eth_chainId' }))?.toLowerCase();
+  if (currentHex === targetHex) return true;
+
+  try {
+    await selectedEip1193.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: targetHex }],
+    });
+    await publishGlobals();
+    return true;
+  } catch (e) {
+    // TrustWallet / некоторые режимы WC: переключение запрещено
+    if (isPermissionError(e)) {
+      // НЕ падаем — просто говорим пользователю переключить вручную
+      showNotification('Switch network in your wallet to Arbitrum One, then press "I switched".', 'warning');
+      return false;
+    }
+    // Если сети нет — можно попробовать добавить (если тоже не запрещено)
+    if (e?.code === 4902) {
+      try {
+        await selectedEip1193.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: targetHex,
+            chainName: 'Arbitrum One',
+            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+            rpcUrls: CONFIG.NETWORK.walletRpcUrls,
+            blockExplorerUrls: CONFIG.NETWORK.blockExplorerUrls,
+          }],
+        });
+        // повторим switch
+        await selectedEip1193.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: targetHex }],
+        });
+        await publishGlobals();
+        return true;
+      } catch (e2) {
+        if (isPermissionError(e2)) {
+          showNotification('Add/switch network is blocked by wallet. Switch to Arbitrum manually in TrustWallet.', 'warning');
+          return false;
+        }
+        throw e2;
+      }
+    }
+    throw e;
+  }
+}
+
+// wallet.js
+
+export function isOnArbitrum() {
+  return window.walletState?.chainId === CONFIG.NETWORK.chainId;
+}
+
+export function requireArbitrumOrThrow(ws = window.walletState) {
+  const expected = Number(CONFIG?.NETWORK?.chainId ?? 42161);
+  const cid = ws?.chainId ?? null;
+
+  if (!Number.isFinite(expected)) {
+    throw new Error('Config error: NETWORK.chainId is invalid');
+  }
+
+  if (Number(cid) !== expected) {
+    throw new Error(`Wrong network. Please switch to Arbitrum One (${expected}). Current: ${cid ?? 'unknown'}`);
+  }
 }
 
 function dispatchConnected() {
