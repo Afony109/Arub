@@ -14,24 +14,21 @@ export const CONFIG = {
   // -----------------------------
   // Network
   // -----------------------------
-  NETWORK: {
-    chainId: 42161,
-    chainIdDec: 42161,
-    chainIdHex: '0xA4B1',
+ NETWORK: {
+  // для кошелька (wallet_addEthereumChain) — только публичные RPC без заголовков
+  walletRpcUrls: [
+    'https://arbitrum-one-rpc.publicnode.com',
+    'https://arb1.arbitrum.io/rpc'
+  ],
 
-    chainName: 'Arbitrum One',
+  // для read-only фронта — ваш proxy
+  readOnlyRpcUrl: 'https://rpc.antirub.com',
 
-    nativeCurrency: {
-      name: 'Ether',
-      symbol: 'ETH',
-      decimals: 18,
-    },
+  chainId: 42161,
+  chainIdHex: '0xa4b1',
+  blockExplorerUrls: ['https://arbiscan.io'],
+},
 
-rpcUrls: [
-  'https://arbitrum-one-rpc.publicnode.com',
-  'https://arb1.arbitrum.io/rpc'
-],
-readOnlyRpcUrl: 'https://rpc.antirub.com',
 
   // -----------------------------
   // Core addresses
@@ -52,4 +49,4 @@ readOnlyRpcUrl: 'https://rpc.antirub.com',
 
   TX_CONFIRMATIONS: 1,
 }
-}
+
