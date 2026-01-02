@@ -9,8 +9,7 @@ import { CONFIG } from './config.js';
 import {initWalletModule, getEthersProvider, getAvailableWallets, connectWalletUI, disconnectWallet} from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
-import { getArubPrice, initReadOnlyContracts, getTotalSupplyArub } from './contracts.js';
-//------------
+import { initReadOnlyContracts } from './contracts.js';
 
 // -----------------------------
 // Read-only provider (stable RPC)

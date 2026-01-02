@@ -21,16 +21,16 @@ console.log('[CONTRACTS] contracts.js loaded, build:', Date.now());
 // -----------------------------
 // State
 // -----------------------------
-let roProvider = null;
-let roToken = null;
-let roOracle = null;
-let roPresale = null;
+var roProvider = null;
+var roToken = null;
+var roOracle = null;
+var roPresale = null;
 
 // init latch (prevents parallel init)
-let roInitPromise = null;
+var roInitPromise = null;
 
 // cached oracle value (fallback)
-let lastGoodArubPriceInfo = null;
+var lastGoodArubPriceInfo = null;
 
 // -----------------------------
 // Helpers
@@ -44,6 +44,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // initReadOnlyContracts (ваша версия)
 // getReadOnlyProviderAsync / getReadOnlyProviderSync
 // getReadOnlyPresale / getArubPrice / getTotalSupplyArub ...
+
+console.log('[CONTRACTS] FILE MARKER: contracts.js active', location.href);
 
 
 async function callWithRetry(fn, tries = 3, delayMs = 350) {
