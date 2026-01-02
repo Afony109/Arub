@@ -6,14 +6,14 @@
  *   - getArubPrice()
  *   - getTotalSupplyArub()
  *
- * Optional exports for trading.js:
+  * Optional exports for trading.js:
  *   - getReadOnlyPresale()
- *   - getReadOnlyProvider()
- */
+ *   - getReadOnlyProviderAsync()
+ *   - getReadOnlyProviderSync()
 
+import { ERC20_ABI, ORACLE_ABI, PRESALE_READ_ABI } from './abis.js';
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import { ERC20_ABI, ORACLE_ABI, PRESALE_READ_ABI } from './abis.js';
 
 console.log('[CONTRACTS] contracts.js loaded, build:', Date.now());
 
@@ -35,28 +35,15 @@ let lastGoodArubPriceInfo = null;
 // Helpers
 // -----------------------------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const RPC_URL = "https://rpc.antirub.com";
-const RPC_KEY = "8f2b9c3a7e1d4c0b9a6f2c1d7e8b4a0f5c9d2e1a3b7c6d8e9f0a1b2c3d4e5f6";
 
-async function rpcFetch(payload) {
-  return callWithRetry(async () => {
-    const res = await fetch(RPC_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // 🔴 ВОТ СЮДА
-        "x-antirub-key": String(RPC_PROXY_KEY).trim()
-      },
-      body: JSON.stringify(payload),
-    });
+// callWithRetry / withTimeout / isBrowserNetworkBlock / probeProvider / normalizeUrl / uniq / ensureChainId
+// ... (ваши функции как вы прислали)
 
-    if (!res.ok) {
-      throw new Error(`RPC HTTP ${res.status}`);
-    }
+// pickWorkingRpc (ваша улучшенная версия)
+// initReadOnlyContracts (ваша версия)
+// getReadOnlyProviderAsync / getReadOnlyProviderSync
+// getReadOnlyPresale / getArubPrice / getTotalSupplyArub ...
 
-    return res.json();
-  });
-}
 
 async function callWithRetry(fn, tries = 3, delayMs = 350) {
   let lastErr = null;
@@ -71,141 +58,277 @@ async function callWithRetry(fn, tries = 3, delayMs = 350) {
   throw lastErr;
 }
 
-function withTimeout(promise, ms, label = 'timeout') {
+function withTimeout(promise, ms, msg = 'Timeout') {
   return Promise.race([
     promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))
+    new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
   ]);
 }
 
-async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
-  let lastErr = null;
+function isBrowserNetworkBlock(msg) {
+  const s = String(msg || '');
+  return (
+    s.includes('CORS') ||
+    s.includes('Access-Control-Allow-Origin') ||
+    s.includes('Failed to fetch') ||
+    s.includes('ERR_FAILED') ||
+    s.includes('NetworkError') ||
+    s.includes('fetch') && s.includes('TypeError')
+  );
+}
 
-  // 1) Всегда пробуем ваш proxy первым
-  const urls = [RPC_PROXY_URL, ...(rpcUrls || [])];
+async function probeProvider(provider, urlLabel, tries = 2) {
+  // Minimal probe: getBlockNumber with timeout + retries
+  for (let i = 0; i < tries; i++) {
+    try {
+      const p = provider.getBlockNumber();
+      const bn = await withTimeout(p, 2500, `RPC timeout: ${urlLabel}`);
+      if (typeof bn === 'number') return true;
+    } catch (e) {
+      if (i === tries - 1) throw e;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  return false;
+}
+
+// Module-level cache
+let _picked = null;        // { url, provider, via }
+let _pickedKey = null;     // cache key for invalidation
+
+function normalizeUrl(u) {
+  return String(u || '').trim();
+}
+
+function uniq(arr) {
+  const seen = new Set();
+  const out = [];
+  for (const v of arr) {
+    const s = normalizeUrl(v);
+    if (!s) continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+}
+
+
+async function ensureChainId(provider, expectedChainId, urlLabel) {
+  try {
+    const net = await provider.getNetwork();
+    const got = Number(net?.chainId);
+    const exp = Number(expectedChainId);
+
+    if (Number.isFinite(exp) && Number.isFinite(got) && got !== exp) {
+      throw new Error(`RPC chainId mismatch: expected ${exp}, got ${got} (${urlLabel})`);
+    }
+  } catch (e) {
+    // If getNetwork fails, treat as a provider failure
+    throw e;
+  }
+}
+
+/**
+ * pickWorkingRpc
+ * - prefers CONFIG.NETWORK.readOnlyRpcUrl
+ * - falls back to CONFIG.NETWORK.walletRpcUrls[]
+ * - then rpcUrls argument (optional)
+ * - finally falls back to injected provider (window.ethereum) if nothing works
+ *
+ * @param {string[]} rpcUrls optional extra urls
+ * @param {number} triesPerRpc retries per endpoint
+ * @param {{allowWalletFallback?: boolean}} opts
+ * @returns {Promise<{url: string|null, provider: any, via: 'proxy'|'rpc'|'wallet'}>}
+ */
+export async function pickWorkingRpc(rpcUrls = [], triesPerRpc = 2, opts = {}) {
+  const { allowWalletFallback = true } = opts;
+
+  const net = CONFIG?.NETWORK || {};
+  const chainId = Number(net.chainId ?? 42161);
+  const ARB_ONE = { name: 'arbitrum', chainId };
+
+  const readOnly = normalizeUrl(net.readOnlyRpcUrl);
+
+  const walletRpcsRaw = Array.isArray(net.walletRpcUrls) ? net.walletRpcUrls : [];
+  const walletRpcs = walletRpcsRaw
+    .map(normalizeUrl)
+    .filter((u) => typeof u === 'string' && u.length > 0);
+
+  const extraRpcs = (Array.isArray(rpcUrls) ? rpcUrls : [])
+    .map(normalizeUrl)
+    .filter((u) => typeof u === 'string' && u.length > 0);
+
+  const urls = uniq([
+    ...(readOnly ? [readOnly] : []),
+    ...walletRpcs,
+    ...extraRpcs,
+  ]);
+
+ if (urls.length === 0) {
+  if (allowWalletFallback && window.ethereum?.request) {
+    console.warn('[RPC] no URLs configured; fallback to injected provider');
+    const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+    _picked = { url: null, provider, via: 'wallet' };
+    _pickedKey = JSON.stringify({ chainId, readOnly: '', urls: [] });
+    return _picked;
+  }
+  throw new Error(
+    'No RPC URLs configured. Set CONFIG.NETWORK.readOnlyRpcUrl and/or CONFIG.NETWORK.walletRpcUrls.'
+  );
+}
+
+  const key = JSON.stringify({ chainId, readOnly, urls });
+  if (_picked?.provider && _pickedKey === key) return _picked;
+
+  let lastErr = null;
 
   for (const url of urls) {
     try {
-      const ARB_ONE = { name: 'arbitrum', chainId: 42161 };
+      const provider = new ethers.providers.JsonRpcProvider(url, ARB_ONE);
 
-      // 2) Для proxy добавляем заголовок, для остальных — как было
-      const connection =
-        url === RPC_PROXY_URL
-          ? { url: RPC_PROXY_URL, headers: { 'x-antirub-key': RPC_PROXY_KEY } }
-          : url;
+      await probeProvider(provider, url, triesPerRpc);
+      await ensureChainId(provider, chainId, url);
 
-      const provider = new ethers.providers.JsonRpcProvider(connection, ARB_ONE);
+      const via = (readOnly && url === readOnly) ? 'proxy' : 'rpc';
+      console.log('[RPC] selected', via === 'proxy' ? `${url} (proxy)` : url);
 
-      await callWithRetry(
-        () => withTimeout(provider.getBlockNumber(), 2500, `RPC timeout: ${url}`),
-        triesPerRpc,
-        250
-      );
-
-      console.log('[RPC] selected', url === RPC_PROXY_URL ? `${url} (proxy)` : url);
-      return { url, provider, via: url === RPC_PROXY_URL ? 'proxy' : 'rpc' };
+      _picked = { url, provider, via };
+      _pickedKey = key;
+      return _picked;
     } catch (e) {
       lastErr = e;
       const msg = String(e?.message || e);
 
-      const isBrowserBlocked =
-        msg.includes('CORS') ||
-        msg.includes('Access-Control-Allow-Origin') ||
-        msg.includes('Failed to fetch') ||
-        msg.includes('ERR_FAILED') ||
-        msg.includes('NetworkError');
-
-      console.warn(isBrowserBlocked ? '[RPC] skipped (browser blocked)' : '[RPC] failed', url, msg);
+      console.warn(
+        isBrowserNetworkBlock(msg) ? '[RPC] skipped (browser blocked)' : '[RPC] failed',
+        url,
+        msg
+      );
     }
   }
 
-  // 3) Fallback: injected provider (кошелёк), если вообще ничего не работает
-  if (window.ethereum?.request) {
+  if (allowWalletFallback && window.ethereum?.request) {
     console.warn('[RPC] no RPC worked; fallback to injected provider');
     const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
-    return { url: null, provider, via: 'wallet' };
+
+    // Non-fatal chain check
+    try {
+      const n = await provider.getNetwork();
+      if (Number(n.chainId) !== Number(chainId)) {
+        console.warn('[RPC] injected chain mismatch', { expected: chainId, got: n.chainId });
+      }
+    } catch (_) {}
+
+    _picked = { url: null, provider, via: 'wallet' };
+    _pickedKey = key;
+    return _picked;
   }
 
   throw lastErr || new Error('No working RPC endpoints');
 }
 
-function assertConfig() {
-  const walletRpcs = CONFIG?.NETWORK?.walletRpcUrls;
-  const readOnlyRpc = CONFIG?.NETWORK?.readOnlyRpcUrl;
+/**
+ * Async provider getter (preferred): always returns a provider (or throws)
+ * Note: for read-only contracts we usually disable wallet fallback to avoid mixed data sources.
+ */
+export async function getReadOnlyProviderAsync() {
+  if (!roProvider) await initReadOnlyContracts();
+  return roProvider;
+}
 
-  if (!Array.isArray(walletRpcs) || walletRpcs.length === 0) {
-    throw new Error('CONFIG.NETWORK.walletRpcUrls missing/empty');
-  }
+export function getReadOnlyProviderSync() {
+  return roProvider;
+}
+
+function assertConfig() {
+  const net = CONFIG?.NETWORK || {};
+  const readOnlyRpc = net.readOnlyRpcUrl;
+  const walletRpcs = net.walletRpcUrls;
 
   if (!readOnlyRpc || typeof readOnlyRpc !== 'string') {
     throw new Error('CONFIG.NETWORK.readOnlyRpcUrl missing');
+  }
+  if (walletRpcs != null && !Array.isArray(walletRpcs)) {
+    throw new Error('CONFIG.NETWORK.walletRpcUrls must be an array if provided');
   }
 
   if (!CONFIG?.TOKEN_ADDRESS) throw new Error('CONFIG.TOKEN_ADDRESS missing');
   if (!CONFIG?.ORACLE_ADDRESS) throw new Error('CONFIG.ORACLE_ADDRESS missing');
   if (!CONFIG?.PRESALE_ADDRESS) throw new Error('CONFIG.PRESALE_ADDRESS missing');
 
-  return {
-    walletRpcs,
-    readOnlyRpc
-  };
+  return true;
 }
+
 // -----------------------------
-// Public: init read-only contracts
+// Public: init read-only contracts (race-free, retryable)
 // -----------------------------
 export async function initReadOnlyContracts() {
   if (roProvider && roToken && roOracle && roPresale) return true;
 
-  // latch to prevent parallel inits
   if (roInitPromise) {
     await roInitPromise;
     return true;
   }
 
   roInitPromise = (async () => {
-    const rpcUrls = assertConfig();
-    const { url, provider, via } = await pickWorkingRpc(rpcUrls, 2);
+    assertConfig();
 
+    const { url, provider, via } = await pickWorkingRpc([], 2, { allowWalletFallback: false });
     roProvider = provider;
+
+    try {
+  const n = await roProvider.getNetwork();
+  if (Number(n.chainId) !== Number(CONFIG.NETWORK.chainId)) {
+    console.warn('[CONTRACTS] RPC chain mismatch', {
+      expected: CONFIG.NETWORK.chainId,
+      got: n.chainId
+    });
+  }
+  } catch (_) {}
 
     roToken   = new ethers.Contract(CONFIG.TOKEN_ADDRESS,   ERC20_ABI,        roProvider);
     roOracle  = new ethers.Contract(CONFIG.ORACLE_ADDRESS,  ORACLE_ABI,       roProvider);
     roPresale = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_READ_ABI, roProvider);
 
     console.log('[CONTRACTS] read-only initialized', { via, rpc: url });
+
+    try { window.dispatchEvent(new Event('contractsInitialized')); } catch (_) {}
+    return true;
   })();
 
   try {
     await roInitPromise;
-    try { window.dispatchEvent(new Event('contractsInitialized')); } catch (_) {}
     return true;
-  } finally {
-    // keep promise (optional). If you want re-init after failure, reset on error.
-    // Here we keep it if init succeeded; on failure it will throw before this line.
+  } catch (e) {
+    // allow retry later
+    roInitPromise = null;
+    console.error('[CONTRACTS] initReadOnlyContracts failed:', e?.message || e);
+    throw e;
   }
 }
+
 
 // -----------------------------
 // Optional getters for other modules
 // -----------------------------
-export function getReadOnlyProvider() {
-  return roProvider;
+export function getReadOnlyTokenSync()  { return roToken; }
+export function getReadOnlyOracleSync() { return roOracle; }
+export function getReadOnlyPresaleSync(){ return roPresale; }
+
+// Async getters (ensure init)
+export async function getReadOnlyToken() {
+  if (!roToken) await initReadOnlyContracts();
+  return roToken;
+}
+
+export async function getReadOnlyOracle() {
+  if (!roOracle) await initReadOnlyContracts();
+  return roOracle;
 }
 
 export async function getReadOnlyPresale() {
-  // Fast path
-  if (roPresale) return roPresale;
-
-  // Ensure single init in flight (no parallel init storms)
-  if (!roInitPromise) {
-    roInitPromise = initReadOnlyContracts().catch((e) => {
-      // allow retry on next call if init failed
-      roInitPromise = null;
-      throw e;
-    });
-  }
-
-  await roInitPromise;
+  if (!roPresale) await initReadOnlyContracts();
   return roPresale;
 }
 
