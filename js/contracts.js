@@ -35,6 +35,33 @@ let lastGoodArubPriceInfo = null;
 // Helpers
 // -----------------------------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const RPC_URL = "https://rpc.antirub.com";
+const RPC_KEY = "8f2b9c3a7e1d4c0b9a6f2c1d7e8b4a0f5c9d2e1a3b7c6d8e9f0a1b2c3d4e5f6";
+
+async function rpcFetch(payload) {
+  return callWithRetry(async () => {
+    const res = await fetch(RPC_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-antirub-key": RPC_KEY, // 🔐 ключ добавляется ТОЛЬКО ЗДЕСЬ
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error(`RPC HTTP ${res.status}`);
+    }
+
+    const json = await res.json();
+
+    if (json?.error) {
+      throw new Error(json.error.message || "RPC error");
+    }
+
+    return json.result;
+  });
+}
 
 async function callWithRetry(fn, tries = 3, delayMs = 350) {
   let lastErr = null;
@@ -59,10 +86,20 @@ function withTimeout(promise, ms, label = 'timeout') {
 async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
   let lastErr = null;
 
-  for (const url of rpcUrls) {
+  // 1) Всегда пробуем ваш proxy первым
+  const urls = [RPC_PROXY_URL, ...(rpcUrls || [])];
+
+  for (const url of urls) {
     try {
       const ARB_ONE = { name: 'arbitrum', chainId: 42161 };
-      const provider = new ethers.providers.JsonRpcProvider(url, ARB_ONE);
+
+      // 2) Для proxy добавляем заголовок, для остальных — как было
+      const connection =
+        url === RPC_PROXY_URL
+          ? { url: RPC_PROXY_URL, headers: { 'x-antirub-key': RPC_PROXY_KEY } }
+          : url;
+
+      const provider = new ethers.providers.JsonRpcProvider(connection, ARB_ONE);
 
       await callWithRetry(
         () => withTimeout(provider.getBlockNumber(), 2500, `RPC timeout: ${url}`),
@@ -70,8 +107,8 @@ async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
         250
       );
 
-      console.log('[RPC] selected', url);
-      return { url, provider, via: 'rpc' };
+      console.log('[RPC] selected', url === RPC_PROXY_URL ? `${url} (proxy)` : url);
+      return { url, provider, via: url === RPC_PROXY_URL ? 'proxy' : 'rpc' };
     } catch (e) {
       lastErr = e;
       const msg = String(e?.message || e);
@@ -87,9 +124,9 @@ async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
     }
   }
 
-  // Fallback: if no CORS-friendly RPC works, use injected provider (if present)
+  // 3) Fallback: injected provider (кошелёк), если вообще ничего не работает
   if (window.ethereum?.request) {
-    console.warn('[RPC] no public RPC worked; fallback to injected provider');
+    console.warn('[RPC] no RPC worked; fallback to injected provider');
     const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
     return { url: null, provider, via: 'wallet' };
   }
@@ -98,16 +135,26 @@ async function pickWorkingRpc(rpcUrls, triesPerRpc = 2) {
 }
 
 function assertConfig() {
-  const rpcs = CONFIG?.NETWORK?.rpcUrls;
-  if (!Array.isArray(rpcs) || rpcs.length === 0) {
-    throw new Error('CONFIG.NETWORK.rpcUrls missing/empty');
+  const walletRpcs = CONFIG?.NETWORK?.walletRpcUrls;
+  const readOnlyRpc = CONFIG?.NETWORK?.readOnlyRpcUrl;
+
+  if (!Array.isArray(walletRpcs) || walletRpcs.length === 0) {
+    throw new Error('CONFIG.NETWORK.walletRpcUrls missing/empty');
   }
+
+  if (!readOnlyRpc || typeof readOnlyRpc !== 'string') {
+    throw new Error('CONFIG.NETWORK.readOnlyRpcUrl missing');
+  }
+
   if (!CONFIG?.TOKEN_ADDRESS) throw new Error('CONFIG.TOKEN_ADDRESS missing');
   if (!CONFIG?.ORACLE_ADDRESS) throw new Error('CONFIG.ORACLE_ADDRESS missing');
   if (!CONFIG?.PRESALE_ADDRESS) throw new Error('CONFIG.PRESALE_ADDRESS missing');
-  return rpcs;
-}
 
+  return {
+    walletRpcs,
+    readOnlyRpc
+  };
+}
 // -----------------------------
 // Public: init read-only contracts
 // -----------------------------

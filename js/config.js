@@ -29,13 +29,9 @@ export const CONFIG = {
 
 rpcUrls: [
   'https://arbitrum-one-rpc.publicnode.com',
-  'https://arb1.arbitrum.io/rpc',
-  'https://1rpc.io/arb',
-  'https://arbitrum.blockpi.network/v1/rpc/public'
+  'https://arb1.arbitrum.io/rpc'
 ],
-
-    blockExplorerUrls: ['https://arbiscan.io'],
-  },
+readOnlyRpcUrl: 'https://rpc.antirub.com',
 
   // -----------------------------
   // Core addresses
@@ -55,4 +51,5 @@ rpcUrls: [
   ORACLE_RATE_DECIMALS: 6,
 
   TX_CONFIRMATIONS: 1,
-};
+}
+}
