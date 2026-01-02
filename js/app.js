@@ -87,42 +87,97 @@ wallets.forEach((w) => {
   btn.textContent = w.name;
 
   btn.onclick = async () => {
-    if (uiConnecting) {
-      showNotification?.('Подключение уже выполняется. Закройте окно кошелька или дождитесь завершения.', 'error');
-      return;
+  if (uiConnecting) {
+    showNotification?.(
+      'Подключение уже выполняется. Дождитесь завершения.',
+      'error'
+    );
+    return;
+  }
+
+  uiConnecting = true;
+  setWalletMenuDisabled(menu, true);
+
+  try {
+    await connectWalletUI({ walletId: w.id });
+
+    // 👇 один раз, после успешного подключения
+    updateWalletUI('connected');
+  } catch (e) {
+    const code = e?.code;
+    const m = String(e?.message || '').toLowerCase();
+    const isUserRejected =
+      code === 4001 ||
+      m.includes('user rejected') ||
+      m.includes('rejected the request') ||
+      m.includes('request rejected') ||
+      m.includes('action_rejected');
+
+    if (isUserRejected) {
+      showNotification?.('Підключення скасовано користувачем.', 'info');
+    } else {
+      console.error('[UI] connect error:', e);
+      showNotification?.('Помилка підключення.', 'error');
     }
+  } finally {
+    uiConnecting = false;
+    setWalletMenuDisabled(menu, false);
+  }
+};
 
-    uiConnecting = true;
-    setWalletMenuDisabled(menu, true);
+  updateWalletUI('startup');
 
-    try {
-      await connectWalletUI({ walletId: w.id });
-    } catch (e) {
-      // user rejected — это ожидаемое действие, не “ошибка приложения”
-      const code = e?.code;
-      const m = String(e?.message || '').toLowerCase();
-      const isUserRejected =
-        code === 4001 ||
-        m.includes('user rejected') ||
-        m.includes('rejected the request') ||
-        m.includes('request rejected') ||
-        m.includes('action_rejected');
-
-      if (isUserRejected) {
-        showNotification?.('Підключення скасовано користувачем.', 'info'); // если 'info' нет — оставьте 'error'
-      } else {
-        console.error('[UI] connect error:', e);
-        showNotification?.('Підключення скасовано.', 'error');
-      }
-    } finally {
-      uiConnecting = false;
-      setWalletMenuDisabled(menu, false);
-    }
-  };
 
   // <-- ВАЖНО: вставка кнопки должна быть здесь (вне onclick)
   menu.insertBefore(btn, menu.firstChild);
 });
+}
+
+window.addEventListener('walletStateChanged', () => {
+  updateWalletUI('walletStateChanged');
+  renderWallets();
+});
+
+
+function shortAddr(a) {
+  if (!a || typeof a !== 'string') return '';
+  return a.slice(0, 6) + '…' + a.slice(-4);
+}
+
+function updateWalletUI(reason = 'unknown') {
+  const btn = document.getElementById('connectBtn');
+  const menu = document.getElementById('walletDropdown') || document.getElementById('walletMenu');
+  const disconnectBtn = document.getElementById('disconnectWalletBtn');
+
+  const ws = window.walletState;
+  const connected = !!ws?.address && !!ws?.signer;
+
+  console.log('[UI] updateWalletUI', { reason, connected, address: ws?.address, chainId: ws?.chainId });
+
+  if (btn) {
+    btn.textContent = connected ? shortAddr(ws.address) : 'Підключити гаманець';
+    btn.classList.toggle('connected', connected);
+  }
+
+  if (menu) {
+    // dropdown показываем только когда connected (иначе там список кошельков)
+    menu.style.display = connected ? 'block' : 'none';
+  }
+
+  if (disconnectBtn) {
+    disconnectBtn.style.display = connected ? 'block' : 'none';
+    disconnectBtn.onclick = async () => {
+      try {
+        await disconnectWallet();
+      } catch (e) {
+        console.warn('[UI] disconnectWallet failed:', e?.message || e);
+      } finally {
+        // UI обновим в любом случае
+        updateWalletUI('disconnect');
+        renderWallets(); // чтобы снова показать список кошельков
+      }
+    };
+  }
 }
 
 // Нормализация ошибок (cancel/timeout и т.п.)
@@ -647,7 +702,7 @@ async function logNetworkState(tag = 'APP') {
 /**
  * Wallet dropdown menu logic (без падений, без несуществующих переменных)
  */
-function setupWalletMenu() {
+//function setupWalletMenu() {
   const getAddress = () => window.walletState?.address || '';
 
   document.addEventListener('click', (e) => {
@@ -685,7 +740,7 @@ function setupWalletMenu() {
     document.getElementById('walletMenu')?.classList.remove('open');
     await disconnectWallet();
   });
-}
+//}
 
 /**
  * Инициализация приложения
@@ -789,3 +844,39 @@ console.log('[APP] Explorer:', (CONFIG?.blockExplorerUrls?.[0] || '(none)'));
 
 
 export { initApp };
+
+document.addEventListener('DOMContentLoaded', () => {
+  const connectBtn = document.getElementById('connectBtn');
+  const dropdown = document.getElementById('walletDropdown');
+
+  if (!connectBtn || !dropdown) {
+    console.warn('[UI] wallet button or dropdown not found');
+    return;
+  }
+
+  // стартовый рендер
+  updateWalletUI('init');
+  renderWallets();
+
+  // toggle dropdown по клику на кнопку
+  connectBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const ws = window.walletState;
+    const connected = !!ws?.address && !!ws?.signer;
+
+    if (!connected) {
+      renderWallets(); // показать список кошельков
+    }
+
+    dropdown.style.display = (dropdown.style.display === 'block') ? 'none' : 'block';
+  });
+
+  // закрытие dropdown по клику вне зоны
+  document.addEventListener('click', (e) => {
+    const area = document.querySelector('.wallet-button-area');
+    if (!area) return;
+    if (!area.contains(e.target)) dropdown.style.display = 'none';
+  });
+});

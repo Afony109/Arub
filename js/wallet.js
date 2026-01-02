@@ -86,6 +86,11 @@ async function publishGlobals() {
     eip1193: selectedEip1193
   };
 
+  try {
+  window.dispatchEvent(new CustomEvent('walletStateChanged', { detail: window.walletState }));
+} catch (_) {}
+
+
   console.log('[wallet] publishGlobals', window.walletState);
 }
 
