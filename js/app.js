@@ -16,6 +16,8 @@ import { getArubPrice, getTotalSupplyArub } from './contracts.js';
 // -----------------------------
 let _readProvider = null;
 
+console.log('[APP] module loaded:', import.meta.url);
+
 function getReadProvider() {
   if (_readProvider) return _readProvider;
 

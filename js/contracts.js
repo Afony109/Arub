@@ -17,6 +17,7 @@ import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.es
 import { CONFIG } from './config.js';
 
 console.log('[CONTRACTS] contracts.js loaded, build:', Date.now());
+console.log('[CONTRACTS] module loaded:', import.meta.url);
 
 // -----------------------------
 // State
