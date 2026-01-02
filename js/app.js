@@ -767,7 +767,11 @@ async function initApp() {
 
     setupGlobalEventListeners();
     setupScrollAnimations();
-    setupWalletMenu();
+
+    try { setupWalletMenu?.(); } catch (e) {
+    console.warn('[APP] setupWalletMenu skipped:', e?.message || e);
+    }
+
 
     // Периодическое обновление статов (если нужно)
     const interval = CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000;
