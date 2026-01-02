@@ -100,6 +100,8 @@ wallets.forEach((w) => {
 
   try {
     await connectWalletUI({ walletId: w.id });
+    updateWalletUI('connected');
+
 
     // 👇 один раз, после успешного подключения
     updateWalletUI('connected');
@@ -145,23 +147,19 @@ function shortAddr(a) {
 }
 
 function updateWalletUI(reason = 'unknown') {
-  const btn = document.getElementById('connectBtn');
-  const menu = document.getElementById('walletDropdown') || document.getElementById('walletMenu');
+  const ws = window.walletState;
+
+  const connectBtn = document.getElementById('connectBtn');
+  const dropdown = document.getElementById('walletDropdown');
   const disconnectBtn = document.getElementById('disconnectWalletBtn');
 
-  const ws = window.walletState;
   const connected = !!ws?.address && !!ws?.signer;
 
   console.log('[UI] updateWalletUI', { reason, connected, address: ws?.address, chainId: ws?.chainId });
 
-  if (btn) {
-    btn.textContent = connected ? shortAddr(ws.address) : 'Підключити гаманець';
-    btn.classList.toggle('connected', connected);
-  }
-
-  if (menu) {
-    // dropdown показываем только когда connected (иначе там список кошельков)
-    menu.style.display = connected ? 'block' : 'none';
+  if (connectBtn) {
+    connectBtn.textContent = connected ? shortAddr(ws.address) : 'Підключити гаманець';
+    connectBtn.classList.toggle('connected', connected);
   }
 
   if (disconnectBtn) {
@@ -169,12 +167,11 @@ function updateWalletUI(reason = 'unknown') {
     disconnectBtn.onclick = async () => {
       try {
         await disconnectWallet();
-      } catch (e) {
-        console.warn('[UI] disconnectWallet failed:', e?.message || e);
       } finally {
-        // UI обновим в любом случае
-        updateWalletUI('disconnect');
-        renderWallets(); // чтобы снова показать список кошельков
+        // после дисконнекта: вернуть список кошельков
+        renderWallets();
+        updateWalletUI('disconnected');
+        if (dropdown) dropdown.style.display = 'none';
       }
     };
   }
