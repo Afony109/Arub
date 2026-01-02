@@ -23,8 +23,79 @@ import { ERC20_ABI, ERC20_ABI_MIN, PRESALE_READ_ABI } from './abis.js';
 import { getReadOnlyPresale } from './contracts.js';
 import { CONFIG } from './config.js';
 
+// -----------------------------
+// RPC helpers (single source of truth)
+// -----------------------------
+let _roProvider = null;
+let _roProviderUrl = null;
+
+function getRpcUrl({ prefer = 'readOnly' } = {}) {
+  const net = CONFIG?.NETWORK || {};
+
+  const readOnly = (net.readOnlyRpcUrl || '').trim();
+  const wallet0  = (net.walletRpcUrls?.[0] || '').trim();
+  const chainId  = Number(net.chainId ?? 42161);
+
+  // Preference order
+  const candidates =
+    prefer === 'wallet'
+      ? [wallet0, readOnly]
+      : [readOnly, wallet0];
+
+  const url = candidates.find((u) => typeof u === 'string' && u.length > 0) || null;
+
+  if (!url) {
+    console.error('[RPC] No RPC URL found. Expected CONFIG.NETWORK.readOnlyRpcUrl or walletRpcUrls[0].', {
+      readOnlyRpcUrl: net.readOnlyRpcUrl,
+      walletRpcUrls: net.walletRpcUrls,
+      chainId
+    });
+    return { url: null, chainId, source: 'none' };
+  }
+
+  const source = url === readOnly ? 'readOnlyRpcUrl' : 'walletRpcUrls[0]';
+
+  // One-line informative log (no spam)
+  console.log('[RPC] selected', { source, chainId, url });
+
+  return { url, chainId, source };
+}
+
+function getReadOnlyProvider() {
+  const { url, chainId } = getRpcUrl({ prefer: 'readOnly' });
+  if (!url) throw new Error('RPC URL missing. Set CONFIG.NETWORK.readOnlyRpcUrl (preferred) or walletRpcUrls[0].');
+
+  // Reuse provider if same URL; recreate only if URL changed
+  if (_roProvider && _roProviderUrl === url) return _roProvider;
+
+  _roProviderUrl = url;
+  _roProvider = new ethers.providers.JsonRpcProvider(url, chainId);
+
+  // Lightweight health log (does not throw if fails)
+  (async () => {
+    try {
+      const n = await _roProvider.getNetwork();
+      if (Number(n.chainId) !== Number(chainId)) {
+        console.warn('[RPC] chainId mismatch', { expected: chainId, got: n.chainId, url });
+      } else {
+        console.log('[RPC] ready', { chainId: n.chainId, name: n.name, url });
+      }
+    } catch (e) {
+      console.warn('[RPC] provider healthcheck failed', { url, message: e?.message || e });
+    }
+  })();
+
+  return _roProvider;
+}
+
+// Optional: if you need a "best effort" provider (won't throw; returns null)
+function tryGetReadOnlyProvider() {
+  try { return getReadOnlyProvider(); } catch (e) { return null; }
+}
+
+
 const rpcProvider = new ethers.providers.JsonRpcProvider(
-  CONFIG.NETWORK.rpcUrls[0],
+  CONFIG.NETWORK.readOnlyRpcUrl,
   CONFIG.NETWORK.chainId
 );
 
@@ -573,12 +644,16 @@ function hardUnlock() {
 // Contracts init
 // -----------------------------
 function initReadOnly() {
-  const rpc = CONFIG?.NETWORK?.rpcUrls?.[0];
-  if (!rpc) throw new Error('CONFIG.NETWORK.rpcUrls[0] missing');
+  const roProvider = getReadOnlyProvider();
+  tokenRO = new ethers.Contract(ARUB_TOKEN_ADDRESS, ERC20_ABI, roProvider);
+  usdtRO  = new ethers.Contract(USDT_ADDRESS,       ERC20_ABI, roProvider);
 
-  const roProvider = new ethers.providers.JsonRpcProvider(rpc);
-  tokenRO = new ethers.Contract(CONFIG?.TOKEN_ADDRESS, ERC20_ABI, roProvider);
-  usdtRO  = new ethers.Contract(CONFIG.USDT_ADDRESS,  ERC20_ABI, roProvider);
+  if (!rpc) throw new Error('CONFIG.NETWORK.readOnlyRpcUrl (or walletRpcUrls[0]) missing');
+
+
+  // Используем те же адреса, что и выше в файле (чтобы не было расхождений)
+  tokenRO = new ethers.Contract(ARUB_TOKEN_ADDRESS, ERC20_ABI, roProvider);
+  usdtRO  = new ethers.Contract(USDT_ADDRESS,       ERC20_ABI, roProvider);
 
   // Sync decimals asynchronously
   (async () => {
@@ -599,8 +674,8 @@ function initWithSigner() {
 
   if (!user.signer) return;
 
-  tokenRW = new ethers.Contract(CONFIG?.TOKEN_ADDRESS, ERC20_ABI, user.signer);
-  usdtRW  = new ethers.Contract(CONFIG.USDT_ADDRESS,  ERC20_ABI, user.signer);
+  tokenRW = new ethers.Contract(ARUB_TOKEN_ADDRESS, ERC20_ABI, user.signer);
+  usdtRW  = new ethers.Contract(USDT_ADDRESS,       ERC20_ABI, user.signer);
 
   (async () => {
     try { if (tokenRW?.decimals) DECIMALS_ARUB = Number(await tokenRW.decimals()); } catch (_) {}
