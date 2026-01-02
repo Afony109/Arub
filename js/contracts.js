@@ -10,6 +10,7 @@
  *   - getReadOnlyPresale()
  *   - getReadOnlyProviderAsync()
  *   - getReadOnlyProviderSync()
+*/
 
 import { ERC20_ABI, ORACLE_ABI, PRESALE_READ_ABI } from './abis.js';
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
