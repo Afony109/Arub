@@ -82,21 +82,20 @@ function isBrowserNetworkBlock(msg) {
 }
 
 async function probeProvider(provider, urlLabel, tries = 2) {
-  // Minimal probe: chainId + blockNumber + simple eth_call
+  // Minimal probe: blockNumber + eth_call
+  // (chainId проверяем отдельно в ensureChainId, чтобы не делать eth_chainId дважды)
   for (let i = 0; i < tries; i++) {
     try {
-      // A) быстрый chainId
-      const pChain = provider.send('eth_chainId', []);
-      await withTimeout(pChain, 2500, `RPC timeout (chainId): ${urlLabel}`);
-
-      // B) block number
+      // A) block number
       const pBn = provider.getBlockNumber();
       const bn = await withTimeout(pBn, 2500, `RPC timeout (blockNumber): ${urlLabel}`);
       if (typeof bn !== 'number') throw new Error(`RPC bad blockNumber: ${urlLabel}`);
 
-      // C) lightweight eth_call (проверка, что eth_call не режется)
-      // call к нулевому адресу — безопасно, вернёт "0x" или "0x0" в зависимости от узла
-      const pCall = provider.send('eth_call', [{ to: '0x0000000000000000000000000000000000000000', data: '0x' }, 'latest']);
+      // B) lightweight eth_call (проверка, что eth_call не режется)
+      const pCall = provider.send('eth_call', [
+        { to: '0x0000000000000000000000000000000000000000', data: '0x' },
+        'latest',
+      ]);
       await withTimeout(pCall, 2500, `RPC timeout (eth_call): ${urlLabel}`);
 
       return true;
@@ -137,30 +136,52 @@ async function ensureChainId(provider, expectedChainId, urlLabel) {
     throw new Error(`Invalid expectedChainId: ${expectedChainId} (${urlLabel})`);
   }
 
-  // 1) Прямой eth_chainId (обычно самый надёжный)
+  // 1) Прямой eth_chainId + timeout
   try {
-    const hex = await provider.send('eth_chainId', []);
-    const got = Number.parseInt(hex, 16);
+    const p = provider.send('eth_chainId', []);
+    const hex = await withTimeout(p, 2500, `RPC timeout (chainId): ${urlLabel}`);
 
+    const got = Number.parseInt(hex, 16);
     if (Number.isFinite(got) && got !== exp) {
       throw new Error(`RPC chainId mismatch: expected ${exp}, got ${got} (${urlLabel})`);
     }
     return true;
-  } catch (e) {
-    // если send не удался — пробуем getNetwork как запасной вариант
+  } catch (_) {
+    // fallback ниже
   }
 
-  // 2) Fallback: ethers getNetwork()
-  try {
-    const net = await provider.getNetwork();
-    const got = Number(net?.chainId);
+  // 2) Fallback: getNetwork() + timeout
+  const pNet = provider.getNetwork();
+  const net = await withTimeout(pNet, 2500, `RPC timeout (getNetwork): ${urlLabel}`);
 
-    if (Number.isFinite(got) && got !== exp) {
-      throw new Error(`RPC chainId mismatch: expected ${exp}, got ${got} (${urlLabel})`);
-    }
+  const got = Number(net?.chainId);
+  if (Number.isFinite(got) && got !== exp) {
+    throw new Error(`RPC chainId mismatch: expected ${exp}, got ${got} (${urlLabel})`);
+  }
+  return true;
+}
+
+// -----------------------------
+// Module-level cache (как у вас)
+// -----------------------------
+
+async function probeRpcUrl(url, timeoutMs = 3500) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (!json?.result) throw new Error('Bad JSON-RPC response');
     return true;
-  } catch (e) {
-    throw e;
+  } finally {
+    clearTimeout(t);
   }
 }
 
@@ -177,43 +198,26 @@ async function ensureChainId(provider, expectedChainId, urlLabel) {
  * @param {{allowWalletFallback?: boolean}} opts
  * @returns {Promise<{url: string|null, provider: any, via: 'proxy'|'rpc'|'wallet'}>}
  */
-export async function pickWorkingRpc(rpcUrls = [], triesPerRpc = 2, opts = {}) {
-  const { allowWalletFallback = true } = opts;
+export async function pickWorkingRpc(extraRpcs = [], triesPerRpc = 2, opts = {}) {
+  const {
+    allowWalletFallback = true,
+  } = opts;
 
   const net = CONFIG?.NETWORK || {};
   const chainId = Number(net.chainId ?? 42161);
-  const NETWORK = { name: 'arbitrum-one', chainId };
+  const NETWORK = { chainId, name: net.name || 'arbitrum' };
 
-  const readOnly = normalizeUrl(net.readOnlyRpcUrl);
-
-  const walletRpcsRaw = Array.isArray(net.walletRpcUrls) ? net.walletRpcUrls : [];
-  const walletRpcs = walletRpcsRaw
-    .map(normalizeUrl)
-    .filter((u) => typeof u === 'string' && u.length > 0);
-
-  const extraRpcs = (Array.isArray(rpcUrls) ? rpcUrls : [])
-    .map(normalizeUrl)
-    .filter((u) => typeof u === 'string' && u.length > 0);
-
-  // ---- фильтры "плохих" RPC (session endpoints и т.п.) ----
-  const isBadRpcUrl = (u) => {
-    const s = String(u || '').toLowerCase();
-    // TrustWallet / twnodes session endpoints (нестабильные/истекающие)
-    if (s.includes('twnodes.com/naas/session/')) return true;
-    // общий случай: явные "session" RPC в пути
-    if (s.includes('/session/')) return true;
-    return false;
-  };
+  const readOnly = net.readOnlyRpcUrl;                 // string | undefined
+  const walletRpcs = Array.isArray(net.walletRpcUrls) ? net.walletRpcUrls : [];
 
   // ---- стратегия выбора ----
   // Для read-only в приоритете ваш proxy/readOnlyRpcUrl.
-  // walletRpcUrls используем только если readOnlyRpcUrl отсутствует.
+  // Но если он упал/таймаутит, пробуем публичные walletRpcUrls (без injected fallback, если allowWalletFallback=false).
   const baseUrls = uniq([
-    ...(readOnly ? [readOnly] : []),
-    ...(!readOnly ? walletRpcs : []),
-    ...extraRpcs,
-  ])
-    .filter((u) => !isBadRpcUrl(u));
+    ...(readOnly ? [readOnly] : []), // 1) proxy первым
+    ...walletRpcs,                   // 2) всегда как fallback
+    ...extraRpcs,                    // 3) дополнительные
+  ]).filter((u) => !isBadRpcUrl(u));
 
   if (baseUrls.length === 0) {
     if (allowWalletFallback && window.ethereum?.request) {
@@ -237,10 +241,16 @@ export async function pickWorkingRpc(rpcUrls = [], triesPerRpc = 2, opts = {}) {
     try {
       const provider = new ethers.providers.JsonRpcProvider(url, NETWORK);
 
+      // 1) минимальная “живость” RPC (без chainId, чтобы не дублировать)
       await probeProvider(provider, url, triesPerRpc);
+
+      // 2) строгая проверка сети (с таймаутом)
       await ensureChainId(provider, chainId, url);
 
-      const via = (readOnly && url === readOnly) ? 'proxy' : 'rpc';
+      const via =
+        (readOnly && url === readOnly) ? 'proxy'
+        : 'rpc';
+
       console.log('[RPC] selected', via === 'proxy' ? `${url} (proxy)` : url);
 
       _picked = { url, provider, via };
@@ -264,7 +274,8 @@ export async function pickWorkingRpc(rpcUrls = [], triesPerRpc = 2, opts = {}) {
 
     // Non-fatal chain check (логируем, но не падаем)
     try {
-      const n = await provider.getNetwork();
+      const pNet = provider.getNetwork();
+      const n = await withTimeout(pNet, 2500, 'RPC timeout (injected getNetwork)');
       if (Number(n.chainId) !== Number(chainId)) {
         console.warn('[RPC] injected chain mismatch', { expected: chainId, got: n.chainId });
       }
@@ -294,16 +305,21 @@ export async function getReadOnlyProviderAsync() {
   return roProvider;
 }
 
-
-
 function assertConfig() {
   const net = CONFIG?.NETWORK || {};
   const readOnlyRpc = net.readOnlyRpcUrl;
   const walletRpcs = net.walletRpcUrls;
 
-  if (!readOnlyRpc || typeof readOnlyRpc !== 'string') {
-    throw new Error('CONFIG.NETWORK.readOnlyRpcUrl missing');
+  const hasReadOnly = typeof readOnlyRpc === 'string' && readOnlyRpc.trim().length > 0;
+  const hasWalletRpcs = Array.isArray(walletRpcs) && walletRpcs.length > 0;
+
+  // Достаточно либо proxy, либо массива публичных RPC
+  if (!hasReadOnly && !hasWalletRpcs) {
+    throw new Error(
+      'No RPC URLs configured. Set CONFIG.NETWORK.readOnlyRpcUrl and/or CONFIG.NETWORK.walletRpcUrls.'
+    );
   }
+
   if (walletRpcs != null && !Array.isArray(walletRpcs)) {
     throw new Error('CONFIG.NETWORK.walletRpcUrls must be an array if provided');
   }

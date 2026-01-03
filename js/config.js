@@ -15,20 +15,15 @@ export const CONFIG = {
   // Network
   // -----------------------------
  NETWORK: {
-  // для кошелька (wallet_addEthereumChain) — только публичные RPC без заголовков
+  readOnlyRpcUrl: 'https://rpc.antirub.com', // может падать — это нормально
   walletRpcUrls: [
     'https://arbitrum-one-rpc.publicnode.com',
     'https://arb1.arbitrum.io/rpc'
   ],
-
-  // для read-only фронта — ваш proxy
-  readOnlyRpcUrl: 'https://rpc.antirub.com',
-
   chainId: 42161,
   chainIdHex: '0xa4b1',
   blockExplorerUrls: ['https://arbiscan.io'],
 },
-
 
   // -----------------------------
   // Core addresses
