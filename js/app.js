@@ -177,41 +177,31 @@ function setupWalletMenu() {
   if (window.__walletMenuBound) return;
   window.__walletMenuBound = true;
 
-  const getAddress = () => window.walletState?.address || '';
-  const getMenuEl = () =>
-    document.getElementById('walletMenu') || document.getElementById('walletDropdown');
+  const getMenuEl = () => document.getElementById('walletDropdown');
+  const getAreaEl = () => document.querySelector('.wallet-button-area');
 
-  // закрытие меню по клику вне
+  // закрытие dropdown по клику вне
   document.addEventListener('click', (e) => {
     const menu = getMenuEl();
-    const wrap = document.querySelector('.wallet-wrap');
-    if (!menu || !wrap) return;
+    const area = getAreaEl();
+    if (!menu || !area) return;
 
-    if (menu.classList.contains('open') && !wrap.contains(e.target)) {
+    if (menu.classList.contains('open') && !area.contains(e.target)) {
       menu.classList.remove('open');
     }
   });
 
-  document.getElementById('copyAddrBtn')?.addEventListener('click', async () => {
-    const addr = getAddress();
-    if (!addr) return;
+  // клики внутри dropdown не закрывают его
+  getMenuEl()?.addEventListener('click', (e) => e.stopPropagation());
 
-    await navigator.clipboard.writeText(addr);
-    getMenuEl()?.classList.remove('open');
-    showNotification?.('Адреса скопійовано', 'info');
-  });
+  // Disconnect button (ID как в вашем HTML!)
+  document.getElementById('disconnectWalletBtn')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-  // ВАЖНО: у вас тут был getElementById('') — это ошибка.
-  // Должно быть changeWalletBtn (как во второй версии).
-  document.getElementById('changeWalletBtn')?.addEventListener('click', async () => {
     getMenuEl()?.classList.remove('open');
     await disconnectWallet();
-    window.connectWallet?.(); // откроет список кошельков
-  });
 
-  document.getElementById('disconnectBtn')?.addEventListener('click', async () => {
-    getMenuEl()?.classList.remove('open');
-    await disconnectWallet();
     try { renderWallets?.(); } catch (_) {}
     try { updateWalletUI?.('disconnected'); } catch (_) {}
   });
@@ -537,34 +527,27 @@ function bindConnectButton() {
   window.__connectBtnBound = true;
 
   const connectBtn = document.getElementById('connectBtn');
-  const dropdown = document.getElementById('walletDropdown');
+  const dropdown   = document.getElementById('walletDropdown');
+  const area       = document.querySelector('.wallet-button-area');
 
-  if (!connectBtn) {
-    console.warn('[UI] connectBtn not found');
-    return;
-  }
-  if (!dropdown) {
-    console.warn('[UI] walletDropdown not found');
+  if (!connectBtn || !dropdown) {
+    console.warn('[UI] connectBtn or walletDropdown not found');
     return;
   }
 
-  // чтобы клики по кнопке не закрывались глобальными "click outside"
   connectBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
 
     try { renderWallets?.(); } catch (_) {}
     dropdown.classList.toggle('open');
-
-    console.log('[UI] connectBtn toggled dropdown:', dropdown.classList.contains('open'));
   });
 
-  // чтобы клики внутри dropdown не всплывали и не закрывали его
+  // если у вас уже есть этот listener в setupWalletMenu — дубль не критичен,
+  // но лучше, чтобы был один. Если хотите — оставьте только в setupWalletMenu.
   dropdown.addEventListener('click', (e) => e.stopPropagation());
 
-  // закрытие dropdown по клику вне
   document.addEventListener('click', (e) => {
-    const area = document.querySelector('.wallet-button-area') || document.querySelector('.wallet-wrap');
     if (area && !area.contains(e.target)) dropdown.classList.remove('open');
   });
 }
