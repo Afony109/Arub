@@ -201,7 +201,9 @@ function setupWalletMenu() {
     showNotification?.('Адреса скопійовано', 'info');
   });
 
-  document.getElementById('')?.addEventListener('click', async () => {
+  // ВАЖНО: у вас тут был getElementById('') — это ошибка.
+  // Должно быть changeWalletBtn (как во второй версии).
+  document.getElementById('changeWalletBtn')?.addEventListener('click', async () => {
     getMenuEl()?.classList.remove('open');
     await disconnectWallet();
     window.connectWallet?.(); // откроет список кошельков
@@ -503,44 +505,7 @@ window.addTokenToWallet = async (symbol) => {
 // Optional: wallet account menu (copy/change/disconnect)
 // Делает то, что ты пытался сделать в "setupWalletMenu", но корректно
 // -------------------------
-function setupWalletMenu() {
-  const getAddress = () => window.walletState?.address || '';
 
-  // закрытие меню по клику вне
-  document.addEventListener('click', (e) => {
-    const menu = document.getElementById('walletMenu');
-    const wrap = document.querySelector('.wallet-wrap');
-    if (!menu || !wrap) return;
-
-    if (menu.classList.contains('open') && !wrap.contains(e.target)) {
-      menu.classList.remove('open');
-    }
-  });
-
-  document.getElementById('copyAddrBtn')?.addEventListener('click', async () => {
-    const addr = getAddress();
-    if (!addr) return;
-
-    await navigator.clipboard.writeText(addr);
-    document.getElementById('walletMenu')?.classList.remove('open');
-    showNotification?.('Адреса скопійовано', 'info');
-  });
-
-  document.getElementById('changeWalletBtn')?.addEventListener('click', async () => {
-    document.getElementById('walletMenu')?.classList.remove('open');
-
-    await disconnectWallet();
-    // открываем dropdown со списком кошельков
-    window.connectWallet?.();
-  });
-
-  document.getElementById('disconnectBtn')?.addEventListener('click', async () => {
-    document.getElementById('walletMenu')?.classList.remove('open');
-    await disconnectWallet();
-    try { renderWallets(); } catch (_) {}
-    try { updateWalletUI('disconnected'); } catch (_) {}
-  });
-}
 
 function setupGlobalEventListeners() {
   // обновление статистики, когда контракты готовы
