@@ -574,76 +574,85 @@ function setupGlobalEventListeners() {
   });
 }
 
+async function logNetworkState(tag = 'APP') {
+  try {
+    const ws = window.walletState;
+    let chainId = ws?.chainId;
+
+    if (!chainId && ws?.provider?.getNetwork) {
+      const net = await ws.provider.getNetwork();
+      chainId = net?.chainId;
+    }
+
+    console.log(`[${tag}] chainId:`, chainId ?? '(unknown)');
+  } catch (e) {
+    console.warn(`[${tag}] logNetworkState failed:`, e);
+  }
+}
+
 // -------------------------
 // initApp() — оставляем initWalletModule только здесь
 // -------------------------
 async function initApp() {
-  console.log('='.repeat(60));
-  console.log('ANTI RUB - Vault Platform (Vault-only)');
-  console.log('Initializing application...');
-  console.log('='.repeat(60));
+  console.log('[APP] Boot (Vault-only)');
 
-  setupGlobalEventListeners?.();
+  // маленький safe-call хелпер — делает init короче
+  const safe = async (label, fn) => {
+    try {
+      const res = await fn?.();
+      return res;
+    } catch (e) {
+      console.warn(`[APP] ${label} failed:`, e?.message || e);
+      return null;
+    }
+  };
 
   try {
-    console.log('[APP] Initializing read-only contracts...');
-    const readOnlySuccess = await initReadOnlyContracts();
+    // 1) Read-only contracts (основа для price/supply/прочего)
+    const roOk = await safe('initReadOnlyContracts', initReadOnlyContracts);
 
-    if (readOnlySuccess) {
-      console.log('[APP] Read-only contracts ready, fetching initial stats...');
-      if (typeof updateGlobalStats === 'function') {
-        setTimeout(() => {
-          try { updateGlobalStats(); } catch (e) { console.warn('[APP] updateGlobalStats failed:', e); }
-        }, 500);
-      }
-    } else {
-      console.warn('[APP] initReadOnlyContracts returned false');
-    }
+    // 2) Первичная отрисовка wallet UI (до модулей — чтобы кнопка не была “битой”)
+    await safe('updateWalletUI(startup)', () => updateWalletUI?.('startup'));
+    await safe('renderWallets', renderWallets);
 
-    console.log('[APP] Initializing wallet module...');
-    try { initWalletModule?.(); } catch (e) { console.warn('[APP] initWalletModule failed:', e); }
+    // 3) Wallet module + dropdown UI
+    await safe('initWalletModule', initWalletModule);
+    await safe('setupWalletDropdownUI', setupWalletDropdownUI);
 
-    console.log('[APP] Initializing trading module...');
-    try { initTradingModule?.(); } catch (e) { console.warn('[APP] initTradingModule failed:', e); }
+    // 4) Trading module (Vault-only оставляем, раз он нужен на странице)
+    await safe('initTradingModule', initTradingModule);
 
-    // optional helpers (если их нет — не падаем)
-    try { setupGlobalEventListeners?.(); } catch (e) { console.warn('[APP] setupGlobalEventListeners failed:', e); }
-    try { setupScrollAnimations?.(); } catch (e) { console.warn('[APP] setupScrollAnimations failed:', e); }
+    // 5) Глобальные listeners (если есть)
+    await safe('setupGlobalEventListeners', setupGlobalEventListeners);
 
-    // ✅ единый dropdown UI (через class "open")
-    try { setupWalletDropdownUI?.(); } catch (e) { console.warn('[APP] setupWalletDropdownUI failed:', e); }
+    // 6) Статы (только если функция существует)
+    if (roOk && typeof updateGlobalStats === 'function') {
+      // первый апдейт — с небольшой задержкой (DOM/контракты успеют “устаканиться”)
+      setTimeout(() => {
+        try { updateGlobalStats(); } catch (e) { console.warn('[APP] updateGlobalStats initial failed:', e); }
+      }, 400);
 
-    // ✅ если нужно меню "Copy/Change/Disconnect"
-    try { setupWalletMenu?.(); } catch (e) { console.warn('[APP] setupWalletMenu failed:', e); }
+      // периодический апдейт
+      const intervalMs = Number(CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000);
+      const safeInterval = Number.isFinite(intervalMs) && intervalMs >= 3000 ? intervalMs : 15000;
 
-    // UI sync
-    try { updateWalletUI?.('startup'); } catch (e) { console.warn('[APP] updateWalletUI failed:', e); }
-    try { renderWallets?.(); } catch (e) { console.warn('[APP] renderWallets failed:', e); }
-
-    // Периодическое обновление статов (только если функция существует)
-    const interval = CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000;
-    if (typeof updateGlobalStats === 'function') {
       setInterval(() => {
         try { updateGlobalStats(); } catch (e) { console.warn('[APP] updateGlobalStats tick failed:', e); }
-      }, interval);
+      }, safeInterval);
     }
 
-    console.log('[APP] ✅ Application ready!');
-    try { await logNetworkState?.('APP'); } catch (e) { console.warn('[APP] logNetworkState failed:', e); }
-
-  } catch (error) {
-    console.error('[APP] ❌ Initialization error:', error);
+    console.log('[APP] Ready');
+  } catch (e) {
+    console.error('[APP] Fatal init error:', e);
     showNotification?.('❌ Помилка ініціалізації додатку', 'error');
-    try { await logNetworkState?.('APP'); } catch (e) { console.warn('[APP] logNetworkState failed:', e); }
   }
 }
 
 // Старт
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp);
+  document.addEventListener('DOMContentLoaded', initApp, { once: true });
 } else {
   initApp();
 }
 
 export { initApp };
-
