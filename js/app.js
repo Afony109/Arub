@@ -532,6 +532,42 @@ function setupWalletDropdownUI() {
   try { setupWalletMenu?.(); } catch (_) {}
 }
 
+function bindConnectButton() {
+  if (window.__connectBtnBound) return;
+  window.__connectBtnBound = true;
+
+  const connectBtn = document.getElementById('connectBtn');
+  const dropdown = document.getElementById('walletDropdown');
+
+  if (!connectBtn) {
+    console.warn('[UI] connectBtn not found');
+    return;
+  }
+  if (!dropdown) {
+    console.warn('[UI] walletDropdown not found');
+    return;
+  }
+
+  // чтобы клики по кнопке не закрывались глобальными "click outside"
+  connectBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try { renderWallets?.(); } catch (_) {}
+    dropdown.classList.toggle('open');
+
+    console.log('[UI] connectBtn toggled dropdown:', dropdown.classList.contains('open'));
+  });
+
+  // чтобы клики внутри dropdown не всплывали и не закрывали его
+  dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+  // закрытие dropdown по клику вне
+  document.addEventListener('click', (e) => {
+    const area = document.querySelector('.wallet-button-area') || document.querySelector('.wallet-wrap');
+    if (area && !area.contains(e.target)) dropdown.classList.remove('open');
+  });
+}
 
 // -------------------------
 // initApp() — оставляем initWalletModule только здесь
@@ -554,6 +590,7 @@ async function initApp() {
     // 2) Wallet module + dropdown UI
     await safe('initWalletModule', initWalletModule);
     await safe('setupWalletDropdownUI', setupWalletDropdownUI);
+    await safe('bindConnectButton', bindConnectButton);
 
     // 3) Trading module
     await safe('initTradingModule', initTradingModule);
