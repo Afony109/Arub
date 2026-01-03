@@ -79,67 +79,67 @@ function renderWallets() {
   menu.querySelectorAll('[data-wallet-item="1"], [data-walletItem="1"]').forEach(n => n.remove());
 
   const wallets = getAvailableWallets();
+  if (!Array.isArray(wallets) || wallets.length === 0) return;
 
-wallets.forEach((w) => {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.dataset.walletItem = '1';
-  btn.textContent = w.name;
+  wallets.forEach((w) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.walletItem = '1';
+    btn.textContent = w.name;
 
-  btn.onclick = async () => {
-  if (uiConnecting) {
-    showNotification?.(
-      'Подключение уже выполняется. Дождитесь завершения.',
-      'error'
-    );
-    return;
-  }
+    btn.onclick = async () => {
+      if (uiConnecting) {
+        showNotification?.('Подключение уже выполняется. Дождитесь завершения.', 'error');
+        return;
+      }
 
-  uiConnecting = true;
-  setWalletMenuDisabled(menu, true);
+      uiConnecting = true;
+      setWalletMenuDisabled(menu, true);
 
-  try {
-    await connectWalletUI({ walletId: w.id });
-    updateWalletUI('connected');
+      try {
+        await connectWalletUI({ walletId: w.id });
 
+        // обновить UI кнопки/меню
+        updateWalletUI('connected');
 
-    // 👇 один раз, после успешного подключения
-    updateWalletUI('connected');
-  } catch (e) {
-    const code = e?.code;
-    const m = String(e?.message || '').toLowerCase();
-    const isUserRejected =
-      code === 4001 ||
-      m.includes('user rejected') ||
-      m.includes('rejected the request') ||
-      m.includes('request rejected') ||
-      m.includes('action_rejected');
+        // обновить пресейл-данные
+        const addr = window.walletState?.address;
+        if (addr) {
+          try {
+            await refreshPresaleUI(addr);
+          } catch (e) {
+            console.warn('[APP] refreshPresaleUI failed:', e?.message || e);
+          }
+        }
 
-    if (isUserRejected) {
-      showNotification?.('Підключення скасовано користувачем.', 'info');
-    } else {
-      console.error('[UI] connect error:', e);
-      showNotification?.('Помилка підключення.', 'error');
-    }
-  } finally {
-    uiConnecting = false;
-    setWalletMenuDisabled(menu, false);
-  }
-};
+        // если dropdown открыт — можно закрыть после успешного connect
+        // menu.style.display = 'none';
+      } catch (e) {
+        const code = e?.code;
+        const m = String(e?.message || '').toLowerCase();
+        const isUserRejected =
+          code === 4001 ||
+          m.includes('user rejected') ||
+          m.includes('rejected the request') ||
+          m.includes('request rejected') ||
+          m.includes('action_rejected');
 
-  updateWalletUI('startup');
+        if (isUserRejected) {
+          showNotification?.('Підключення скасовано користувачем.', 'info');
+        } else {
+          console.error('[UI] connect error:', e);
+          showNotification?.('Помилка підключення.', 'error');
+        }
+      } finally {
+        uiConnecting = false;
+        setWalletMenuDisabled(menu, false);
+      }
+    };
 
-
-  // <-- ВАЖНО: вставка кнопки должна быть здесь (вне onclick)
-  menu.insertBefore(btn, menu.firstChild);
-});
+    // вставляем кнопку в меню
+    menu.insertBefore(btn, menu.firstChild);
+  });
 }
-
-window.addEventListener('walletStateChanged', () => {
-  updateWalletUI('walletStateChanged');
-  renderWallets();
-});
-
 
 function shortAddr(a) {
   if (!a || typeof a !== 'string') return '';
@@ -372,6 +372,7 @@ function setPresaleScanProgress(pct) {
 }
 
 async function refreshPresaleUI(address) {
+  
   // Единый read-only провайдер (proxy-first) из contracts.js
   const provider = await getReadOnlyProviderAsync();
 
@@ -388,6 +389,8 @@ async function refreshPresaleUI(address) {
   setText("presaleAvgPrice", presale.avgPrice ? presale.avgPrice.toFixed(6) : "—");
   setText("presaleDiscount", discount !== null ? discount.toFixed(2) + "%" : "—");
 }
+
+window.refreshPresaleUI = refreshPresaleUI;
 
 
 function presaleCacheKey(addr) {
@@ -765,10 +768,13 @@ async function initApp() {
     setupGlobalEventListeners();
     setupScrollAnimations();
 
+    // ✅ один раз, до первого рендера кошелька
     try { setupWalletMenu?.(); } catch (e) {
-    console.warn('[APP] setupWalletMenu skipped:', e?.message || e);
+      console.warn('[APP] setupWalletMenu skipped:', e?.message || e);
     }
 
+    updateWalletUI('startup');
+    renderWallets();
 
     // Периодическое обновление статов (если нужно)
     const interval = CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000;
@@ -776,15 +782,15 @@ async function initApp() {
 
     console.log('[APP] ✅ Application ready!');
     const netName =
-  CONFIG?.NETWORK?.name ||
-  CONFIG?.NETWORK?.chainName ||
-  CONFIG?.NETWORK?.chainIdName ||
-  'Arbitrum One';
+      CONFIG?.NETWORK?.name ||
+      CONFIG?.NETWORK?.chainName ||
+      CONFIG?.NETWORK?.chainIdName ||
+      'Arbitrum One';
 
-const chainId = Number(CONFIG?.NETWORK?.chainIdDecimal ?? CONFIG?.NETWORK?.chainId ?? 42161);
+    const chainId = Number(CONFIG?.NETWORK?.chainIdDecimal ?? CONFIG?.NETWORK?.chainId ?? 42161);
 
-console.log('[APP] Network:', netName);
-console.log('[APP] Chain ID:', chainId);
+    console.log('[APP] Network:', netName);
+    console.log('[APP] Chain ID:', chainId);
 
     await logNetworkState('APP');
   } catch (error) {
