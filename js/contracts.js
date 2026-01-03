@@ -203,9 +203,7 @@ async function probeRpcUrl(url, timeoutMs = 3500) {
  // -----------------------------
 // Local utils (ensure defined in this module)
 // -----------------------------
-function uniq(arr) {
-  return Array.from(new Set((arr || []).filter(Boolean)));
-}
+
 
 function isBadRpcUrl(u) {
   if (!u || typeof u !== 'string') return true;
