@@ -589,8 +589,8 @@ async function initApp() {
 
     // 2) Wallet module + dropdown UI
     await safe('initWalletModule', initWalletModule);
-    await safe('setupWalletDropdownUI', setupWalletDropdownUI);
     await safe('bindConnectButton', bindConnectButton);
+    await safe('setupWalletDropdownUI', setupWalletDropdownUI);
 
     // 3) Trading module
     await safe('initTradingModule', initTradingModule);
