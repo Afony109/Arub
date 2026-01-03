@@ -164,7 +164,9 @@
     font-size: 2.5em;
     font-weight: bold;
     background: linear-gradient(45deg, var(--ukraine-blue), var(--ukraine-yellow));
+    background-clip: text;
     -webkit-background-clip: text;
+
     -webkit-text-fill-color: transparent;
     margin-bottom: 10px;
 }
@@ -339,6 +341,7 @@
     margin-bottom: var(--spacing-md);
     text-align: center;
     background: linear-gradient(45deg, var(--ukraine-blue), var(--ukraine-yellow));
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -650,5 +653,10 @@
 #walletDropdown.open {
   display: block; /* или flex, если нужно */
 }
+
+#walletDropdown .wallet-list { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; }
+#walletDropdown .wallet-list-title { font-size: 13px; opacity: 0.85; margin-bottom: 6px; }
+#walletDropdown .wallet-item { width: 100%; text-align: left; padding: 10px; border-radius: 10px; }
+
 
 

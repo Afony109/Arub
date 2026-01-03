@@ -67,73 +67,78 @@ function getWalletDropdownEl() {
 })();
 
 function renderWallets() {
-  const menu = getWalletDropdownEl();
-  if (!menu) return;
+  const dd = document.getElementById('walletDropdown');
+  if (!dd) {
+    console.warn('[UI] walletDropdown not found');
+    return;
+  }
 
-  // удалить старые элементы списка (кроме disconnect)
-  menu.querySelectorAll('[data-wallet-item="1"], [data-walletItem="1"]').forEach(n => n.remove());
+  // Контейнер для списка
+  let list = dd.querySelector('.wallet-list');
+  if (!list) {
+    list = document.createElement('div');
+    list.className = 'wallet-list';
+    dd.insertBefore(list, dd.firstChild);
+  }
 
-  const wallets = getAvailableWallets();
-  if (!Array.isArray(wallets) || wallets.length === 0) return;
+  let wallets = [];
+  try {
+    wallets = (typeof getAvailableWallets === 'function') ? getAvailableWallets() : [];
+  } catch (e) {
+    console.warn('[UI] getAvailableWallets failed:', e?.message || e);
+    wallets = [];
+  }
 
-  wallets.forEach((w) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.dataset.walletItem = '1';
-    btn.textContent = w.name;
+  if (!Array.isArray(wallets) || wallets.length === 0) {
+    list.innerHTML = `
+      <div class="wallet-list-title">Гаманці не знайдено</div>
+      <div class="wallet-list-hint">Встановіть MetaMask / Rabby або увімкніть WalletConnect.</div>
+    `;
+    return;
+  }
 
-    btn.onclick = async () => {
-      if (uiConnecting) {
-        showNotification?.('Подключение уже выполняется. Дождитесь завершения.', 'error');
-        return;
-      }
+  // Рендер кнопок (icon может быть dataURL/svg — вставляем безопасно как <img>)
+  list.innerHTML = `
+    <div class="wallet-list-title">Оберіть гаманець</div>
+    <div class="wallet-list-items">
+      ${wallets.map(w => `
+        <button type="button" class="wallet-item" data-wallet-id="${w.id}">
+          ${w.icon ? `<img class="wallet-item-icon" src="${w.icon}" alt="">` : `<span class="wallet-item-icon placeholder"></span>`}
+          <span class="wallet-item-name">${escapeHtml(String(w.name || w.id))}</span>
+          <span class="wallet-item-type">${escapeHtml(String(w.type || ''))}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
 
-      uiConnecting = true;
-      setWalletMenuDisabled(menu, true);
+  // Делегирование кликов
+  const itemsWrap = list.querySelector('.wallet-list-items');
+  itemsWrap?.addEventListener('click', async (e) => {
+    const btn = e.target?.closest?.('.wallet-item');
+    if (!btn) return;
 
-      try {
-        await connectWalletUI({ walletId: w.id });
+    const walletId = btn.getAttribute('data-wallet-id');
+    if (!walletId) return;
 
-        // обновить UI кнопки/меню
-        updateWalletUI('connected');
+    try {
+      // ВАЖНО: connectWallet требует объект
+      await window.connectWallet({ walletId });
+      dd.classList.remove('open');
+    } catch (err) {
+      console.warn('[UI] connectWallet failed:', err?.message || err);
+      showNotification?.(err?.message || 'Wallet connect failed', 'error');
+    }
+  }, { once: true }); // once, чтобы не плодить обработчики при каждом render
+}
 
-        // обновить пресейл-данные
-        const addr = window.walletState?.address;
-        if (addr) {
-          try {
-            await refreshPresaleUI(addr);
-          } catch (e) {
-            console.warn('[APP] refreshPresaleUI failed:', e?.message || e);
-          }
-        }
-
-        // если dropdown открыт — можно закрыть после успешного connect
-        // menu.style.display = 'none';
-      } catch (e) {
-        const code = e?.code;
-        const m = String(e?.message || '').toLowerCase();
-        const isUserRejected =
-          code === 4001 ||
-          m.includes('user rejected') ||
-          m.includes('rejected the request') ||
-          m.includes('request rejected') ||
-          m.includes('action_rejected');
-
-        if (isUserRejected) {
-          showNotification?.('Підключення скасовано користувачем.', 'info');
-        } else {
-          console.error('[UI] connect error:', e);
-          showNotification?.('Помилка підключення.', 'error');
-        }
-      } finally {
-        uiConnecting = false;
-        setWalletMenuDisabled(menu, false);
-      }
-    };
-
-    // вставляем кнопку в меню
-    menu.insertBefore(btn, menu.firstChild);
-  });
+// маленький helper для текста (чтобы не ломать разметку)
+function escapeHtml(s) {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 function shortAddr(a) {
@@ -196,16 +201,14 @@ function setupWalletMenu() {
 
   // Disconnect button (ID как в вашем HTML!)
   document.getElementById('disconnectWalletBtn')?.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  e.preventDefault();
+  e.stopPropagation();
 
-    getMenuEl()?.classList.remove('open');
-    await disconnectWallet();
-
-    try { renderWallets?.(); } catch (_) {}
-    try { updateWalletUI?.('disconnected'); } catch (_) {}
-  });
-}
+  document.getElementById('walletDropdown')?.classList.remove('open');
+  await disconnectWallet();
+  try { renderWallets(); } catch (_) {}
+  try { updateWalletUI?.('disconnected'); } catch (_) {}
+});
 
 async function updateGlobalStats() {
   try {
@@ -527,36 +530,21 @@ function bindConnectButton() {
   window.__connectBtnBound = true;
 
   const btn = document.getElementById('connectBtn');
-  const dropdown = document.getElementById('walletDropdown');
-  if (!btn) return console.warn('[UI] connectBtn not found');
+  const dd  = document.getElementById('walletDropdown');
+  if (!btn || !dd) return;
 
-  btn.addEventListener('click', async (e) => {
+  btn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const connected = !!window.walletState?.address && !!window.walletState?.signer;
-
-    // 1) Если НЕ подключены — пытаемся подключить сразу (как “раньше”)
-    if (!connected && typeof window.connectWallet === 'function') {
-      try {
-        console.log('[UI] connectBtn -> connectWallet()');
-        await window.connectWallet();
-        return;
-      } catch (err) {
-        console.warn('[UI] connectWallet failed, fallback to dropdown:', err?.message || err);
-        // упали — покажем dropdown как fallback
-      }
+    try { renderWallets(); } catch (err) {
+      console.warn('[UI] renderWallets failed:', err?.message || err);
     }
 
-    // 2) Иначе — открываем dropdown (выбор/меню)
-    if (dropdown) {
-      try { renderWallets?.(); } catch (_) {}
-      dropdown.classList.toggle('open');
-      console.log('[UI] connectBtn -> dropdown open:', dropdown.classList.contains('open'));
-    } else {
-      console.warn('[UI] walletDropdown not found');
-    }
+    dd.classList.toggle('open');
   });
+
+  dd.addEventListener('click', (e) => e.stopPropagation());
 }
 
 // -------------------------
@@ -574,25 +562,17 @@ async function initApp() {
   };
 
   try {
-    // 1) Read-only contracts
     const roOk = await safe('initReadOnlyContracts', initReadOnlyContracts);
 
-    // 2) Wallet module + dropdown UI
     await safe('initWalletModule', initWalletModule);
     await safe('bindConnectButton', bindConnectButton);
-    await safe('setupWalletDropdownUI', setupWalletDropdownUI);
+    await safe('setupWalletMenu', setupWalletMenu);
 
-    // 3) Trading module
     await safe('initTradingModule', initTradingModule);
-
-    // 4) Global listeners (если функция есть)
     await safe('setupGlobalEventListeners', setupGlobalEventListeners);
 
-    // 5) UI sync
     await safe('updateWalletUI(startup)', () => updateWalletUI?.('startup'));
-    await safe('renderWallets', renderWallets);
 
-    // 6) Stats: только если функция существует
     if (roOk && typeof updateGlobalStats === 'function') {
       setTimeout(() => { try { updateGlobalStats(); } catch {} }, 400);
 
@@ -608,12 +588,4 @@ async function initApp() {
     showNotification?.('❌ Помилка ініціалізації додатку', 'error');
   }
 }
-
-// Старт
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp, { once: true });
-} else {
-  initApp();
 }
-
-export { initApp };

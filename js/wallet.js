@@ -383,10 +383,13 @@ export function getAvailableWallets() {
       );
 
       localWc = await EthereumProvider.init({
-        projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-        chains: [Number(CONFIG.NETWORK.chainId)],
-        rpcMap: { [CONFIG.NETWORK.chainId]: CONFIG.NETWORK.rpcUrls[0] }
-      });
+      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+      chains: [Number(CONFIG.NETWORK.chainId)],
+      rpcMap: {
+      [Number(CONFIG.NETWORK.chainId)]: (CONFIG.NETWORK.walletRpcUrls?.[0] || CONFIG.NETWORK.readOnlyRpcUrl)
+      }
+     });
+
 
       // ВАЖНО: сначала присваиваем, потом request (раньше тут был баг: localSelected был null)
       localSelected = localWc;
