@@ -633,3 +633,22 @@
 #add-token-guide .page-card .action-btn {
     margin-top: auto;              /* прижимает кнопку к низу карточки */
 }
+
+/* ===== Wallet connect dropdown FIX ===== */
+.wallet-button-area {
+  position: relative;
+}
+
+#walletDropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 99999;
+}
+
+#walletDropdown.open {
+  display: block; /* или flex, если нужно */
+}
+
+
