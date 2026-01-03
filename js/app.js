@@ -527,6 +527,11 @@ function setupGlobalEventListeners() {
   });
 }
 
+function setupWalletDropdownUI() {
+  try { renderWallets?.(); } catch (_) {}
+  try { setupWalletMenu?.(); } catch (_) {}
+}
+
 
 // -------------------------
 // initApp() — оставляем initWalletModule только здесь

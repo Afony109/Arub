@@ -197,7 +197,31 @@ async function probeRpcUrl(url, timeoutMs = 3500) {
  * @param {number} triesPerRpc retries per endpoint
  * @param {{allowWalletFallback?: boolean}} opts
  * @returns {Promise<{url: string|null, provider: any, via: 'proxy'|'rpc'|'wallet'}>}
+ * 
  */
+
+ // -----------------------------
+// Local utils (ensure defined in this module)
+// -----------------------------
+function uniq(arr) {
+  return Array.from(new Set((arr || []).filter(Boolean)));
+}
+
+function isBadRpcUrl(u) {
+  if (!u || typeof u !== 'string') return true;
+  const s = u.trim();
+  if (!s) return true;
+
+  // Отсекаем явный мусор/плейсхолдеры
+  if (s === 'null' || s === 'undefined') return true;
+
+  // Разрешаем http(s). (Если захотите wss/ws — добавьте второй regex)
+  if (!/^https?:\/\//i.test(s)) return true;
+
+  return false;
+}
+
+
 export async function pickWorkingRpc(extraRpcs = [], triesPerRpc = 2, opts = {}) {
   const {
     allowWalletFallback = true,
