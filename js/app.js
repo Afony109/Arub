@@ -6,7 +6,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import {initWalletModule, getEthersProvider, getAvailableWallets, connectWalletUI, disconnectWallet} from './wallet.js';
+import {initWalletModule, getEthersProvider, getAvailableWallets, connectWallet, disconnectWallet} from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
@@ -81,9 +81,10 @@ function renderWallets() {
     dd.insertBefore(list, dd.firstChild);
   }
 
-  let wallets = [];
+    let wallets = [];
   try {
-    wallets = (typeof getAvailableWallets === 'function') ? getAvailableWallets() : [];
+    const fn = window.getAvailableWallets; // <-- важно
+    wallets = (typeof fn === 'function') ? fn() : [];
   } catch (e) {
     console.warn('[UI] getAvailableWallets failed:', e?.message || e);
     wallets = [];

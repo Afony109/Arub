@@ -332,6 +332,11 @@ export function getAvailableWallets() {
     seen.add(nameKey);
     seen.add(id);
 
+    try {
+    window.getAvailableWallets = getAvailableWallets;
+    window.connectWallet = connectWallet; // если ещё не публикуете
+    } catch (_) {}
+
     list.push({
       id,
       name,
