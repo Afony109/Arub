@@ -554,6 +554,26 @@ function setupWalletMenu() {
   });
 }
 
+function setupGlobalEventListeners() {
+  // обновление статистики, когда контракты готовы
+  window.addEventListener('contractsInitialized', () => {
+    if (typeof updateGlobalStats === 'function') {
+      try { updateGlobalStats(); } catch (e) {
+        console.warn('[APP] updateGlobalStats failed:', e);
+      }
+    }
+  });
+
+  // плавный скролл по якорям (UX, безопасно)
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+}
+
 // -------------------------
 // initApp() — оставляем initWalletModule только здесь
 // -------------------------
@@ -563,48 +583,58 @@ async function initApp() {
   console.log('Initializing application...');
   console.log('='.repeat(60));
 
+  setupGlobalEventListeners?.();
+
   try {
     console.log('[APP] Initializing read-only contracts...');
     const readOnlySuccess = await initReadOnlyContracts();
 
     if (readOnlySuccess) {
       console.log('[APP] Read-only contracts ready, fetching initial stats...');
-      setTimeout(() => updateGlobalStats(), 500);
+      if (typeof updateGlobalStats === 'function') {
+        setTimeout(() => {
+          try { updateGlobalStats(); } catch (e) { console.warn('[APP] updateGlobalStats failed:', e); }
+        }, 500);
+      }
     } else {
       console.warn('[APP] initReadOnlyContracts returned false');
     }
 
     console.log('[APP] Initializing wallet module...');
-    initWalletModule(); // ✅ только тут
+    try { initWalletModule?.(); } catch (e) { console.warn('[APP] initWalletModule failed:', e); }
 
     console.log('[APP] Initializing trading module...');
-    initTradingModule();
+    try { initTradingModule?.(); } catch (e) { console.warn('[APP] initTradingModule failed:', e); }
 
-    setupGlobalEventListeners();
-    setupScrollAnimations();
+    // optional helpers (если их нет — не падаем)
+    try { setupGlobalEventListeners?.(); } catch (e) { console.warn('[APP] setupGlobalEventListeners failed:', e); }
+    try { setupScrollAnimations?.(); } catch (e) { console.warn('[APP] setupScrollAnimations failed:', e); }
 
     // ✅ единый dropdown UI (через class "open")
-    setupWalletDropdownUI();
+    try { setupWalletDropdownUI?.(); } catch (e) { console.warn('[APP] setupWalletDropdownUI failed:', e); }
 
     // ✅ если нужно меню "Copy/Change/Disconnect"
-    try { setupWalletMenu(); } catch (e) {
-      console.warn('[APP] setupWalletMenu failed:', e?.message || e);
+    try { setupWalletMenu?.(); } catch (e) { console.warn('[APP] setupWalletMenu failed:', e); }
+
+    // UI sync
+    try { updateWalletUI?.('startup'); } catch (e) { console.warn('[APP] updateWalletUI failed:', e); }
+    try { renderWallets?.(); } catch (e) { console.warn('[APP] renderWallets failed:', e); }
+
+    // Периодическое обновление статов (только если функция существует)
+    const interval = CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000;
+    if (typeof updateGlobalStats === 'function') {
+      setInterval(() => {
+        try { updateGlobalStats(); } catch (e) { console.warn('[APP] updateGlobalStats tick failed:', e); }
+      }, interval);
     }
 
-    // ✅ привести UI к текущему состоянию и отрисовать список кошельков
-    updateWalletUI('startup');
-    renderWallets();
-
-    // Периодическое обновление статов
-    const interval = CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000;
-    setInterval(() => updateGlobalStats(), interval);
-
     console.log('[APP] ✅ Application ready!');
-    await logNetworkState('APP');
+    try { await logNetworkState?.('APP'); } catch (e) { console.warn('[APP] logNetworkState failed:', e); }
+
   } catch (error) {
     console.error('[APP] ❌ Initialization error:', error);
     showNotification?.('❌ Помилка ініціалізації додатку', 'error');
-    await logNetworkState('APP');
+    try { await logNetworkState?.('APP'); } catch (e) { console.warn('[APP] logNetworkState failed:', e); }
   }
 }
 
@@ -616,3 +646,4 @@ if (document.readyState === 'loading') {
 }
 
 export { initApp };
+
