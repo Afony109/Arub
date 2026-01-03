@@ -526,29 +526,36 @@ function bindConnectButton() {
   if (window.__connectBtnBound) return;
   window.__connectBtnBound = true;
 
-  const connectBtn = document.getElementById('connectBtn');
-  const dropdown   = document.getElementById('walletDropdown');
-  const area       = document.querySelector('.wallet-button-area');
+  const btn = document.getElementById('connectBtn');
+  const dropdown = document.getElementById('walletDropdown');
+  if (!btn) return console.warn('[UI] connectBtn not found');
 
-  if (!connectBtn || !dropdown) {
-    console.warn('[UI] connectBtn or walletDropdown not found');
-    return;
-  }
-
-  connectBtn.addEventListener('click', (e) => {
+  btn.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    try { renderWallets?.(); } catch (_) {}
-    dropdown.classList.toggle('open');
-  });
+    const connected = !!window.walletState?.address && !!window.walletState?.signer;
 
-  // если у вас уже есть этот listener в setupWalletMenu — дубль не критичен,
-  // но лучше, чтобы был один. Если хотите — оставьте только в setupWalletMenu.
-  dropdown.addEventListener('click', (e) => e.stopPropagation());
+    // 1) Если НЕ подключены — пытаемся подключить сразу (как “раньше”)
+    if (!connected && typeof window.connectWallet === 'function') {
+      try {
+        console.log('[UI] connectBtn -> connectWallet()');
+        await window.connectWallet();
+        return;
+      } catch (err) {
+        console.warn('[UI] connectWallet failed, fallback to dropdown:', err?.message || err);
+        // упали — покажем dropdown как fallback
+      }
+    }
 
-  document.addEventListener('click', (e) => {
-    if (area && !area.contains(e.target)) dropdown.classList.remove('open');
+    // 2) Иначе — открываем dropdown (выбор/меню)
+    if (dropdown) {
+      try { renderWallets?.(); } catch (_) {}
+      dropdown.classList.toggle('open');
+      console.log('[UI] connectBtn -> dropdown open:', dropdown.classList.contains('open'));
+    } else {
+      console.warn('[UI] walletDropdown not found');
+    }
   });
 }
 
