@@ -221,10 +221,39 @@ export async function renderWallets() {
 
   console.log('[UI] wallets detected:', wallets);
 
+  // ✅ normalize: поддерживаем и новый формат (walletId/entryName),
+  // и старый (id/name) на всякий случай
+  const norm = wallets.map((w) => {
+    const id =
+      w?.walletId ??
+      w?.id ??
+      w?.entryId ??
+      null;
+
+    const label =
+      w?.entryName ??
+      w?.name ??
+      w?.entryId ??
+      w?.walletId ??
+      w?.id ??
+      'Wallet';
+
+    return { id, label, raw: w };
+  }).filter(x => !!x.id);
+
+  if (norm.length === 0) {
+    list.innerHTML = `
+      <div class="wallet-list-title">Гаманці не знайдено</div>
+      <div class="wallet-list-hint">Невірний формат списку гаманців (walletId/id відсутній).</div>
+    `;
+    console.warn('[UI] wallets list has no usable ids:', wallets);
+    return;
+  }
+
   // рисуем кнопки
-  list.innerHTML = wallets.map(w => `
-    <button type="button" class="wallet-item" data-wallet-id="${w.id}">
-      <span class="wallet-name">${w.name || w.id}</span>
+  list.innerHTML = norm.map(w => `
+    <button type="button" class="wallet-item" data-wallet-id="${String(w.id)}">
+      <span class="wallet-name">${String(w.label)}</span>
     </button>
   `).join('');
 
@@ -242,14 +271,18 @@ export async function renderWallets() {
       e.stopPropagation();
 
       const walletId = btn.getAttribute('data-wallet-id');
-      if (!walletId) return;
+      if (!walletId) {
+        console.warn('[UI] wallet-item has no data-wallet-id');
+        return;
+      }
 
       // ⛔ блокируем повторные клики
-      if (uiConnecting) return;
-      uiConnecting = true;
+      if (window.uiConnecting) return;
+      window.uiConnecting = true;
       btn.disabled = true;
 
       try {
+        // ✅ передаём реальный walletId
         await window.connectWallet?.({ walletId });
         dd.classList.remove('open');
       } catch (err) {
@@ -263,7 +296,7 @@ export async function renderWallets() {
           stack: err?.stack
         });
       } finally {
-        uiConnecting = false;
+        window.uiConnecting = false;
         btn.disabled = false;
       }
     });
