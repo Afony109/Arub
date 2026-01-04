@@ -7,11 +7,15 @@
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
 import {initWalletModule, getEthersProvider, getAvailableWallets, connectWallet, disconnectWallet} from './wallet.js';
+import { renderWallets } from './ui-wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
 
 initWalletModule();
+document.addEventListener('DOMContentLoaded', () => {
+  renderWallets();
+});
 
 // если UI использует window.*, то публикуем тут (это 100% выполняется после импорта)
 window.getAvailableWallets = getAvailableWallets;
