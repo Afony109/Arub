@@ -44,52 +44,46 @@ async function publishGlobals() {
     return;
   }
 
-  // ВАЖНО: 'any' позволяет ethers корректно переживать chainChanged
-  // и не фиксировать сеть на момент создания.
-  try {
-    ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
-    signer = ethersProvider.getSigner();
-  } catch (e) {
-    console.warn('[wallet] failed to build Web3Provider/signer', e);
-    ethersProvider = null;
-    signer = null;
-  }
-
-  // chainId: всегда пытаемся получить из провайдера
-  let chainId = null;
+  // chainId: пытаемся получить из провайдера (быстрее/надежнее чем ethers.getNetwork в некоторых кошельках)
+  let chainId = currentChainId ?? null;
   try {
     const hex = await selectedEip1193.request({ method: 'eth_chainId' });
     const parsed = Number.parseInt(hex, 16);
-    chainId = Number.isFinite(parsed) ? parsed : null;
+    chainId = Number.isFinite(parsed) ? parsed : chainId;
   } catch (e) {
-    console.warn('[wallet] failed to fetch chainId from provider', e);
-    chainId = null;
+    // оставляем что было в currentChainId
   }
 
   currentChainId = chainId;
 
-  // address: если у вас currentAddress ведётся отдельно — ок.
-  // Но безопаснее синхронизировать из eth_accounts (не обязательно, но полезно).
-  // Если не хотите — уберите этот блок.
+  // address: синхронизируем из eth_accounts (если доступно)
+  let addr = currentAddress ?? null;
   try {
     const accs = await selectedEip1193.request({ method: 'eth_accounts' });
-    if (Array.isArray(accs) && accs[0]) currentAddress = accs[0];
+    if (Array.isArray(accs) && accs[0]) addr = accs[0];
   } catch (e) {
-    // игнорируем
+    // оставляем что было в currentAddress
   }
 
+  // нормализуем checksum, если есть ethers
+  try {
+    if (addr) addr = ethers.utils.getAddress(addr);
+  } catch (_) {}
+
+  currentAddress = addr;
+
+  // ВАЖНО: НЕ создаём тут ethersProvider/signer заново, только публикуем то, что уже есть
   window.walletState = {
     provider: ethersProvider || null,
     signer: signer || null,
     address: currentAddress || null,
-    chainId: chainId,
+    chainId: currentChainId ?? null,
     eip1193: selectedEip1193
   };
 
   try {
-  window.dispatchEvent(new CustomEvent('walletStateChanged', { detail: window.walletState }));
-} catch (_) {}
-
+    window.dispatchEvent(new CustomEvent('walletStateChanged', { detail: window.walletState }));
+  } catch (_) {}
 
   console.log('[wallet] publishGlobals', window.walletState);
 }
@@ -332,10 +326,6 @@ export function getAvailableWallets() {
     seen.add(nameKey);
     seen.add(id);
 
-    try {
-    window.getAvailableWallets = getAvailableWallets;
-    window.connectWallet = connectWallet; // если ещё не публикуете
-    } catch (_) {}
 
     list.push({
       id,
@@ -382,24 +372,22 @@ export function getAvailableWallets() {
     const entry = wallets.find(w => w.id === walletId);
     if (!entry) throw new Error('No wallet selected');
 
+    // 1) Получаем EIP-1193 провайдер (localSelected) и делаем requestAccounts
     if (entry.type === 'walletconnect') {
       const { default: EthereumProvider } = await import(
         'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.2/dist/index.es.js'
       );
 
       localWc = await EthereumProvider.init({
-      projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-      chains: [Number(CONFIG.NETWORK.chainId)],
-      rpcMap: {
-      [Number(CONFIG.NETWORK.chainId)]: (CONFIG.NETWORK.walletRpcUrls?.[0] || CONFIG.NETWORK.readOnlyRpcUrl)
-      }
-     });
+        projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+        chains: [Number(CONFIG.NETWORK.chainId)],
+        rpcMap: {
+          [Number(CONFIG.NETWORK.chainId)]: (CONFIG.NETWORK.walletRpcUrls?.[0] || CONFIG.NETWORK.readOnlyRpcUrl),
+        },
+      });
 
-
-      // ВАЖНО: сначала присваиваем, потом request (раньше тут был баг: localSelected был null)
       localSelected = localWc;
 
-      // connect может “висеть” → ограничиваем по времени
       await withTimeout(
         localSelected.request({ method: 'eth_requestAccounts' }),
         20000,
@@ -418,38 +406,42 @@ export function getAvailableWallets() {
       );
     }
 
+    // если была старая сессия/провайдер — аккуратно снять слушатели
+    detachProviderListeners();
+
+
+    // 2) Фиксируем выбранный провайдер в состоянии модуля
+    selectedEip1193 = localSelected;
+    wcProvider = localWc || wcProvider;
+
+    // 3) Теперь безопасно строим ethers provider/signer и читаем address/chainId
+    ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
+    signer = ethersProvider.getSigner();
+
+    const addr = await signer.getAddress();
+    currentAddress = addr ? ethers.utils.getAddress(addr) : null;
+
+    const net = await ethersProvider.getNetwork();
+    currentChainId = net?.chainId ?? null;
+
+    // 4) Листенеры ставим после selectedEip1193
+    attachProviderListeners();
+
+    // 5) Публикуем глобальное состояние (walletState)
     await publishGlobals();
 
-
-   // сохраняем выбранный провайдер только после успешного requestAccounts
-selectedEip1193 = localSelected;
-wcProvider = localWc || wcProvider;
-
-ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
-signer = ethersProvider.getSigner();
-currentAddress = ethers.utils.getAddress(await signer.getAddress());
-
-const net = await ethersProvider.getNetwork();
-currentChainId = net.chainId;
-
-// Ставим слушателей ПОСЛЕ того, как selectedEip1193 уже задан
-attachProviderListeners();
-
-// Публикуем глобальное состояние
-await publishGlobals();
-
-    // Подстрахуемся: если publishGlobals получил chainId напрямую из провайдера
+    // Подстраховка: берём chainId из walletState если он там точнее
     currentChainId = window.walletState?.chainId ?? currentChainId;
 
     showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
     dispatchConnected();
 
-    // для совместимости со старым кодом, который слушает "walletChanged"
+    // совместимость со старым кодом
     window.dispatchEvent(new Event('walletChanged'));
 
     return currentAddress;
   } catch (e) {
-    // Уборка WalletConnect инстанса, если он был создан в этой попытке
+    // cleanup WalletConnect, если он создавался в этой попытке
     try {
       if (localWc) {
         await localWc.disconnect?.();
@@ -457,7 +449,6 @@ await publishGlobals();
       }
     } catch (_) {}
 
-    // При любой неуспешной попытке не оставляем "полуподключённое" состояние
     selectedEip1193 = null;
     ethersProvider = null;
     signer = null;
@@ -487,19 +478,27 @@ export function connectWalletUI({ walletId } = {}) {
 
 export async function disconnectWallet() {
   try {
-    if (wcProvider?.disconnect) await wcProvider.disconnect();
+    if (wcProvider) {
+      await wcProvider.disconnect?.();
+      await wcProvider.close?.();
+    }
   } catch (_) {}
+
+  // снимаем слушателей со старого провайдера
+  detachProviderListeners();
 
   selectedEip1193 = null;
   ethersProvider = null;
   signer = null;
   currentAddress = null;
   currentChainId = null;
+  wcProvider = null;
 
   clearGlobals();
   showNotification?.('Wallet disconnected', 'info');
   dispatchDisconnected();
 }
+
 
 export function isWalletConnected() {
   return !!window.walletState?.address;
@@ -580,18 +579,53 @@ function attachProviderListeners() {
   if (typeof selectedEip1193.on !== 'function') return;
 
   listenersAttached = true;
+  listenersOwner = selectedEip1193;
 
-  selectedEip1193.on('chainChanged', (hex) => {
+  onChainChanged = (hex) => {
     const parsed = parseInt(hex, 16);
     currentChainId = Number.isFinite(parsed) ? parsed : null;
     publishGlobals().catch(() => {});
-  });
+  };
 
-  selectedEip1193.on('accountsChanged', (accounts) => {
-  const a = accounts?.[0] || null;
-  currentAddress = a ? ethers.utils.getAddress(a) : null;
-  publishGlobals().catch(() => {});
-});
+  onAccountsChanged = (accounts) => {
+    const a = accounts?.[0] || null;
+    try {
+      currentAddress = a ? ethers.utils.getAddress(a) : null;
+    } catch (_) {
+      currentAddress = a;
+    }
+    publishGlobals().catch(() => {});
+  };
+
+  selectedEip1193.on('chainChanged', onChainChanged);
+  selectedEip1193.on('accountsChanged', onAccountsChanged);
+}
+
+function detachProviderListeners() {
+  const p = listenersOwner;
+  if (!p) {
+    listenersAttached = false;
+    onChainChanged = null;
+    onAccountsChanged = null;
+    return;
+  }
+
+  // разные провайдеры поддерживают разные методы
+  const off = p.removeListener || p.off;
+
+  try {
+    if (typeof off === 'function') {
+      if (onChainChanged) off.call(p, 'chainChanged', onChainChanged);
+      if (onAccountsChanged) off.call(p, 'accountsChanged', onAccountsChanged);
+    }
+  } catch (_) {
+    // игнорируем
+  }
+
+  listenersOwner = null;
+  listenersAttached = false;
+  onChainChanged = null;
+  onAccountsChanged = null;
 }
 
 function calcDiscount(avgPrice, currentPrice) {
@@ -602,4 +636,18 @@ function calcDiscount(avgPrice, currentPrice) {
 export function getEthersProvider() {
   return ethersProvider;
 }
+
+// -----------------------------
+// Publish legacy globals for UI modules that call window.*
+// -----------------------------
+try {
+  window.initWalletModule = initWalletModule;
+  window.getAvailableWallets = getAvailableWallets;
+  window.connectWallet = connectWallet;
+  window.connectWalletUI = connectWalletUI;
+  window.disconnectWallet = disconnectWallet;
+} catch (e) {
+  console.warn('[wallet] failed to publish globals', e);
+}
+
 
