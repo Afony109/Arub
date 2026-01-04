@@ -178,28 +178,66 @@ function renderTrading() {
   if (!host) return;
 
   const ws = window.walletState || null;
-  const connected  = !!ws?.address && !!ws?.signer;
-  const onArbitrum = Number(ws?.chainId) === 42161;
+  const address = ws?.address || null;
+  const signer  = ws?.signer || null;
+  const chainId = Number(ws?.chainId);
 
-  console.log('[TRADING] renderTrading', {
-    address: ws?.address,
-    hasSigner: !!ws?.signer,
-    chainId: ws?.chainId,
-    connected,
-    onArbitrum
-  });
+  const connected  = !!address && !!signer;
+  const onArbitrum = chainId === 42161;
 
-  if (!connected || !onArbitrum) {
+  console.log('[TRADING] renderTrading', { address, hasSigner: !!signer, chainId, connected, onArbitrum });
+
+  // 1) not connected
+  if (!connected) {
     host.innerHTML = `
       <div style="text-align:center; padding:50px;">
         <div style="font-size:3em; margin-bottom:10px;">🔒</div>
-        <p>${!connected ? 'Підключіть гаманець для торгівлі' : 'Перемкніться на мережу Arbitrum One'}</p>
+        <p>Підключіть гаманець для торгівлі</p>
       </div>
     `;
     return;
   }
 
-  // ✅ подключено — рисуем реальный UI
+  // 2) wrong network
+  if (!onArbitrum) {
+    host.innerHTML = `
+      <div style="text-align:center; padding:50px;">
+        <div style="font-size:3em; margin-bottom:10px;">🌐</div>
+        <p style="margin:0 0 12px 0;">Потрібна мережа <b>Arbitrum One</b></p>
+        <div style="font-size:13px; opacity:.8; margin-bottom:14px;">
+          Зараз: chainId <b>${Number.isFinite(chainId) ? chainId : '—'}</b>
+        </div>
+        <button id="switchToArbBtn" type="button"
+          style="padding:10px 14px; border-radius:12px; border:0; cursor:pointer;">
+          Перемкнути на Arbitrum One
+        </button>
+        <div style="margin-top:12px; font-size:13px; opacity:.8;">
+          Якщо гаманець не дозволяє автоперемикання — перемкніться вручну у гаманці.
+        </div>
+      </div>
+    `;
+
+    const btn = document.getElementById('switchToArbBtn');
+    if (btn) {
+      btn.onclick = async () => {
+        btn.disabled = true;
+        try {
+          const ok = await window.trySwitchToArbitrum?.();
+          if (!ok) {
+            // trySwitchToArbitrum already notifies; this is just a fallback
+            console.warn('[TRADING] switchToArbitrum returned false');
+          }
+        } catch (e) {
+          console.warn('[TRADING] switchToArbitrum failed:', e?.message || e);
+        } finally {
+          btn.disabled = false;
+        }
+      };
+    }
+    return;
+  }
+
+  // 3) ok network => draw real trading UI
   renderTradingUI();
 }
 

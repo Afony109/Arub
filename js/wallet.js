@@ -372,7 +372,6 @@ function pickEip6963Fields(w) {
 
     if (!walletId) throw new Error('No wallet selected');
 
-    // ✅ robust: ищем по walletId (а не по id)
     const entry = wallets.find(w => w.walletId === walletId);
     if (!entry) throw new Error('No wallet selected');
 
@@ -384,7 +383,9 @@ function pickEip6963Fields(w) {
       rdns: entry.rdns
     });
 
-    // 1) Получаем EIP-1193 провайдер (localSelected) и делаем requestAccounts
+    // -----------------------------
+    // 1) pick provider + accounts
+    // -----------------------------
     if (entry.type === 'walletconnect') {
       const { default: EthereumProvider } = await import(
         'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.2/dist/index.es.js'
@@ -400,57 +401,70 @@ function pickEip6963Fields(w) {
 
       localSelected = localWc;
 
+      // WalletConnect обычно требует requestAccounts
       await withTimeout(
         localSelected.request({ method: 'eth_requestAccounts' }),
-        20000,
-        'eth_requestAccounts timeout'
+        60000,
+        'eth_requestAccounts (walletconnect)'
       );
     } else if (entry.type === 'eip6963') {
-      // ✅ берём provider по entryId (надежнее), fallback по walletId
       const prov =
         getEip1193ProviderById(entry.entryId) ||
         getEip1193ProviderById(entry.walletId);
 
       if (!prov?.request) throw new Error('Selected wallet provider not found');
-
       localSelected = prov;
 
-      await withTimeout(
-        localSelected.request({ method: 'eth_requestAccounts' }),
-        20000,
-        'eth_requestAccounts'
-      );
+      // ✅ сначала пробуем eth_accounts (без попапа)
+      let accs = [];
+      try { accs = await localSelected.request({ method: 'eth_accounts' }); } catch (_) { accs = []; }
+
+      // ✅ если доступа нет — requestAccounts (попап)
+      if (!Array.isArray(accs) || accs.length === 0) {
+        await withTimeout(
+          localSelected.request({ method: 'eth_requestAccounts' }),
+          60000,
+          'eth_requestAccounts'
+        );
+      }
     } else if (entry.type === 'injected') {
-      // fallback для старых кошельков
       const prov = window.ethereum;
       if (!prov?.request) throw new Error('Injected provider not found');
 
       localSelected = prov;
 
-      await withTimeout(
-        localSelected.request({ method: 'eth_requestAccounts' }),
-        20000,
-        'eth_requestAccounts'
-      );
+      let accs = [];
+      try { accs = await localSelected.request({ method: 'eth_accounts' }); } catch (_) { accs = []; }
+
+      if (!Array.isArray(accs) || accs.length === 0) {
+        await withTimeout(
+          localSelected.request({ method: 'eth_requestAccounts' }),
+          60000,
+          'eth_requestAccounts'
+        );
+      }
     } else {
       throw new Error(`Unsupported wallet type: ${entry.type}`);
     }
 
-    // если была старая сессия/провайдер — аккуратно снять слушатели
+    // -----------------------------
+    // 2) swap listeners + set selected
+    // -----------------------------
     detachProviderListeners();
 
-    // 2) Фиксируем выбранный провайдер в состоянии модуля
     selectedEip1193 = localSelected;
     wcProvider = localWc || wcProvider;
 
-    // 3) Теперь безопасно строим ethers provider/signer и читаем address/chainId
+    // -----------------------------
+    // 3) ethers provider/signer + address/chainId
+    // -----------------------------
     ethersProvider = new ethers.providers.Web3Provider(selectedEip1193, 'any');
     signer = ethersProvider.getSigner();
 
     const addr = await signer.getAddress();
     currentAddress = addr ? ethers.utils.getAddress(addr) : null;
 
-    // chainId берём из провайдера (бывает надежнее, чем getNetwork у некоторых кошельков)
+    // chainId (prefer eth_chainId)
     let cid = null;
     try {
       const hex = await selectedEip1193.request({ method: 'eth_chainId' });
@@ -465,7 +479,6 @@ function pickEip6963Fields(w) {
       currentChainId = net?.chainId ?? null;
     }
 
-    // 4) Листенеры ставим после selectedEip1193
     attachProviderListeners();
 
     console.log('[wallet] before publishGlobals', {
@@ -474,23 +487,46 @@ function pickEip6963Fields(w) {
       chainId: currentChainId
     });
 
-    // 5) Публикуем глобальное состояние (walletState)
+    // -----------------------------
+    // 4) publish globals
+    // -----------------------------
     await publishGlobals();
 
-    // Подстраховка: берём chainId из walletState если он там точнее
+    // -----------------------------
+    // 5) auto switch to Arbitrum (ONCE)
+    // -----------------------------
+    try {
+      const expected = Number(CONFIG.NETWORK.chainId);
+      const actual = Number(window.walletState?.chainId);
+
+      if (Number.isFinite(expected) && actual !== expected) {
+        const ok = await trySwitchToArbitrum();
+
+        // trySwitchToArbitrum already handles permission-blocked wallets
+        if (ok) {
+          // обновим состояние после переключения
+          await publishGlobals();
+        } else {
+          showNotification?.(
+            'Переключіть мережу на Arbitrum One у гаманці та повторіть дію.',
+            'warning'
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('[wallet] auto switch failed:', e?.message || e);
+    }
+
+    // Подстраховка
     currentChainId = window.walletState?.chainId ?? currentChainId;
 
     showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
-
-    // ваш текущий dispatchConnected использует currentAddress/currentChainId
     dispatchConnected();
-
-    // совместимость со старым кодом
     window.dispatchEvent(new Event('walletChanged'));
 
     return currentAddress;
   } catch (e) {
-    // cleanup WalletConnect, если он создавался в этой попытке
+    // cleanup WalletConnect if created
     try {
       if (localWc) {
         await localWc.disconnect?.();
@@ -498,7 +534,6 @@ function pickEip6963Fields(w) {
       }
     } catch (_) {}
 
-    // сброс локального состояния
     selectedEip1193 = null;
     ethersProvider = null;
     signer = null;
@@ -506,7 +541,6 @@ function pickEip6963Fields(w) {
     currentAddress = null;
     wcProvider = null;
 
-    // и публикуем сброс, чтобы UI тоже сбросился
     try { await publishGlobals(); } catch (_) {}
 
     throw e;
@@ -752,6 +786,8 @@ try {
 } catch (e) {
   console.warn('[wallet] failed to publish globals', e);
 }
+
+window.trySwitchToArbitrum = trySwitchToArbitrum;
 
 
 
