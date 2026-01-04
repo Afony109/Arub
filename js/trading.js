@@ -173,29 +173,47 @@ async function ensureAllowance(amount) {
   }
 }
 
-function bindTradingHandlers() {
-  // Если реальная функция была удалена/переименована — модуль не должен падать.
-  // Здесь можно подключить ваши реальные биндинги позднее.
+function renderTrading() {
+  const host = getTradingHost?.() || document.getElementById('tradingInterface');
+  if (!host) return;
 
-  console.log('[TRADING] bindTradingHandlers: stub');
+  const ws = window.walletState || null;
+  const connected  = !!ws?.address && !!ws?.signer;
+  const onArbitrum = Number(ws?.chainId) === 42161;
 
-  // Пример: если у вас будут кнопки buy/sell с id buyBtn/sellBtn — можно безопасно повесить тут.
-  // Но лучше вешать после renderTrading (когда DOM уже создан), поэтому пока оставляем пустым.
+  console.log('[TRADING] renderTrading', {
+    address: ws?.address,
+    hasSigner: !!ws?.signer,
+    chainId: ws?.chainId,
+    connected,
+    onArbitrum
+  });
+
+  if (!connected || !onArbitrum) {
+    host.innerHTML = `
+      <div style="text-align:center; padding:50px;">
+        <div style="font-size:3em; margin-bottom:10px;">🔒</div>
+        <p>${!connected ? 'Підключіть гаманець для торгівлі' : 'Перемкніться на мережу Arbitrum One'}</p>
+      </div>
+    `;
+    return;
+  }
+
+  // ✅ подключено — рисуем реальный UI
+  renderTradingUI();
 }
 
 let _tradingBound = false;
 
 export function initTradingModule() {
   if (_tradingBound) {
-    try { renderTrading(); } catch (e) {
-      console.warn('[TRADING] renderTrading failed (repeat init):', e?.message || e);
-    }
+    try { renderTrading(); } catch (e) { console.warn('[TRADING] renderTrading failed (repeat init):', e?.message || e); }
     return;
   }
-
   _tradingBound = true;
 
-  try { bindTradingHandlers(); } catch (e) {
+  // bind handlers (если есть) — не критично
+  try { bindTradingHandlers?.(); } catch (e) {
     console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e);
   }
 
@@ -209,6 +227,8 @@ export function initTradingModule() {
     }
   });
 }
+
+function bindTradingHandlers() {}
 
 // -----------------------------
 // Utils
@@ -439,9 +459,9 @@ function renderTradingUI() {
   </div>
 `;
 
-  bindUiOncePerRender();
-  hardUnlock();
-  refreshBuyBonusBox().catch(() => {});
+try { bindUiOncePerRender?.(); } catch (e) { console.warn(e); }
+try { hardUnlock?.(); } catch (e) { console.warn(e); }
+try { refreshBuyBonusBox?.().catch(()=>{}); } catch (e) { console.warn(e); }
 }
 
 // -----------------------------
