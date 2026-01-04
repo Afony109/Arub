@@ -10,8 +10,7 @@ import {initWalletModule, getEthersProvider, getAvailableWallets, connectWallet,
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
-initTradingModule();
-initWalletModule();
+
 document.addEventListener('DOMContentLoaded', async () => {
   try { await renderWallets(); } catch (e) { console.warn(e); }
 });
@@ -31,6 +30,33 @@ console.log('[app] wallet api ready', typeof window.getAvailableWallets, typeof 
 
 console.log('[APP] module loaded:', import.meta.url);
 
+let tradingInitDone = false;
+
+async function ensureTradingUI(reason = 'unknown') {
+  // trading.html: контейнер существует
+  const box = document.getElementById('tradingInterface');
+  if (!box) return;
+
+  // ВАЖНО: initTradingModule должен быть идемпотентным.
+  // Если он не идемпотентен — смотрите пункт 2 ниже.
+  try {
+    await initTradingModule();
+    tradingInitDone = true;
+    console.log('[UI] ensureTradingUI ok', { reason });
+  } catch (e) {
+    console.warn('[UI] ensureTradingUI failed', reason, e?.message || e);
+  }
+}
+
+// 1) после загрузки DOM (чтобы #tradingInterface точно был в DOM)
+document.addEventListener('DOMContentLoaded', () => {
+  ensureTradingUI('DOMContentLoaded');
+});
+
+// 2) после любого изменения кошелька
+window.addEventListener('walletStateChanged', () => {
+  ensureTradingUI('walletStateChanged');
+});
 
 function ensureWalletDropdownBinding() {
   const connectBtn = document.getElementById('connectBtn');
