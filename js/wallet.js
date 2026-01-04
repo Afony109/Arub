@@ -726,38 +726,7 @@ try {
   console.warn('[wallet] failed to publish globals', e);
 }
 
-function pickInjectedProvider(walletId) {
-  const eth = window.ethereum;
-  if (!eth) return null;
 
-  const list = Array.isArray(eth.providers) && eth.providers.length ? eth.providers : [eth];
-
-  const isTrust = (p) => !!(p?.isTrust || p?.isTrustWallet);
-  const isRabby = (p) => !!(p?.isRabby);
-  const isMetaMask = (p) => !!(p?.isMetaMask);
-
-  // Важно: Trust может притворяться MetaMask => Trust проверяем раньше
-  if (walletId === 'trust' || walletId === 'trustwallet') {
-    return list.find(isTrust) || eth;
-  }
-
-  if (walletId === 'metamask') {
-    // MetaMask: isMetaMask = true, но НЕ Rabby и НЕ Trust
-    return (
-      list.find(p => isMetaMask(p) && !isRabby(p) && !isTrust(p)) ||
-      list.find(isMetaMask) ||
-      eth
-    );
-  }
-
-  // Другие injected (например uniswap)
-  if (walletId === 'uniswap') {
-    return list.find(p => p?.isUniswap) || eth;
-  }
-
-  // fallback
-  return eth;
-}
 
 
 
