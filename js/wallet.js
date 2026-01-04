@@ -352,6 +352,34 @@ export function getAvailableWallets() {
   return list;
 }
 
+function pickInjectedProvider(walletId, entry) {
+  const p0 = entry?._provider || entry?.provider;
+  if (p0?.request) return p0;
+
+  const eth = window.ethereum;
+  if (!eth?.request) return null;
+
+  const providers = Array.isArray(eth.providers) && eth.providers.length ? eth.providers : [eth];
+
+  const isTrust = (p) => !!(p?.isTrust || p?.isTrustWallet);
+  const isRabby = (p) => !!p?.isRabby;
+  const isMetaMask = (p) => !!p?.isMetaMask;
+
+  if (walletId === 'trust' || walletId === 'trustwallet') {
+    return providers.find(isTrust) || eth;
+  }
+
+  if (walletId === 'metamask') {
+    return (
+      providers.find(p => isMetaMask(p) && !isTrust(p) && !isRabby(p)) ||
+      providers.find(isMetaMask) ||
+      eth
+    );
+  }
+
+  return eth;
+}
+
 
  export async function connectWallet({ walletId = null } = {}) {
   if (isConnecting) {
@@ -394,17 +422,17 @@ export function getAvailableWallets() {
         'eth_requestAccounts timeout'
       );
     } else {
-      const prov = entry._provider || entry.provider;
-      if (!prov) throw new Error('Selected wallet provider not found');
+  const prov = pickInjectedProvider(walletId, entry);
+  if (!prov) throw new Error('Selected wallet provider not found');
 
-      localSelected = prov;
+  localSelected = prov;
 
-      await withTimeout(
-        localSelected.request({ method: 'eth_requestAccounts' }),
-        20000,
-        'eth_requestAccounts'
-      );
-    }
+  await withTimeout(
+    localSelected.request({ method: 'eth_requestAccounts' }),
+    20000,
+    'eth_requestAccounts'
+  );
+  }
 
     // если была старая сессия/провайдер — аккуратно снять слушатели
     detachProviderListeners();
@@ -461,6 +489,48 @@ export function getAvailableWallets() {
     isConnecting = false;
   }
 }
+
+async function requestAccounts(provider) {
+  // EIP-1193
+  return await provider.request({ method: 'eth_requestAccounts' });
+}
+
+async function ensureArbitrum(provider) {
+  const targetHex = '0xa4b1';
+
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: targetHex }],
+    });
+    return true;
+  } catch (e) {
+    // 4902 = chain not added
+    if (e?.code === 4902) {
+      try {
+        await provider.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: targetHex,
+            chainName: 'Arbitrum One',
+            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+            rpcUrls: [
+              'https://arbitrum-one-rpc.publicnode.com',
+              'https://arb1.arbitrum.io/rpc',
+            ],
+            blockExplorerUrls: ['https://arbiscan.io'],
+          }],
+        });
+        return true;
+      } catch (e2) {
+        // Trust Wallet иногда не любит addChain → просто вернём false
+        return false;
+      }
+    }
+    return false;
+  }
+}
+
 
 function withTimeout(promise, ms, label = 'operation') {
   let t;
@@ -654,6 +724,39 @@ try {
   });
 } catch (e) {
   console.warn('[wallet] failed to publish globals', e);
+}
+
+function pickInjectedProvider(walletId) {
+  const eth = window.ethereum;
+  if (!eth) return null;
+
+  const list = Array.isArray(eth.providers) && eth.providers.length ? eth.providers : [eth];
+
+  const isTrust = (p) => !!(p?.isTrust || p?.isTrustWallet);
+  const isRabby = (p) => !!(p?.isRabby);
+  const isMetaMask = (p) => !!(p?.isMetaMask);
+
+  // Важно: Trust может притворяться MetaMask => Trust проверяем раньше
+  if (walletId === 'trust' || walletId === 'trustwallet') {
+    return list.find(isTrust) || eth;
+  }
+
+  if (walletId === 'metamask') {
+    // MetaMask: isMetaMask = true, но НЕ Rabby и НЕ Trust
+    return (
+      list.find(p => isMetaMask(p) && !isRabby(p) && !isTrust(p)) ||
+      list.find(isMetaMask) ||
+      eth
+    );
+  }
+
+  // Другие injected (например uniswap)
+  if (walletId === 'uniswap') {
+    return list.find(p => p?.isUniswap) || eth;
+  }
+
+  // fallback
+  return eth;
 }
 
 
