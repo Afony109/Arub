@@ -640,14 +640,21 @@ export function getEthersProvider() {
 // -----------------------------
 // Publish legacy globals for UI modules that call window.*
 // -----------------------------
+// ---- publish globals (UI relies on window.*) ----
 try {
   window.initWalletModule = initWalletModule;
   window.getAvailableWallets = getAvailableWallets;
   window.connectWallet = connectWallet;
   window.connectWalletUI = connectWalletUI;
   window.disconnectWallet = disconnectWallet;
+
+  console.log('[wallet] globals published', {
+    hasGetAvailableWallets: typeof window.getAvailableWallets === 'function',
+    hasConnectWallet: typeof window.connectWallet === 'function',
+  });
 } catch (e) {
   console.warn('[wallet] failed to publish globals', e);
 }
+
 
 

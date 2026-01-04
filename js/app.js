@@ -11,6 +11,15 @@ import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from 
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
 
+initWalletModule();
+
+// если UI использует window.*, то публикуем тут (это 100% выполняется после импорта)
+window.getAvailableWallets = getAvailableWallets;
+window.connectWallet = connectWallet;
+window.disconnectWallet = disconnectWallet;
+
+console.log('[app] wallet api ready', typeof window.getAvailableWallets, typeof window.connectWallet);
+
 // -----------------------------
 // Read-only provider (stable RPC)
 // -----------------------------
@@ -67,6 +76,12 @@ function getWalletDropdownEl() {
 })();
 
 export async function renderWallets() {
+  console.log('[UI] renderWallets() start', {
+  hasDropdown: !!document.getElementById('walletDropdown'),
+  typeofGetAvailableWallets: typeof window.getAvailableWallets,
+  typeofConnectWallet: typeof window.connectWallet
+});
+
   const dd = document.getElementById('walletDropdown');
   if (!dd) {
     console.warn('[UI] walletDropdown not found');
@@ -97,6 +112,9 @@ export async function renderWallets() {
     `;
     return;
   }
+
+  console.log('[UI] wallets detected:', wallets);
+
 
   list.innerHTML = wallets.map(w => `
     <button class="wallet-item" data-wallet-id="${w.id}">
