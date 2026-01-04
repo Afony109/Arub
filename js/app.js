@@ -178,11 +178,23 @@ export async function renderWallets() {
       if (!disconnectBtn) return;
 
       e.preventDefault();
+
+      // ⛔ блокируем повторные клики по disconnect
+      if (dd.dataset.disconnecting === '1') return;
+      dd.dataset.disconnecting = '1';
+
       try {
         await window.disconnectWallet?.();
+
+        // UI refresh after disconnect
+        try { window.updateWalletUI?.('disconnected'); } catch (_) {}
+        try { renderWallets?.(); } catch (_) {}
+
         dd.classList.remove('open');
       } catch (err) {
         console.warn('[UI] disconnectWallet failed:', err);
+      } finally {
+        dd.dataset.disconnecting = '0';
       }
     });
   }
@@ -224,12 +236,7 @@ export async function renderWallets() {
   // ✅ normalize: поддерживаем и новый формат (walletId/entryName),
   // и старый (id/name) на всякий случай
   const norm = wallets.map((w) => {
-    const id =
-      w?.walletId ??
-      w?.id ??
-      w?.entryId ??
-      null;
-
+    const id = w?.walletId ?? w?.id ?? w?.entryId ?? null;
     const label =
       w?.entryName ??
       w?.name ??
@@ -282,8 +289,11 @@ export async function renderWallets() {
       btn.disabled = true;
 
       try {
-        // ✅ передаём реальный walletId
         await window.connectWallet?.({ walletId });
+
+        // опционально: обновить UI сразу (если updateWalletUI слушает walletStateChanged, можно не надо)
+        try { window.updateWalletUI?.('connected'); } catch (_) {}
+
         dd.classList.remove('open');
       } catch (err) {
         console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
@@ -295,6 +305,9 @@ export async function renderWallets() {
           reason: err?.reason,
           stack: err?.stack
         });
+
+        // ❗ НЕ вызываем disconnectWallet здесь.
+        // Ошибка подключения не означает, что надо рвать текущую сессию.
       } finally {
         window.uiConnecting = false;
         btn.disabled = false;

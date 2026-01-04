@@ -606,6 +606,7 @@ export function connectWalletUI({ walletId } = {}) {
 }
 
 export async function disconnectWallet() {
+  // 1) WalletConnect cleanup (if used)
   try {
     if (wcProvider) {
       await wcProvider.disconnect?.();
@@ -613,9 +614,12 @@ export async function disconnectWallet() {
     }
   } catch (_) {}
 
-  // снимаем слушателей со старого провайдера
-  detachProviderListeners();
+  // 2) remove listeners from previous provider
+  try {
+    detachProviderListeners();
+  } catch (_) {}
 
+  // 3) reset internal state
   selectedEip1193 = null;
   ethersProvider = null;
   signer = null;
@@ -623,11 +627,27 @@ export async function disconnectWallet() {
   currentChainId = null;
   wcProvider = null;
 
-  clearGlobals();
-  showNotification?.('Wallet disconnected', 'info');
-  dispatchDisconnected();
-}
+  // 4) reset globals
+  clearGlobals(); // window.walletState = null
 
+  // 5) IMPORTANT: notify UI/modules (trading listens to walletStateChanged)
+  // publishGlobals() in your code dispatches walletStateChanged even when no provider selected
+  try {
+    await publishGlobals();
+  } catch (_) {
+    // fallback: at least dispatch the event
+    try {
+      window.dispatchEvent(new CustomEvent('walletStateChanged', { detail: window.walletState }));
+    } catch (_) {}
+  }
+
+  // 6) optional legacy/custom events
+  try { dispatchDisconnected(); } catch (_) {}
+
+  try {
+    showNotification?.('Wallet disconnected', 'info');
+  } catch (_) {}
+}
 
 export function isWalletConnected() {
   return !!window.walletState?.address;
