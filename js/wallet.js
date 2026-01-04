@@ -324,40 +324,8 @@ function getLegacyInjectedEntries() {
 }
 
 // -----------------------------
-// EIP-6963 discovery
-// -----------------------------
-let discoveryReady = false;
-
-function setupEip6963Discovery() {
-  if (discoveryReady) return;
-  discoveryReady = true;
-
-  window.addEventListener('eip6963:announceProvider', (event) => {
-    const { info, provider } = event.detail || {};
-    if (!info?.rdns || !provider) return;
-
-    discoveredWallets.set(info.rdns, {
-      id: info.rdns,
-      name: info.name || info.rdns,
-      icon: info.icon || null,
-      type: 'eip6963',
-      provider
-    });
-  });
-
-  // Ask wallets to announce themselves
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
-}
-
-// -----------------------------
 // Public API
 // -----------------------------
-export function initWalletModule() {
-  try { setupEip6963Discovery(); } catch (e) {
-    console.warn('[WALLET] EIP-6963 discovery skipped:', e);
-  }
-  console.log('[WALLET] initWalletModule');
-}
 
 function detectWalletBrand(provider, fallbackName = 'Wallet') {
   // EIP-1193 vendor hints (order matters)
@@ -388,112 +356,7 @@ function pickEip6963Fields(w) {
   return { rdns, metaName, icon, provider };
 }
 
-export function getAvailableWallets() {
-  const list = [];
-  const seen = new Set();
-
-  // -------------------------
-  // EIP-6963 discovered wallets
-  // -------------------------
-  for (const w of discoveredWallets.values()) {
-    const { rdns, metaName, icon, provider } = pickEip6963Fields(w);
-
-    // Brand-detected name (prevents "MetaMask" label opening Bybit, etc.)
-    const name = detectWalletBrand(provider, metaName || 'Wallet');
-
-    // Stable unique id
-    const id = rdns ? `eip6963:${rdns}` : `eip6963:${name.toLowerCase()}`;
-
-    // Dedup by id and by display name (case-insensitive)
-    const nameKey = `name:${name.toLowerCase()}`;
-    if (seen.has(id) || seen.has(nameKey)) continue;
-    seen.add(id);
-    seen.add(nameKey);
-
-    list.push({
-      id,
-      name,
-      icon,
-      type: 'eip6963',
-      _provider: provider,
-      _meta: { rdns, name }
-    });
-  }
-
-  // -------------------------
-  // Legacy injected wallets
-  // -------------------------
-  for (const w of getLegacyInjectedEntries()) {
-    const prov = w?._provider || w?.provider || null;
-
-    // Prefer detected brand name over w.name if provider hints exist
-    const detectedName = detectWalletBrand(prov, w?.name || 'Injected');
-    const name = (detectedName || w?.name || 'Injected').trim();
-
-    const id = `legacy:${(w?.id || name).toLowerCase()}`;
-    const nameKey = `name:${name.toLowerCase()}`;
-
-    // If an EIP-6963 wallet with same brand/name already exists, skip legacy duplicate
-    if (seen.has(nameKey) || seen.has(id)) continue;
-    seen.add(nameKey);
-    seen.add(id);
-
-
-    list.push({
-      id,
-      name,
-      icon: null,
-      type: w?.type || 'injected',
-      _provider: prov,
-      _meta: { name }
-    });
-  }
-
-  // -------------------------
-  // WalletConnect
-  // -------------------------
-  if (CONFIG?.WALLETCONNECT_PROJECT_ID) {
-    list.push({
-      id: 'walletconnect',
-      name: 'WalletConnect',
-      icon: null,
-      type: 'walletconnect'
-    });
-  }
-
-  return list;
-}
-
-function pickInjectedProvider(walletId, entry) {
-  const p0 = entry?._provider || entry?.provider;
-  if (p0?.request) return p0;
-
-  const eth = window.ethereum;
-  if (!eth?.request) return null;
-
-  const providers = Array.isArray(eth.providers) && eth.providers.length ? eth.providers : [eth];
-
-  const isTrust = (p) => !!(p?.isTrust || p?.isTrustWallet);
-  const isRabby = (p) => !!p?.isRabby;
-  const isMetaMask = (p) => !!p?.isMetaMask;
-
-  if (walletId === 'trust' || walletId === 'trustwallet') {
-    return providers.find(isTrust) || eth;
-  }
-
-  if (walletId === 'metamask') {
-    return (
-      providers.find(p => isMetaMask(p) && !isTrust(p) && !isRabby(p)) ||
-      providers.find(isMetaMask) ||
-      eth
-    );
-  }
-
-  return eth;
-}
-
-
- export async function connectWallet({ walletId = null } = {}) {
+  export async function connectWallet({ walletId = null } = {}) {
   if (isConnecting) {
     if (currentAddress) return currentAddress;
     throw new Error('Wallet connection already in progress');
@@ -509,16 +372,17 @@ function pickInjectedProvider(walletId, entry) {
 
     if (!walletId) throw new Error('No wallet selected');
 
-    const entry = wallets.find(w => w.id === walletId);
+    // ✅ robust: ищем по walletId (а не по id)
+    const entry = wallets.find(w => w.walletId === walletId);
     if (!entry) throw new Error('No wallet selected');
 
     console.log('[wallet] connect start', {
-  walletId,
-  entryId: entry.id,
-  entryName: entry.name,
-  type: entry.type,
-  rdns: entry?._meta?.rdns
-  });
+      walletId,
+      entryId: entry.entryId,
+      entryName: entry.entryName,
+      type: entry.type,
+      rdns: entry.rdns
+    });
 
     // 1) Получаем EIP-1193 провайдер (localSelected) и делаем requestAccounts
     if (entry.type === 'walletconnect') {
@@ -541,22 +405,39 @@ function pickInjectedProvider(walletId, entry) {
         20000,
         'eth_requestAccounts timeout'
       );
-   } else {
-  const prov = pickInjectedProvider(walletId, entry);
-  if (!prov) throw new Error('Selected wallet provider not found');
+    } else if (entry.type === 'eip6963') {
+      // ✅ берём provider по entryId (надежнее), fallback по walletId
+      const prov =
+        getEip1193ProviderById(entry.entryId) ||
+        getEip1193ProviderById(entry.walletId);
 
-  localSelected = prov;
+      if (!prov?.request) throw new Error('Selected wallet provider not found');
 
-  await withTimeout(
-    localSelected.request({ method: 'eth_requestAccounts' }),
-    20000,
-    'eth_requestAccounts'
-  );
-}
+      localSelected = prov;
+
+      await withTimeout(
+        localSelected.request({ method: 'eth_requestAccounts' }),
+        20000,
+        'eth_requestAccounts'
+      );
+    } else if (entry.type === 'injected') {
+      // fallback для старых кошельков
+      const prov = window.ethereum;
+      if (!prov?.request) throw new Error('Injected provider not found');
+
+      localSelected = prov;
+
+      await withTimeout(
+        localSelected.request({ method: 'eth_requestAccounts' }),
+        20000,
+        'eth_requestAccounts'
+      );
+    } else {
+      throw new Error(`Unsupported wallet type: ${entry.type}`);
+    }
 
     // если была старая сессия/провайдер — аккуратно снять слушатели
     detachProviderListeners();
-
 
     // 2) Фиксируем выбранный провайдер в состоянии модуля
     selectedEip1193 = localSelected;
@@ -569,18 +450,29 @@ function pickInjectedProvider(walletId, entry) {
     const addr = await signer.getAddress();
     currentAddress = addr ? ethers.utils.getAddress(addr) : null;
 
-    const net = await ethersProvider.getNetwork();
-    currentChainId = net?.chainId ?? null;
+    // chainId берём из провайдера (бывает надежнее, чем getNetwork у некоторых кошельков)
+    let cid = null;
+    try {
+      const hex = await selectedEip1193.request({ method: 'eth_chainId' });
+      const parsed = Number.parseInt(hex, 16);
+      cid = Number.isFinite(parsed) ? parsed : null;
+    } catch (_) {}
+
+    if (cid) {
+      currentChainId = cid;
+    } else {
+      const net = await ethersProvider.getNetwork();
+      currentChainId = net?.chainId ?? null;
+    }
 
     // 4) Листенеры ставим после selectedEip1193
     attachProviderListeners();
 
     console.log('[wallet] before publishGlobals', {
-  walletId,
-  address: currentAddress,
-  chainId: currentChainId
-  });
-
+      walletId,
+      address: currentAddress,
+      chainId: currentChainId
+    });
 
     // 5) Публикуем глобальное состояние (walletState)
     await publishGlobals();
@@ -589,6 +481,8 @@ function pickInjectedProvider(walletId, entry) {
     currentChainId = window.walletState?.chainId ?? currentChainId;
 
     showNotification?.(`Wallet connected: ${currentAddress}`, 'success');
+
+    // ваш текущий dispatchConnected использует currentAddress/currentChainId
     dispatchConnected();
 
     // совместимость со старым кодом
@@ -604,12 +498,16 @@ function pickInjectedProvider(walletId, entry) {
       }
     } catch (_) {}
 
+    // сброс локального состояния
     selectedEip1193 = null;
     ethersProvider = null;
     signer = null;
     currentChainId = null;
     currentAddress = null;
     wcProvider = null;
+
+    // и публикуем сброс, чтобы UI тоже сбросился
+    try { await publishGlobals(); } catch (_) {}
 
     throw e;
   } finally {
