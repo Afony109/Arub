@@ -149,6 +149,28 @@ export async function renderWallets() {
     dd.insertBefore(list, dd.firstChild);
   }
 
+  // bind click handler once (event delegation)
+  if (!list.dataset.bound) {
+    list.dataset.bound = '1';
+    list.addEventListener('click', async (e) => {
+      const btn = e.target.closest?.('.wallet-item');
+      if (!btn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const walletId = btn.getAttribute('data-wallet-id');
+      if (!walletId) return;
+
+      try {
+        await window.connectWallet?.({ walletId });
+        dd.classList.remove('open');
+      } catch (err) {
+        console.warn('[UI] connectWallet failed:', err?.message || err);
+      }
+    });
+  }
+
   let wallets = [];
   try {
     const fn = window.getAvailableWallets;
@@ -169,25 +191,10 @@ export async function renderWallets() {
   console.log('[UI] wallets detected:', wallets);
 
   list.innerHTML = wallets.map(w => `
-    <button class="wallet-item" data-wallet-id="${w.id}">
+    <button type="button" class="wallet-item" data-wallet-id="${w.id}">
       <span class="wallet-name">${w.name || w.id}</span>
     </button>
   `).join('');
-
-  list.querySelectorAll('.wallet-item').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const walletId = btn.getAttribute('data-wallet-id');
-      try {
-        await window.connectWallet?.({ walletId });
-        dd.classList.remove('open');
-      } catch (err) {
-        console.warn('[UI] connectWallet failed:', err?.message || err);
-      }
-    });
-  });
 }
     
 
