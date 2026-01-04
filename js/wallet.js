@@ -62,11 +62,6 @@ function normalize6963Entry(detail) {
   };
 }
 
-export function initWalletModule() {
-  // вы у себя уже вызываете initWalletModule() из app.js — оставляем
-  // добавляем внутрь подписку на 6963
-  bindEip6963();
-}
 
 function bindEip6963() {
   if (EIP6963._bound) return;
