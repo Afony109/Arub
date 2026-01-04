@@ -176,28 +176,35 @@ async function ensureAllowance(amount) {
 let _tradingBound = false;
 
 export function initTradingModule() {
-  // вешаем слушатель всегда (даже если bind отвалился)
-  if (!_tradingBound) {
-    _tradingBound = true;
+  if (_tradingBound) {
+    // только перерендер
+    renderTrading();
+    return;
+  }
+  _tradingBound = true;
 
-    // bind handlers once — но не даём этому сломать весь модуль
+  // биндим хендлеры ОДИН раз
+  try {
+    bindTradingHandlers();
+  } catch (e) {
+    console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e);
+  }
+
+  // первый рендер
+  try {
+    renderTrading();
+  } catch (e) {
+    console.warn('[TRADING] initial renderTrading failed:', e?.message || e);
+  }
+
+  // реакция на изменения кошелька
+  window.addEventListener('walletStateChanged', () => {
     try {
-      bindTradingHandlers();
+      renderTrading();
     } catch (e) {
-      console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e);
+      console.warn('[TRADING] renderTrading failed on walletStateChanged:', e?.message || e);
     }
-
-    window.addEventListener('walletStateChanged', () => {
-      try { renderTrading(); } catch (e) {
-        console.warn('[TRADING] renderTrading failed on walletStateChanged:', e?.message || e);
-      }
-    });
-  }
-
-  // initial / повторный рендер
-  try { renderTrading(); } catch (e) {
-    console.warn('[TRADING] renderTrading failed:', e?.message || e);
-  }
+  });
 }
 
 function renderTrading() {
@@ -1384,59 +1391,3 @@ export async function loadMyLockInfo() {
   }
 }
 
-// -----------------------------
-// Public init (event-driven)
-// -----------------------------
-export function initTradingModule() {
-  if (inited) return true;
-  inited = true;
-
-  console.log('[TRADING] initTradingModule: start');
-
-  // IMPORTANT: initReadOnly is async — handle promise
-  initReadOnly().catch((e) => {
-    console.error('[TRADING] initReadOnly failed:', e?.message || e);
-  });
-
-  applyWalletState('init').catch((e) =>
-    console.error('[TRADING] applyWalletState(init) error:', e)
-  );
-
-  if (!listenersBound) {
-    listenersBound = true;
-
-    window.addEventListener('wallet:connected', () => {
-      applyWalletState('wallet:connected').catch((e) =>
-        console.error('[TRADING] apply wallet:connected error:', e)
-      );
-    });
-
-    window.addEventListener('wallet:disconnected', () => {
-      applySeq++;
-      applyWalletState('wallet:disconnected').catch((e) =>
-        console.error('[TRADING] apply wallet:disconnected error:', e)
-      );
-    });
-
-    window.addEventListener('walletConnected', () => {
-      applyWalletState('walletConnected').catch((e) =>
-        console.error('[TRADING] apply walletConnected error:', e)
-      );
-    });
-
-    window.addEventListener('walletDisconnected', () => {
-      applySeq++;
-      applyWalletState('walletDisconnected').catch((e) =>
-        console.error('[TRADING] apply walletDisconnected error:', e)
-      );
-    });
-
-    window.addEventListener('walletChanged', () => {
-      applyWalletState('walletChanged').catch((e) =>
-        console.error('[TRADING] apply walletChanged error:', e)
-      );
-    });
-  }
-
-  return true;
-}
