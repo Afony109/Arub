@@ -213,28 +213,48 @@ export async function renderWallets() {
     }
   }
 
-  // загрузим список кошельков
-  let wallets = [];
-  try {
-    const fn = window.getAvailableWallets;
-    wallets = (typeof fn === 'function') ? (fn() || []) : [];
-  } catch (e) {
-    console.warn('[UI] getAvailableWallets failed:', e);
-    wallets = [];
+  const getWalletsSafe = () => {
+    try {
+      const fn = window.getAvailableWallets;
+      const w = (typeof fn === 'function') ? (fn() || []) : [];
+      return Array.isArray(w) ? w : [];
+    } catch (e) {
+      console.warn('[UI] getAvailableWallets failed:', e);
+      return [];
+    }
+  };
+
+  // ------------------------------------------
+  // загрузим список кошельков (EIP-6963 async)
+  // ------------------------------------------
+  let wallets = getWalletsSafe();
+
+  // Если пришёл только WalletConnect/Injected — подождём чуть-чуть announceProvider
+  // (это частая причина "был список, стал один")
+  if (!wallets || wallets.length <= 1) {
+    await new Promise(r => setTimeout(r, 120));
+    wallets = getWalletsSafe();
+  }
+  if (!wallets || wallets.length <= 1) {
+    await new Promise(r => setTimeout(r, 200));
+    wallets = getWalletsSafe();
   }
 
   if (!Array.isArray(wallets) || wallets.length === 0) {
     list.innerHTML = `
       <div class="wallet-list-title">Гаманці не знайдено</div>
-      <div class="wallet-list-hint">Встановіть MetaMask / Rabby або увімкніть WalletConnect.</div>
+      <div class="wallet-list-hint">Увімкніть розширення гаманця або WalletConnect.</div>
     `;
     return;
   }
 
   console.log('[UI] wallets detected:', wallets);
 
-  // ✅ normalize: поддерживаем и новый формат (walletId/entryName),
-  // и старый (id/name) на всякий случай
+  // ------------------------------------------
+  // normalize + de-duplicate by id
+  // ------------------------------------------
+  const seen = new Set();
+
   const norm = wallets.map((w) => {
     const id = w?.walletId ?? w?.id ?? w?.entryId ?? null;
     const label =
@@ -245,8 +265,16 @@ export async function renderWallets() {
       w?.id ??
       'Wallet';
 
-    return { id, label, raw: w };
-  }).filter(x => !!x.id);
+    const type = w?.type ?? '';
+    const rdns = w?.rdns ?? '';
+    const icon = w?.icon ?? '';
+
+    return { id, label, type, rdns, icon, raw: w };
+  }).filter(x => !!x.id).filter(x => {
+    if (seen.has(x.id)) return false;
+    seen.add(x.id);
+    return true;
+  });
 
   if (norm.length === 0) {
     list.innerHTML = `
@@ -257,12 +285,37 @@ export async function renderWallets() {
     return;
   }
 
-  // рисуем кнопки
-  list.innerHTML = norm.map(w => `
-    <button type="button" class="wallet-item" data-wallet-id="${String(w.id)}">
-      <span class="wallet-name">${String(w.label)}</span>
-    </button>
-  `).join('');
+  // сортировка: eip6963 -> walletconnect -> injected, дальше по имени
+  const rank = (t) => (t === 'eip6963' ? 0 : t === 'walletconnect' ? 1 : 2);
+  norm.sort((a, b) => {
+    const ra = rank(a.type), rb = rank(b.type);
+    if (ra !== rb) return ra - rb;
+    return String(a.label).localeCompare(String(b.label));
+  });
+
+  // ------------------------------------------
+  // render buttons (with icon + rdns)
+  // ------------------------------------------
+  list.innerHTML = `
+    <div class="wallet-list-title">Оберіть гаманець</div>
+    ${norm.map(w => {
+      const iconHtml = w.icon
+        ? `<img class="wallet-icon" src="${escapeHtml(w.icon)}" alt="" referrerpolicy="no-referrer">`
+        : `<span class="wallet-icon-placeholder"></span>`;
+
+      const sub = (w.type === 'eip6963' && w.rdns) ? w.rdns : (w.type === 'walletconnect' ? 'QR / Deeplink' : '');
+
+      return `
+        <button type="button" class="wallet-item" data-wallet-id="${escapeHtml(String(w.id))}">
+          ${iconHtml}
+          <span class="wallet-item-text">
+            <span class="wallet-name">${escapeHtml(String(w.label))}</span>
+            ${sub ? `<span class="wallet-sub">${escapeHtml(String(sub))}</span>` : ``}
+          </span>
+        </button>
+      `;
+    }).join('')}
+  `;
 
   console.log('[UI] wallet buttons rendered:', list.querySelectorAll('.wallet-item').length);
 
@@ -291,9 +344,7 @@ export async function renderWallets() {
       try {
         await window.connectWallet?.({ walletId });
 
-        // опционально: обновить UI сразу (если updateWalletUI слушает walletStateChanged, можно не надо)
         try { window.updateWalletUI?.('connected'); } catch (_) {}
-
         dd.classList.remove('open');
       } catch (err) {
         console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
@@ -305,9 +356,6 @@ export async function renderWallets() {
           reason: err?.reason,
           stack: err?.stack
         });
-
-        // ❗ НЕ вызываем disconnectWallet здесь.
-        // Ошибка подключения не означает, что надо рвать текущую сессию.
       } finally {
         window.uiConnecting = false;
         btn.disabled = false;
@@ -316,9 +364,9 @@ export async function renderWallets() {
   }
 }
 
-// маленький helper для текста (чтобы не ломать разметку)
+// простая защита от HTML-инъекций
 function escapeHtml(s) {
-  return s
+  return String(s ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
