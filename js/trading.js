@@ -173,128 +173,42 @@ async function ensureAllowance(amount) {
   }
 }
 
+function bindTradingHandlers() {
+  // Если реальная функция была удалена/переименована — модуль не должен падать.
+  // Здесь можно подключить ваши реальные биндинги позднее.
+
+  console.log('[TRADING] bindTradingHandlers: stub');
+
+  // Пример: если у вас будут кнопки buy/sell с id buyBtn/sellBtn — можно безопасно повесить тут.
+  // Но лучше вешать после renderTrading (когда DOM уже создан), поэтому пока оставляем пустым.
+}
+
 let _tradingBound = false;
 
 export function initTradingModule() {
   if (_tradingBound) {
-    // только перерендер
-    renderTrading();
+    try { renderTrading(); } catch (e) {
+      console.warn('[TRADING] renderTrading failed (repeat init):', e?.message || e);
+    }
     return;
   }
+
   _tradingBound = true;
 
-  // биндим хендлеры ОДИН раз
-  try {
-    bindTradingHandlers();
-  } catch (e) {
+  try { bindTradingHandlers(); } catch (e) {
     console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e);
   }
 
-  // первый рендер
-  try {
-    renderTrading();
-  } catch (e) {
+  try { renderTrading(); } catch (e) {
     console.warn('[TRADING] initial renderTrading failed:', e?.message || e);
   }
 
-  // реакция на изменения кошелька
   window.addEventListener('walletStateChanged', () => {
-    try {
-      renderTrading();
-    } catch (e) {
+    try { renderTrading(); } catch (e) {
       console.warn('[TRADING] renderTrading failed on walletStateChanged:', e?.message || e);
     }
   });
 }
-
-function renderTrading() {
-  const box = document.getElementById('tradingInterface');
-  if (!box) return;
-
-  const ws = window.walletState || null;
-  const address = ws?.address || null;
-  const signer  = ws?.signer || null;
-  const chainId = Number(ws?.chainId);
-
-  const connected  = !!address && !!signer;
-  const onArbitrum = chainId === 42161;
-
-  console.log('[TRADING] renderTrading', {
-    address,
-    hasSigner: !!signer,
-    chainId,
-    connected,
-    onArbitrum
-  });
-
-  // -----------------------------
-  // LOCKED STATE
-  // -----------------------------
-  if (!connected || !onArbitrum) {
-    box.innerHTML = `
-      <div style="text-align:center; padding:50px;">
-        <div style="font-size:3em; margin-bottom:10px;">🔒</div>
-        <p>${!connected
-          ? 'Підключіть гаманець для торгівлі'
-          : 'Перемкніться на мережу Arbitrum One'
-        }</p>
-      </div>
-    `;
-    return;
-  }
-
-  // -----------------------------
-  // UNLOCKED STATE (TEMP UI)
-  // -----------------------------
-  // ⚠️ Это намеренно простой UI-заглушка,
-  // чтобы 100% убедиться, что "замок" снят.
-  // Замените этот блок на ваш реальный UI.
-  box.innerHTML = `
-    <div style="padding:24px;">
-      <div style="text-align:center; margin-bottom:16px;">
-        <div style="font-size:2em;">✅</div>
-        <div style="margin-top:6px; font-weight:600;">
-          Гаманець підключено
-        </div>
-        <div style="font-size:13px; opacity:.8;">
-          ${address}
-        </div>
-      </div>
-
-      <div style="display:flex; gap:12px; justify-content:center;">
-        <button id="buyBtn"  style="padding:10px 16px;">Купити ARUB</button>
-        <button id="sellBtn" style="padding:10px 16px;">Продати ARUB</button>
-      </div>
-
-      <div style="margin-top:14px; text-align:center; font-size:13px; opacity:.8;">
-        Trading UI активовано. Можна підключати реальний інтерфейс.
-      </div>
-    </div>
-  `;
-
-  // -----------------------------
-  // BIND TEMP BUTTONS (SAFE)
-  // -----------------------------
-  const buyBtn  = document.getElementById('buyBtn');
-  const sellBtn = document.getElementById('sellBtn');
-
-  if (buyBtn && typeof buyTokens === 'function') {
-    buyBtn.onclick = () => {
-      try { buyTokens(); } catch (e) {
-        console.warn('[TRADING] buyTokens failed:', e?.message || e);
-      }
-    };
-  }
-
-  if (sellBtn && typeof sellTokens === 'function') {
-    sellBtn.onclick = () => {
-      try { sellTokens(); } catch (e) {
-        console.warn('[TRADING] sellTokens failed:', e?.message || e);
-      }
-    };
-  }
-}
-
 
 // -----------------------------
 // Utils
