@@ -256,8 +256,92 @@ function escapeHtml(s) {
 }
 
 function shortAddr(a) {
-  if (!a || typeof a !== 'string') return '';
-  return a.slice(0, 6) + '…' + a.slice(-4);
+  if (!a || a.length < 10) return a || '';
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+function bindWalletUiTradingPage() {
+  const connectBtn = document.getElementById('connectBtn');
+  const toggleBtn  = document.getElementById('walletMenuToggle');
+  const menu       = document.getElementById('walletMenu');
+
+  // toggle wallet menu
+  toggleBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    menu?.classList.toggle('open');
+  });
+
+  // close menu on outside click
+  document.addEventListener('click', (e) => {
+    if (!menu || !toggleBtn) return;
+    const wrap = menu.parentElement; // .wallet-dropdown
+    if (menu.classList.contains('open') && wrap && !wrap.contains(e.target)) {
+      menu.classList.remove('open');
+    }
+  });
+
+  // connect button opens your wallet picker (если так задумано)
+  connectBtn?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // если у вас подключение делается через dropdown/рендер кошельков — вызовите это
+    try { renderWallets?.(); } catch (_) {}
+    // либо напрямую коннект:
+    // await window.connectWallet?.();
+  });
+
+  // explorer
+  document.getElementById('walletViewOnExplorer')?.addEventListener('click', () => {
+    const a = window.walletState?.address;
+    if (!a) return;
+    window.open(`https://arbiscan.io/address/${a}`, '_blank');
+    menu?.classList.remove('open');
+  });
+
+  // disconnect
+  document.getElementById('walletDisconnect')?.addEventListener('click', async () => {
+    try { await disconnectWallet?.(); } catch (_) {}
+    menu?.classList.remove('open');
+  });
+
+  // главный: слушаем изменения кошелька
+  window.addEventListener('walletStateChanged', () => {
+    updateWalletUI?.('walletStateChanged');
+  });
+}
+
+function updateWalletUI(reason = 'unknown') {
+  const ws = window.walletState;
+
+  const connectBtn = document.getElementById('connectBtn');
+  const toggleBtn  = document.getElementById('walletMenuToggle');
+  const menuAddr   = document.getElementById('walletMenuAddress');
+
+  const connected = !!ws?.address && !!ws?.signer;
+
+  console.log('[UI] updateWalletUI', { reason, connected, address: ws?.address, chainId: ws?.chainId });
+
+  if (connectBtn) {
+    connectBtn.textContent = connected ? shortAddr(ws.address) : 'Підключити гаманець';
+    connectBtn.hidden = connected;          // на этой странице лучше скрывать кнопку и показывать avatar
+  }
+
+  if (toggleBtn) {
+    toggleBtn.hidden = !connected;
+  }
+
+  if (menuAddr) {
+    menuAddr.textContent = connected ? ws.address : '—';
+  }
+
+  // ВАЖНО: вызвать ваши колбэки, которые вы уже предусмотрели в HTML
+  if (connected) {
+    try { window.onWalletConnected?.(ws.address, { chainId: ws.chainId }); } catch (_) {}
+  } else {
+    try { window.onWalletDisconnected?.({}); } catch (_) {}
+  }
 }
 
 function setTradingLocked(locked) {
@@ -841,4 +925,17 @@ document.addEventListener('DOMContentLoaded', () => {
   applyWalletToUI(window.walletState);
 });
 
-initApp();
+function initApp() {
+  // 1) Привязка UI кошелька
+  bindWalletUiTradingPage();
+
+  // 2) Начальная отрисовка/синхронизация
+  try { updateWalletUI?.('initApp'); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent('walletStateChanged', { detail: window.walletState ?? null })); } catch (_) {}
+}
+
+// ВАЖНО: только после загрузки DOM
+document.addEventListener('DOMContentLoaded', initApp);
+
+
+
