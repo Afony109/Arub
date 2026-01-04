@@ -66,14 +66,14 @@ function getWalletDropdownEl() {
   if (!dropdown && menu) menu.id = 'walletDropdown';
 })();
 
-function renderWallets() {
+export async function renderWallets() {
   const dd = document.getElementById('walletDropdown');
   if (!dd) {
     console.warn('[UI] walletDropdown not found');
     return;
   }
 
-  // Контейнер для списка
+  // контейнер списка
   let list = dd.querySelector('.wallet-list');
   if (!list) {
     list = document.createElement('div');
@@ -81,17 +81,15 @@ function renderWallets() {
     dd.insertBefore(list, dd.firstChild);
   }
 
-  // 1) Получаем список кошельков из window.getAvailableWallets
   let wallets = [];
   try {
     const fn = window.getAvailableWallets;
-    wallets = (typeof fn === 'function') ? fn() : [];
+    wallets = (typeof fn === 'function') ? (fn() || []) : [];
   } catch (e) {
     console.warn('[UI] getAvailableWallets failed:', e?.message || e);
     wallets = [];
   }
 
-  // 2) Пусто — показываем подсказку
   if (!Array.isArray(wallets) || wallets.length === 0) {
     list.innerHTML = `
       <div class="wallet-list-title">Гаманці не знайдено</div>
@@ -100,45 +98,25 @@ function renderWallets() {
     return;
   }
 
-  // 3) Рендер
-  list.innerHTML = `
-    <div class="wallet-list-title">Оберіть гаманець</div>
-    <div class="wallet-list-items">
-      ${wallets.map(w => `
-        <button type="button" class="wallet-item" data-wallet-id="${escapeHtml(String(w.id))}">
-          ${w.icon ? `<img class="wallet-item-icon" src="${w.icon}" alt="">` : `<span class="wallet-item-icon placeholder"></span>`}
-          <span class="wallet-item-name">${escapeHtml(String(w.name || w.id))}</span>
-          <span class="wallet-item-type">${escapeHtml(String(w.type || ''))}</span>
-        </button>
-      `).join('')}
-    </div>
-  `;
+  list.innerHTML = wallets.map(w => `
+    <button class="wallet-item" data-wallet-id="${w.id}">
+      <span class="wallet-name">${w.name || w.id}</span>
+    </button>
+  `).join('');
 
-  // 4) Делегирование клика — без once, но с защитой от повторного навешивания
-  const itemsWrap = list.querySelector('.wallet-list-items');
-  if (!itemsWrap) return;
+  list.querySelectorAll('.wallet-item').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-  if (itemsWrap.dataset.bound === '1') return;
-  itemsWrap.dataset.bound = '1';
-
-  itemsWrap.addEventListener('click', async (e) => {
-    const btn = e.target?.closest?.('.wallet-item');
-    if (!btn) return;
-
-    const walletId = btn.getAttribute('data-wallet-id');
-    if (!walletId) return;
-
-    try {
-      if (typeof window.connectWallet !== 'function') {
-        throw new Error('connectWallet is not available');
+      const walletId = btn.getAttribute('data-wallet-id');
+      try {
+        await window.connectWallet?.({ walletId });
+        dd.classList.remove('open');
+      } catch (err) {
+        console.warn('[UI] connectWallet failed:', err?.message || err);
       }
-
-      await window.connectWallet({ walletId });
-      dd.classList.remove('open');
-    } catch (err) {
-      console.warn('[UI] connectWallet failed:', err?.message || err);
-      showNotification?.(err?.message || 'Wallet connect failed', 'error');
-    }
+    });
   });
 }
 
