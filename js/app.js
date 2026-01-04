@@ -193,10 +193,10 @@ function getWalletDropdownEl() {
 
 export async function renderWallets() {
   console.log('[UI] renderWallets() start', {
-  hasDropdown: !!document.getElementById('walletDropdown'),
-  typeofGetAvailableWallets: typeof window.getAvailableWallets,
-  typeofConnectWallet: typeof window.connectWallet
-});
+    hasDropdown: !!document.getElementById('walletDropdown'),
+    typeofGetAvailableWallets: typeof window.getAvailableWallets,
+    typeofConnectWallet: typeof window.connectWallet
+  });
 
   const dd = document.getElementById('walletDropdown');
   if (!dd) {
@@ -231,7 +231,6 @@ export async function renderWallets() {
 
   console.log('[UI] wallets detected:', wallets);
 
-
   list.innerHTML = wallets.map(w => `
     <button class="wallet-item" data-wallet-id="${w.id}">
       <span class="wallet-name">${w.name || w.id}</span>
@@ -253,6 +252,7 @@ export async function renderWallets() {
     });
   });
 }
+    
 
 // маленький helper для текста (чтобы не ломать разметку)
 function escapeHtml(s) {
