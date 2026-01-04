@@ -157,7 +157,7 @@ export async function renderWallets() {
         await window.disconnectWallet?.();
         dd.classList.remove('open');
       } catch (err) {
-        console.warn('[UI] disconnectWallet failed:', err?.message || err);
+        console.warn('[UI] disconnectWallet failed:', err);
       }
     });
   }
@@ -176,54 +176,13 @@ export async function renderWallets() {
     }
   }
 
-  // bind click handler once (event delegation) for wallet items
-// где-то ВЫШЕ в файле (один раз): let uiConnecting = false;
-
-if (!list.dataset.bound) {
-  list.dataset.bound = '1';
-
-  list.addEventListener('click', async (e) => {
-    const btn = e.target.closest?.('.wallet-item');
-    if (!btn) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const walletId = btn.getAttribute('data-wallet-id');
-    if (!walletId) return;
-
-    // ⛔ блокируем повторные клики
-    if (uiConnecting) return;
-    uiConnecting = true;
-    btn.disabled = true;
-
-    try {
-      await window.connectWallet?.({ walletId });
-      dd.classList.remove('open');
-    } catch (err) {
-      console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
-      console.warn('[UI] connectWallet failed details:', {
-        walletId,
-        message: err?.message,
-        code: err?.code,
-        data: err?.data,
-        reason: err?.reason,
-        stack: err?.stack
-      });
-    } finally {
-      uiConnecting = false;
-      btn.disabled = false;
-    }
-  });
-}
-
-
+  // загрузим список кошельков
   let wallets = [];
   try {
     const fn = window.getAvailableWallets;
     wallets = (typeof fn === 'function') ? (fn() || []) : [];
   } catch (e) {
-    console.warn('[UI] getAvailableWallets failed:', e?.message || e);
+    console.warn('[UI] getAvailableWallets failed:', e);
     wallets = [];
   }
 
@@ -237,6 +196,7 @@ if (!list.dataset.bound) {
 
   console.log('[UI] wallets detected:', wallets);
 
+  // рисуем кнопки
   list.innerHTML = wallets.map(w => `
     <button type="button" class="wallet-item" data-wallet-id="${w.id}">
       <span class="wallet-name">${w.name || w.id}</span>
@@ -244,7 +204,46 @@ if (!list.dataset.bound) {
   `).join('');
 
   console.log('[UI] wallet buttons rendered:', list.querySelectorAll('.wallet-item').length);
-    
+
+  // bind click handler once (event delegation) for wallet items
+  if (!list.dataset.bound) {
+    list.dataset.bound = '1';
+
+    list.addEventListener('click', async (e) => {
+      const btn = e.target.closest?.('.wallet-item');
+      if (!btn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const walletId = btn.getAttribute('data-wallet-id');
+      if (!walletId) return;
+
+      // ⛔ блокируем повторные клики
+      if (uiConnecting) return;
+      uiConnecting = true;
+      btn.disabled = true;
+
+      try {
+        await window.connectWallet?.({ walletId });
+        dd.classList.remove('open');
+      } catch (err) {
+        console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
+        console.warn('[UI] connectWallet failed details:', {
+          walletId,
+          message: err?.message,
+          code: err?.code,
+          data: err?.data,
+          reason: err?.reason,
+          stack: err?.stack
+        });
+      } finally {
+        uiConnecting = false;
+        btn.disabled = false;
+      }
+    });
+  }
+}
 
 // маленький helper для текста (чтобы не ломать разметку)
 function escapeHtml(s) {
@@ -702,6 +701,5 @@ async function initApp() {
     console.error('[APP] Fatal init error:', e);
     showNotification?.('❌ Помилка ініціалізації додатку', 'error');
   }
-}
 }
 }
