@@ -81,15 +81,17 @@ function renderWallets() {
     dd.insertBefore(list, dd.firstChild);
   }
 
-    let wallets = [];
+  // 1) Получаем список кошельков из window.getAvailableWallets
+  let wallets = [];
   try {
-    const fn = window.getAvailableWallets; // <-- важно
+    const fn = window.getAvailableWallets;
     wallets = (typeof fn === 'function') ? fn() : [];
   } catch (e) {
     console.warn('[UI] getAvailableWallets failed:', e?.message || e);
     wallets = [];
   }
 
+  // 2) Пусто — показываем подсказку
   if (!Array.isArray(wallets) || wallets.length === 0) {
     list.innerHTML = `
       <div class="wallet-list-title">Гаманці не знайдено</div>
@@ -98,12 +100,12 @@ function renderWallets() {
     return;
   }
 
-  // Рендер кнопок (icon может быть dataURL/svg — вставляем безопасно как <img>)
+  // 3) Рендер
   list.innerHTML = `
     <div class="wallet-list-title">Оберіть гаманець</div>
     <div class="wallet-list-items">
       ${wallets.map(w => `
-        <button type="button" class="wallet-item" data-wallet-id="${w.id}">
+        <button type="button" class="wallet-item" data-wallet-id="${escapeHtml(String(w.id))}">
           ${w.icon ? `<img class="wallet-item-icon" src="${w.icon}" alt="">` : `<span class="wallet-item-icon placeholder"></span>`}
           <span class="wallet-item-name">${escapeHtml(String(w.name || w.id))}</span>
           <span class="wallet-item-type">${escapeHtml(String(w.type || ''))}</span>
@@ -112,9 +114,14 @@ function renderWallets() {
     </div>
   `;
 
-  // Делегирование кликов
+  // 4) Делегирование клика — без once, но с защитой от повторного навешивания
   const itemsWrap = list.querySelector('.wallet-list-items');
-  itemsWrap?.addEventListener('click', async (e) => {
+  if (!itemsWrap) return;
+
+  if (itemsWrap.dataset.bound === '1') return;
+  itemsWrap.dataset.bound = '1';
+
+  itemsWrap.addEventListener('click', async (e) => {
     const btn = e.target?.closest?.('.wallet-item');
     if (!btn) return;
 
@@ -122,14 +129,17 @@ function renderWallets() {
     if (!walletId) return;
 
     try {
-      // ВАЖНО: connectWallet требует объект
+      if (typeof window.connectWallet !== 'function') {
+        throw new Error('connectWallet is not available');
+      }
+
       await window.connectWallet({ walletId });
       dd.classList.remove('open');
     } catch (err) {
       console.warn('[UI] connectWallet failed:', err?.message || err);
       showNotification?.(err?.message || 'Wallet connect failed', 'error');
     }
-  }, { once: true }); // once, чтобы не плодить обработчики при каждом render
+  });
 }
 
 // маленький helper для текста (чтобы не ломать разметку)
