@@ -29,6 +29,99 @@ const discoveredWallets = new Map();
 // -----------------------------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// -----------------------------
+// EIP-6963 store (robust)
+// -----------------------------
+const eip6963Store = {
+  inited: false,
+  // key -> entry
+  map: new Map(),
+};
+
+function makeEip6963Key(detail) {
+  // EIP-6963 обычно даёт info.uuid. Если нет — используем устойчивый составной ключ.
+  const info = detail?.info || {};
+  return (
+    info.uuid ||
+    `${info.rdns || 'rdns:unknown'}|${info.name || 'name:unknown'}|${info.icon || 'icon:unknown'}`
+  );
+}
+
+export function initWalletModule() {
+  if (eip6963Store.inited) return;
+  eip6963Store.inited = true;
+
+  // 1) Collect announcements
+  window.addEventListener('eip6963:announceProvider', (event) => {
+    try {
+      const detail = event?.detail;
+      if (!detail?.provider) return;
+
+      const key = makeEip6963Key(detail);
+      eip6963Store.map.set(key, {
+        walletId: `eip6963:${detail?.info?.name || detail?.info?.rdns || 'wallet'}`,
+        entryId: key,
+        entryName: detail?.info?.name || 'Wallet',
+        type: 'eip6963',
+        rdns: detail?.info?.rdns || '',
+        info: detail?.info || {},
+        provider: detail.provider,
+      });
+    } catch (e) {
+      console.warn('[wallet] eip6963 announceProvider handler failed:', e?.message || e);
+    }
+  });
+
+  // 2) Request providers (this triggers announceProvider in many wallets)
+  try {
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+  } catch (e) {
+    console.warn('[wallet] eip6963 requestProvider failed:', e?.message || e);
+  }
+
+  console.log('[wallet] initWalletModule: eip6963 init ok');
+}
+
+export function getAvailableWallets() {
+  const out = [];
+
+  // A) EIP-6963 wallets (MetaMask, Rabby, Trust, Bybit, etc.)
+  for (const entry of eip6963Store.map.values()) {
+    out.push({
+      walletId: entry.walletId,
+      entryId: entry.entryId,
+      entryName: entry.entryName,
+      type: entry.type,
+      rdns: entry.rdns || '',
+    });
+  }
+
+  // B) Legacy injected provider fallback (older wallets expose window.ethereum only)
+  // Do NOT let this collapse EIP-6963 entries; it is just a fallback.
+  if (window.ethereum && out.length === 0) {
+    out.push({
+      walletId: 'injected:ethereum',
+      entryId: 'injected:ethereum',
+      entryName: 'Injected',
+      type: 'injected',
+      rdns: '',
+    });
+  }
+
+  return out;
+}
+
+// Optional helper to fetch provider by walletId/entryId
+export function getEip1193ProviderById(walletIdOrEntryId) {
+  for (const entry of eip6963Store.map.values()) {
+    if (entry.walletId === walletIdOrEntryId || entry.entryId === walletIdOrEntryId) {
+      return entry.provider;
+    }
+  }
+  if (walletIdOrEntryId === 'injected:ethereum') return window.ethereum;
+  return null;
+}
+
 async function readChainIdHex(eth) {
   // вернёт строку вида "0xa4b1"
   return await eth.request({ method: 'eth_chainId' });
