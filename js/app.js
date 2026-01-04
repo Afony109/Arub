@@ -690,6 +690,67 @@ function bindConnectButton() {
   dd.addEventListener('click', (e) => e.stopPropagation());
 }
 
+function renderTradingLocked() {
+  const box = document.getElementById('tradingInterface');
+  if (!box) return;
+
+  box.innerHTML = `
+    <div style="text-align:center; padding:50px;">
+      <div style="font-size:3em; margin-bottom: 10px;">🔒</div>
+      <p>Підключіть гаманець для торгівлі</p>
+    </div>
+  `;
+}
+
+function renderTradingUnlocked() {
+  const box = document.getElementById('tradingInterface');
+  if (!box) return;
+
+  // ВАЖНО: тут либо ваша реальная разметка торговли,
+  // либо вызов вашей функции, которая уже рисует торговый интерфейс.
+  // Ниже — минимальный каркас, чтобы секция перестала быть "замком".
+  box.innerHTML = `
+    <div class="trade-grid">
+      <div class="trade-row">
+        <button type="button" class="action-btn" id="buyBtn">Купити ARUB</button>
+        <button type="button" class="action-btn" id="sellBtn">Продати ARUB</button>
+      </div>
+      <div class="trade-row" style="margin-top:12px; font-size:14px; opacity:.85;">
+        Гаманець підключено. Торгівля доступна.
+      </div>
+    </div>
+  `;
+
+  // Если у вас уже есть функции buyTokens/sellTokens — привяжите:
+  if (typeof buyTokens === 'function') {
+    document.getElementById('buyBtn')?.addEventListener('click', () => buyTokens());
+  }
+  if (typeof sellTokens === 'function') {
+    document.getElementById('sellBtn')?.addEventListener('click', () => sellTokens());
+  }
+}
+
+function onWalletUIChange(reason = 'walletStateChanged') {
+  updateWalletUI(reason);
+
+  const ws = window.walletState;
+  const connected = !!ws?.address && !!ws?.signer;
+  const onArbitrum = Number(ws?.chainId) === 42161;
+
+  if (connected && onArbitrum) {
+    renderTradingUnlocked();
+  } else {
+    renderTradingLocked();
+  }
+}
+
+window.addEventListener('walletStateChanged', () => onWalletUIChange('walletStateChanged'));
+
+document.addEventListener('DOMContentLoaded', () => {
+  // начальная синхронизация (важно, если кошелек уже подключен при загрузке)
+  onWalletUIChange('DOMContentLoaded');
+});
+
 // -------------------------
 // initApp() — оставляем initWalletModule только здесь
 // -------------------------
