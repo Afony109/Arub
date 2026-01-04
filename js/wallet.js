@@ -42,6 +42,9 @@ async function publishGlobals() {
   // если провайдер не выбран — сброс состояния
   if (!selectedEip1193) {
     window.walletState = null;
+    try {
+      window.dispatchEvent(new CustomEvent('walletStateChanged', { detail: window.walletState }));
+    } catch (_) {}
     return;
   }
 
@@ -74,7 +77,7 @@ async function publishGlobals() {
   currentAddress = addr;
 
   // ВАЖНО: НЕ создаём тут ethersProvider/signer заново, только публикуем то, что уже есть
-  window.walletState = {
+ window.walletState = {
     provider: ethersProvider || null,
     signer: signer || null,
     address: currentAddress || null,
@@ -88,6 +91,21 @@ async function publishGlobals() {
 
   console.log('[wallet] publishGlobals', window.walletState);
 }
+
+function dispatchWalletState() {
+  const ws = window.walletState || {};
+  window.dispatchEvent(new CustomEvent('wallet:state', { detail: ws }));
+
+  // для совместимости, если где-то уже ждёте другой ивент
+  if (ws?.address && ws?.signer) {
+    window.dispatchEvent(new CustomEvent('wallet:connected', { detail: ws }));
+  } else {
+    window.dispatchEvent(new CustomEvent('wallet:disconnected', { detail: ws }));
+  }
+}
+
+console.log('[wallet] publishGlobals', window.walletState);
+dispatchWalletState();
 
 function isPermissionError(e) {
   const msg = (e?.message || '').toLowerCase();
@@ -407,7 +425,7 @@ function pickInjectedProvider(walletId, entry) {
   entryName: entry.name,
   type: entry.type,
   rdns: entry?._meta?.rdns
-});
+  });
 
     // 1) Получаем EIP-1193 провайдер (localSelected) и делаем requestAccounts
     if (entry.type === 'walletconnect') {
@@ -463,6 +481,13 @@ function pickInjectedProvider(walletId, entry) {
 
     // 4) Листенеры ставим после selectedEip1193
     attachProviderListeners();
+
+    console.log('[wallet] before publishGlobals', {
+  walletId,
+  address: currentAddress,
+  chainId: currentChainId
+  });
+
 
     // 5) Публикуем глобальное состояние (walletState)
     await publishGlobals();

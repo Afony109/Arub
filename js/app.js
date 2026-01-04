@@ -260,6 +260,35 @@ function shortAddr(a) {
   return a.slice(0, 6) + '…' + a.slice(-4);
 }
 
+function setTradingLocked(locked) {
+  // универсально: отключаем элементы торговли (подстройте селекторы под ваш DOM)
+  document.querySelectorAll('#buyBtn, #sellBtn, .trade button, input.trade-input').forEach((el) => {
+    el.disabled = !!locked;
+  });
+
+  // если у вас есть контейнер “замка”
+  const tradeSection = document.getElementById('tradeSection') || document.querySelector('.trade-section');
+  if (tradeSection) tradeSection.classList.toggle('locked', !!locked);
+}
+
+window.addEventListener('walletStateChanged', (e) => {
+  const ws = e.detail;
+
+  // 1) обновить кнопку/меню
+  updateWalletUI('walletStateChanged');
+
+  // 2) снять замок с торговли (или поставить)
+  const connected = !!ws?.address && !!ws?.signer;
+  const onArbitrum = Number(ws?.chainId) === 42161;
+
+  // если вы хотите разрешать торговлю только в Arbitrum:
+  setTradingLocked(!(connected && onArbitrum));
+
+  // если нужно — сразу обновить лимиты/балансы
+  // refreshBalances?.();
+  // refreshTradeUI?.();
+});
+
 function updateWalletUI(reason = 'unknown') {
   const ws = window.walletState;
 
@@ -703,3 +732,52 @@ async function initApp() {
   }
 }
 }
+
+function isConnected(ws) {
+  return !!ws?.address && !!ws?.signer && Number(ws?.chainId) === 42161;
+}
+
+function applyWalletToUI(ws) {
+  // 1) Кнопка "Подключить" -> адрес
+  const connectBtn = document.getElementById('connectBtn');
+  if (connectBtn) {
+    if (ws?.address) {
+      const a = ws.address;
+      connectBtn.textContent = `${a.slice(0, 6)}…${a.slice(-4)}`;
+      connectBtn.classList.add('connected');
+    } else {
+      connectBtn.textContent = 'Підключити гаманець';
+      connectBtn.classList.remove('connected');
+    }
+  }
+
+  // 2) Разблокировать торговлю
+  const enabled = isConnected(ws);
+
+  // Вариант А: если у вас есть готовая функция
+  if (typeof window.setTradingEnabled === 'function') {
+    window.setTradingEnabled(enabled);
+  }
+
+  // Вариант B: прямое включение контролов (универсально)
+  document.querySelectorAll('[data-requires-wallet]').forEach((el) => {
+    el.classList.toggle('locked', !enabled);
+  });
+
+  // Пример: отключаем/включаем кнопки buy/sell
+  document.querySelectorAll('.trade button, #buyBtn, #sellBtn').forEach((btn) => {
+    btn.disabled = !enabled;
+  });
+}
+
+// Подписка на события кошелька
+window.addEventListener('wallet:state', (e) => applyWalletToUI(e.detail));
+window.addEventListener('wallet:connected', (e) => applyWalletToUI(e.detail));
+window.addEventListener('wallet:disconnected', (e) => applyWalletToUI(e.detail));
+
+// И ПРИНУДИТЕЛЬНО применить текущее состояние при старте
+document.addEventListener('DOMContentLoaded', () => {
+  applyWalletToUI(window.walletState);
+});
+
+initApp();
