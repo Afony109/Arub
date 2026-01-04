@@ -102,10 +102,9 @@ async function debugPresaleMath(address) {
   console.log("[DEBUG] Oracle rate raw =", oracleRateRaw.toString());
 }
 
+window.addEventListener('walletStateChanged', () => updateWalletUI('walletStateChanged'));
 
 // чтобы старый onclick="connectWallet()" продолжал работать:
-
-
 window.CONFIG = window.CONFIG || CONFIG;
 
 // app.js (глобально)
@@ -304,90 +303,30 @@ function bindWalletUiTradingPage() {
   document.getElementById('walletDisconnect')?.addEventListener('click', async () => {
     try { await disconnectWallet?.(); } catch (_) {}
     menu?.classList.remove('open');
-  });
-
-  // главный: слушаем изменения кошелька
-  window.addEventListener('walletStateChanged', () => {
-    updateWalletUI?.('walletStateChanged');
-  });
+  });// главный: слушаем изменения кошелька
 }
 
 function updateWalletUI(reason = 'unknown') {
   const ws = window.walletState;
 
-  const connectBtn = document.getElementById('connectBtn');
-  const toggleBtn  = document.getElementById('walletMenuToggle');
-  const menuAddr   = document.getElementById('walletMenuAddress');
-
   const connected = !!ws?.address && !!ws?.signer;
 
   console.log('[UI] updateWalletUI', { reason, connected, address: ws?.address, chainId: ws?.chainId });
 
-  if (connectBtn) {
-    connectBtn.textContent = connected ? shortAddr(ws.address) : 'Підключити гаманець';
-    connectBtn.hidden = connected;          // на этой странице лучше скрывать кнопку и показывать avatar
-  }
-
-  if (toggleBtn) {
-    toggleBtn.hidden = !connected;
-  }
-
-  if (menuAddr) {
-    menuAddr.textContent = connected ? ws.address : '—';
-  }
-
-  // ВАЖНО: вызвать ваши колбэки, которые вы уже предусмотрели в HTML
-  if (connected) {
-    try { window.onWalletConnected?.(ws.address, { chainId: ws.chainId }); } catch (_) {}
-  } else {
-    try { window.onWalletDisconnected?.({}); } catch (_) {}
-  }
-}
-
-function setTradingLocked(locked) {
-  // универсально: отключаем элементы торговли (подстройте селекторы под ваш DOM)
-  document.querySelectorAll('#buyBtn, #sellBtn, .trade button, input.trade-input').forEach((el) => {
-    el.disabled = !!locked;
-  });
-
-  // если у вас есть контейнер “замка”
-  const tradeSection = document.getElementById('tradeSection') || document.querySelector('.trade-section');
-  if (tradeSection) tradeSection.classList.toggle('locked', !!locked);
-}
-
-window.addEventListener('walletStateChanged', (e) => {
-  const ws = e.detail;
-
-  // 1) обновить кнопку/меню
-  updateWalletUI('walletStateChanged');
-
-  // 2) снять замок с торговли (или поставить)
-  const connected = !!ws?.address && !!ws?.signer;
-  const onArbitrum = Number(ws?.chainId) === 42161;
-
-  // если вы хотите разрешать торговлю только в Arbitrum:
-  setTradingLocked(!(connected && onArbitrum));
-
-  // если нужно — сразу обновить лимиты/балансы
-  // refreshBalances?.();
-  // refreshTradeUI?.();
-});
-
-function updateWalletUI(reason = 'unknown') {
-  const ws = window.walletState;
-
+  // ---------
+  // Общая кнопка connect (есть на обеих страницах)
+  // ---------
   const connectBtn = document.getElementById('connectBtn');
-  const dropdown = document.getElementById('walletDropdown');
-  const disconnectBtn = document.getElementById('disconnectWalletBtn');
-
-  const connected = !!ws?.address && !!ws?.signer;
-
-  console.log('[UI] updateWalletUI', { reason, connected, address: ws?.address, chainId: ws?.chainId });
-
   if (connectBtn) {
     connectBtn.textContent = connected ? shortAddr(ws.address) : 'Підключити гаманець';
     connectBtn.classList.toggle('connected', connected);
   }
+
+  // ---------
+  // INDEX / dashboard: dropdown + disconnectWalletBtn
+  // ---------
+  const disconnectBtn = document.getElementById('disconnectWalletBtn');
+  const dropdown = document.getElementById('walletDropdown');
 
   if (disconnectBtn) {
     disconnectBtn.style.display = connected ? 'block' : 'none';
@@ -395,12 +334,46 @@ function updateWalletUI(reason = 'unknown') {
       try {
         await disconnectWallet();
       } finally {
-        // после дисконнекта: вернуть список кошельков
-        renderWallets();
+        renderWallets?.();
         updateWalletUI('disconnected');
         if (dropdown) dropdown.classList.remove('open');
       }
     };
+  }
+
+  // ---------
+  // TRADING page: wallet menu toggle + menu address + disconnect
+  // ---------
+  const toggleBtn = document.getElementById('walletMenuToggle');
+  const menuAddr  = document.getElementById('walletMenuAddress');
+
+  if (toggleBtn) toggleBtn.hidden = !connected;
+  if (menuAddr)  menuAddr.textContent = connected ? ws.address : '—';
+
+  const explorerBtn = document.getElementById('walletViewOnExplorer');
+  if (explorerBtn) {
+    explorerBtn.onclick = () => {
+      const a = window.walletState?.address;
+      if (!a) return;
+      window.open(`https://arbiscan.io/address/${a}`, '_blank');
+      document.getElementById('walletMenu')?.classList.remove('open');
+    };
+  }
+
+  const walletDisconnect = document.getElementById('walletDisconnect');
+  if (walletDisconnect) {
+    walletDisconnect.onclick = async () => {
+      try { await disconnectWallet?.(); } finally {
+        document.getElementById('walletMenu')?.classList.remove('open');
+      }
+    };
+  }
+
+  // Вызвать ваши колбэки из inline-скрипта trading.html (если есть)
+  if (connected) {
+    try { window.onWalletConnected?.(ws.address, { chainId: ws.chainId }); } catch (_) {}
+  } else {
+    try { window.onWalletDisconnected?.({}); } catch (_) {}
   }
 }
 
