@@ -30,6 +30,119 @@ console.log('[app] wallet api ready', typeof window.getAvailableWallets, typeof 
 
 console.log('[APP] module loaded:', import.meta.url);
 
+(function bindWalletDropdown() {
+  const connectBtn = document.getElementById('connectBtn');
+  const dropdown = document.getElementById('walletDropdown');
+
+  if (!connectBtn || !dropdown) {
+    console.warn('[wallet-ui] connectBtn or walletDropdown not found');
+    return;
+  }
+
+  if (connectBtn.dataset.bound === '1') return;
+  connectBtn.dataset.bound = '1';
+
+  connectBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // перерисовать список (если есть)
+    try {
+      if (typeof window.renderWallets === 'function') {
+        window.renderWallets();
+      }
+    } catch (_) {}
+
+    dropdown.classList.toggle('open');
+    console.log('[wallet-ui] dropdown open =', dropdown.classList.contains('open'));
+  });
+
+  dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+  document.addEventListener('click', (e) => {
+    if (!dropdown.classList.contains('open')) return;
+    if (!dropdown.contains(e.target) && e.target !== connectBtn) {
+      dropdown.classList.remove('open');
+    }
+  });
+
+  console.log('[wallet-ui] dropdown binding attached');
+})();
+
+
+function ensureWalletDropdownBinding() {
+  const connectBtn = document.getElementById('connectBtn');
+  const dropdown = document.getElementById('walletDropdown');
+
+  if (!connectBtn || !dropdown) {
+    console.warn('[UI] connectBtn or walletDropdown not found');
+    return;
+  }
+
+  // защита от повторной привязки
+  if (connectBtn.dataset.bound === '1') return;
+  connectBtn.dataset.bound = '1';
+
+  // клик по кнопке — открыть/закрыть
+  connectBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // если у тебя есть модульная renderWallets — вызови её
+    // иначе — fallback: нарисуем минимальный список из window.getAvailableWallets()
+    try {
+      if (typeof window.renderWallets === 'function') {
+        await window.renderWallets();
+      } else {
+        // fallback render
+        let list = dropdown.querySelector('.wallet-list');
+        if (!list) {
+          list = document.createElement('div');
+          list.className = 'wallet-list';
+          dropdown.insertBefore(list, dropdown.firstChild);
+        }
+
+        const wallets = window.getAvailableWallets?.() || [];
+        list.innerHTML = wallets.length
+          ? wallets.map(w => `<button class="wallet-item" data-wallet-id="${w.id}">${w.name}</button>`).join('')
+          : `<div class="wallet-list-title">Гаманці не знайдено</div>`;
+
+        list.querySelectorAll('.wallet-item').forEach(btn => {
+          btn.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const walletId = btn.getAttribute('data-wallet-id');
+            await window.connectWallet?.({ walletId });
+            dropdown.classList.remove('open');
+          });
+        });
+      }
+    } catch (err) {
+      console.warn('[UI] renderWallets failed:', err?.message || err);
+    }
+
+    dropdown.classList.toggle('open');
+  });
+
+  // клики внутри dropdown не закрывают его
+  dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+  // клик вне — закрыть
+  document.addEventListener('click', (e) => {
+    if (!dropdown.classList.contains('open')) return;
+    const area = document.querySelector('.wallet-button-area') || connectBtn.closest('.wallet-wrap') || connectBtn.parentElement;
+    if (area && !area.contains(e.target)) dropdown.classList.remove('open');
+  });
+
+  console.log('[UI] wallet dropdown binding OK');
+}
+
+// 1) обычный запуск
+document.addEventListener('DOMContentLoaded', ensureWalletDropdownBinding);
+
+// 2) подстраховка: если скрипт загрузился после DOMContentLoaded
+ensureWalletDropdownBinding();
+
 
 async function debugPresaleMath(address) {
   const provider = await getReadOnlyProviderAsync();
