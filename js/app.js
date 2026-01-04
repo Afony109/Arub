@@ -109,7 +109,6 @@ async function debugPresaleMath(address) {
 window.CONFIG = window.CONFIG || CONFIG;
 
 // app.js (глобально)
-let uiConnecting = false;
 
 function getWalletDropdownEl() {
   return document.getElementById('walletDropdown') || null;
@@ -127,6 +126,8 @@ function getWalletDropdownEl() {
   // если на странице старый id walletMenu — приводим к единому walletDropdown
   if (!dropdown && menu) menu.id = 'walletDropdown';
 })();
+
+let uiConnecting = false;
 
 export async function renderWallets() {
   console.log('[UI] renderWallets() start', {
@@ -179,22 +180,54 @@ export async function renderWallets() {
   if (!list.dataset.bound) {
     list.dataset.bound = '1';
     list.addEventListener('click', async (e) => {
-      const btn = e.target.closest?.('.wallet-item');
-      if (!btn) return;
+  const btn = e.target.closest?.('.wallet-item');
+  if (!btn) return;
 
-      e.preventDefault();
-      e.stopPropagation();
+  e.preventDefault();
+  e.stopPropagation();
 
-      const walletId = btn.getAttribute('data-wallet-id');
-      if (!walletId) return;
+  const walletId = btn.getAttribute('data-wallet-id');
+  if (!walletId) return;
+
+  // ⛔ блокируем повторные клики
+  if (uiConnecting) return;
+  uiConnecting = true;
+  btn.disabled = true;
+
+  try {
+    await window.connectWallet?.({ walletId });
+    dd.classList.remove('open');
+  } catch (err) {
+    console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
+    console.warn('[UI] details:', {
+      message: err?.message,
+      code: err?.code,
+      data: err?.data,
+      stack: err?.stack
+    });
+  } finally {
+    uiConnecting = false;
+    btn.disabled = false;
+  }
+});
+  
+
 
       try {
         await window.connectWallet?.({ walletId });
         dd.classList.remove('open');
       } catch (err) {
-        console.warn('[UI] connectWallet failed:', err?.message || err);
-      }
-    });
+  console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
+  console.warn('[UI] connectWallet failed details:', {
+    walletId,
+    message: err?.message,
+    code: err?.code,
+    data: err?.data,
+    reason: err?.reason,
+    stack: err?.stack
+  });
+}
+  }
   }
 
   let wallets = [];
@@ -223,7 +256,6 @@ export async function renderWallets() {
   `).join('');
 
   console.log('[UI] wallet buttons rendered:', list.querySelectorAll('.wallet-item').length);
-}
     
 
 // маленький helper для текста (чтобы не ломать разметку)

@@ -401,6 +401,14 @@ function pickInjectedProvider(walletId, entry) {
     const entry = wallets.find(w => w.id === walletId);
     if (!entry) throw new Error('No wallet selected');
 
+    console.log('[wallet] connect start', {
+  walletId,
+  entryId: entry.id,
+  entryName: entry.name,
+  type: entry.type,
+  rdns: entry?._meta?.rdns
+});
+
     // 1) Получаем EIP-1193 провайдер (localSelected) и делаем requestAccounts
     if (entry.type === 'walletconnect') {
       const { default: EthereumProvider } = await import(
