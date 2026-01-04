@@ -177,58 +177,46 @@ export async function renderWallets() {
   }
 
   // bind click handler once (event delegation) for wallet items
-  if (!list.dataset.bound) {
-    list.dataset.bound = '1';
-    list.addEventListener('click', async (e) => {
-  const btn = e.target.closest?.('.wallet-item');
-  if (!btn) return;
+// где-то ВЫШЕ в файле (один раз): let uiConnecting = false;
 
-  e.preventDefault();
-  e.stopPropagation();
+if (!list.dataset.bound) {
+  list.dataset.bound = '1';
 
-  const walletId = btn.getAttribute('data-wallet-id');
-  if (!walletId) return;
+  list.addEventListener('click', async (e) => {
+    const btn = e.target.closest?.('.wallet-item');
+    if (!btn) return;
 
-  // ⛔ блокируем повторные клики
-  if (uiConnecting) return;
-  uiConnecting = true;
-  btn.disabled = true;
+    e.preventDefault();
+    e.stopPropagation();
 
-  try {
-    await window.connectWallet?.({ walletId });
-    dd.classList.remove('open');
-  } catch (err) {
-    console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
-    console.warn('[UI] details:', {
-      message: err?.message,
-      code: err?.code,
-      data: err?.data,
-      stack: err?.stack
-    });
-  } finally {
-    uiConnecting = false;
-    btn.disabled = false;
-  }
-});
-  
+    const walletId = btn.getAttribute('data-wallet-id');
+    if (!walletId) return;
 
+    // ⛔ блокируем повторные клики
+    if (uiConnecting) return;
+    uiConnecting = true;
+    btn.disabled = true;
 
-      try {
-        await window.connectWallet?.({ walletId });
-        dd.classList.remove('open');
-      } catch (err) {
-  console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
-  console.warn('[UI] connectWallet failed details:', {
-    walletId,
-    message: err?.message,
-    code: err?.code,
-    data: err?.data,
-    reason: err?.reason,
-    stack: err?.stack
+    try {
+      await window.connectWallet?.({ walletId });
+      dd.classList.remove('open');
+    } catch (err) {
+      console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
+      console.warn('[UI] connectWallet failed details:', {
+        walletId,
+        message: err?.message,
+        code: err?.code,
+        data: err?.data,
+        reason: err?.reason,
+        stack: err?.stack
+      });
+    } finally {
+      uiConnecting = false;
+      btn.disabled = false;
+    }
   });
 }
-  }
-  }
+
 
   let wallets = [];
   try {
@@ -714,5 +702,6 @@ async function initApp() {
     console.error('[APP] Fatal init error:', e);
     showNotification?.('❌ Помилка ініціалізації додатку', 'error');
   }
+}
 }
 }
