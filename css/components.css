@@ -642,16 +642,44 @@
   position: relative;
 }
 
-#walletDropdown {
+#walletDropdown.wallet-connect-dropdown {
   display: none;
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
   z-index: 99999;
+
+  min-width: 260px;
+  padding: 10px;
+  background: rgba(15, 22, 40, 0.98);
+  border: 1px solid rgba(0,87,183,0.4);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xl);
 }
 
-#walletDropdown.open {
-  display: block; /* или flex, если нужно */
+#walletDropdown.wallet-connect-dropdown.open {
+  display: block;
+}
+
+#walletDropdown.wallet-connect-dropdown .wallet-actions {
+  margin-bottom: 10px;
+}
+
+#walletDropdown.wallet-connect-dropdown .wallet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+}
+
+#walletDropdown.wallet-connect-dropdown .wallet-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff;
 }
 
 #walletDropdown .wallet-list { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; }
