@@ -141,15 +141,41 @@ export async function renderWallets() {
     return;
   }
 
-  // контейнер списка
+  // bind dropdown handler once (stop propagation + disconnect)
+  if (!dd.dataset.bound) {
+    dd.dataset.bound = '1';
+
+    dd.addEventListener('click', async (e) => {
+      e.stopPropagation();
+
+      const disconnectBtn = e.target.closest?.('#disconnectWalletBtn');
+      if (!disconnectBtn) return;
+
+      e.preventDefault();
+      try {
+        await window.disconnectWallet?.();
+        dd.classList.remove('open');
+      } catch (err) {
+        console.warn('[UI] disconnectWallet failed:', err?.message || err);
+      }
+    });
+  }
+
+  // контейнер списка — строго после .wallet-actions
   let list = dd.querySelector('.wallet-list');
   if (!list) {
     list = document.createElement('div');
     list.className = 'wallet-list';
-    dd.insertBefore(list, dd.firstChild);
+
+    const actions = dd.querySelector('.wallet-actions');
+    if (actions && actions.parentNode === dd) {
+      actions.insertAdjacentElement('afterend', list);
+    } else {
+      dd.appendChild(list);
+    }
   }
 
-  // bind click handler once (event delegation)
+  // bind click handler once (event delegation) for wallet items
   if (!list.dataset.bound) {
     list.dataset.bound = '1';
     list.addEventListener('click', async (e) => {
@@ -195,6 +221,8 @@ export async function renderWallets() {
       <span class="wallet-name">${w.name || w.id}</span>
     </button>
   `).join('');
+
+  console.log('[UI] wallet buttons rendered:', list.querySelectorAll('.wallet-item').length);
 }
     
 

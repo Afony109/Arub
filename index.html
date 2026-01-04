@@ -709,10 +709,13 @@
 </button>
 </div>
 <div class="wallet-button-area">
-<button class="connect-btn" id="connectBtn">Підключити гаманець</button>
-<div class="wallet-dropdown" id="walletDropdown">
-<button id="disconnectWalletBtn">Відключити гаманець</button>
-</div>
+  <button type="button" class="connect-btn" id="connectBtn">Підключити гаманець</button>
+  <div class="wallet-dropdown" id="walletDropdown">
+    <div class="wallet-actions">
+      <button type="button" id="disconnectWalletBtn">Відключити гаманець</button>
+    </div>
+<!-- Сюда renderWallets() вставит .wallet-list -->
+  </div>
 </div>
 </div>
 </nav>
