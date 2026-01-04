@@ -17,6 +17,7 @@ let currentAddress = null;
 let currentChainId = null;
 let isConnecting = false;
 
+
 // WalletConnect provider
 let wcProvider = null;
 
@@ -421,7 +422,7 @@ function pickInjectedProvider(walletId, entry) {
         20000,
         'eth_requestAccounts timeout'
       );
-    } else {
+   } else {
   const prov = pickInjectedProvider(walletId, entry);
   if (!prov) throw new Error('Selected wallet provider not found');
 
@@ -432,7 +433,7 @@ function pickInjectedProvider(walletId, entry) {
     20000,
     'eth_requestAccounts'
   );
-  }
+}
 
     // если была старая сессия/провайдер — аккуратно снять слушатели
     detachProviderListeners();
@@ -642,11 +643,20 @@ const ORACLE_ABI_MIN = [
 ];
 
 let listenersAttached = false;
+let listenersOwner = null;
+let onChainChanged = null;
+let onAccountsChanged = null;
+
 
 function attachProviderListeners() {
   if (!selectedEip1193) return;
-  if (listenersAttached) return;
   if (typeof selectedEip1193.on !== 'function') return;
+
+  // если были слушатели на другом провайдере — снимем
+  if (listenersAttached && listenersOwner && listenersOwner !== selectedEip1193) {
+    detachProviderListeners();
+  }
+  if (listenersAttached) return;
 
   listenersAttached = true;
   listenersOwner = selectedEip1193;
@@ -673,29 +683,22 @@ function attachProviderListeners() {
 
 function detachProviderListeners() {
   const p = listenersOwner;
+
   if (!p) {
     listenersAttached = false;
-    onChainChanged = null;
-    onAccountsChanged = null;
     return;
   }
 
-  // разные провайдеры поддерживают разные методы
-  const off = p.removeListener || p.off;
-
-  try {
-    if (typeof off === 'function') {
-      if (onChainChanged) off.call(p, 'chainChanged', onChainChanged);
-      if (onAccountsChanged) off.call(p, 'accountsChanged', onAccountsChanged);
-    }
-  } catch (_) {
-    // игнорируем
+  const off = p.removeListener?.bind(p) || p.off?.bind(p);
+  if (off) {
+    if (onChainChanged) off('chainChanged', onChainChanged);
+    if (onAccountsChanged) off('accountsChanged', onAccountsChanged);
   }
 
   listenersOwner = null;
-  listenersAttached = false;
   onChainChanged = null;
   onAccountsChanged = null;
+  listenersAttached = false;
 }
 
 function calcDiscount(avgPrice, currentPrice) {
