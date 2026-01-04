@@ -10,7 +10,7 @@ import {initWalletModule, getEthersProvider, getAvailableWallets, connectWallet,
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
-
+initTradingModule();
 initWalletModule();
 document.addEventListener('DOMContentLoaded', async () => {
   try { await renderWallets(); } catch (e) { console.warn(e); }
@@ -747,6 +747,8 @@ function bindConnectButton() {
   dd.addEventListener('click', (e) => e.stopPropagation());
 }
 
+let tradingMounted = false;
+
 function renderTradingLocked() {
   const box = document.getElementById('tradingInterface');
   if (!box) return;
@@ -759,33 +761,50 @@ function renderTradingLocked() {
   `;
 }
 
-function renderTradingUnlocked() {
+async function renderTradingUnlocked() {
   const box = document.getElementById('tradingInterface');
   if (!box) return;
 
-  // ВАЖНО: тут либо ваша реальная разметка торговли,
-  // либо вызов вашей функции, которая уже рисует торговый интерфейс.
-  // Ниже — минимальный каркас, чтобы секция перестала быть "замком".
-  box.innerHTML = `
-    <div class="trade-grid">
-      <div class="trade-row">
-        <button type="button" class="action-btn" id="buyBtn">Купити ARUB</button>
-        <button type="button" class="action-btn" id="sellBtn">Продати ARUB</button>
-      </div>
-      <div class="trade-row" style="margin-top:12px; font-size:14px; opacity:.85;">
-        Гаманець підключено. Торгівля доступна.
-      </div>
-    </div>
-  `;
+  // 1) Если у вас есть модуль торговли, который должен отрендерить UI — дерните его здесь.
+  // Подставьте вашу реальную функцию: initTradingModule(), renderTradingUI(), mountTrading(), etc.
+  if (!tradingMounted) {
+    tradingMounted = true;
 
-  // Если у вас уже есть функции buyTokens/sellTokens — привяжите:
-  if (typeof buyTokens === 'function') {
-    document.getElementById('buyBtn')?.addEventListener('click', () => buyTokens());
+    // пример: если вы делали window.initTradingModule в app.js
+    if (typeof window.initTradingModule === 'function') {
+      await window.initTradingModule();
+    }
   }
-  if (typeof sellTokens === 'function') {
-    document.getElementById('sellBtn')?.addEventListener('click', () => sellTokens());
+
+  // 2) Если никакого рендера пока нет — хотя бы уберём замок и покажем заглушку "готово"
+  // (чтобы отличать проблему рендера от проблемы коннекта)
+  if (!box.innerHTML || box.textContent.includes('Підключіть гаманець')) {
+    box.innerHTML = `
+      <div style="text-align:center; padding:30px;">
+        <div style="font-size:2em; margin-bottom:10px;">✅</div>
+        <p>Гаманець підключено. UI торгівлі має бути відрендерений trading.js.</p>
+      </div>
+    `;
   }
 }
+
+function syncTradingLock(reason = 'sync') {
+  const ws = window.walletState;
+  const connected = !!ws?.address && !!ws?.signer;
+  const onArbitrum = Number(ws?.chainId) === 42161;
+
+  if (connected && onArbitrum) {
+    renderTradingUnlocked().catch(() => {});
+    try { window.onWalletConnected?.(ws.address, { chainId: ws.chainId, reason }); } catch (_) {}
+  } else {
+    renderTradingLocked();
+    try { window.onWalletDisconnected?.({ reason }); } catch (_) {}
+  }
+}
+
+// дергаем при изменении кошелька + при старте страницы
+window.addEventListener('walletStateChanged', () => syncTradingLock('walletStateChanged'));
+document.addEventListener('DOMContentLoaded', () => syncTradingLock('DOMContentLoaded'));
 
 function onWalletUIChange(reason = 'walletStateChanged') {
   updateWalletUI(reason);
