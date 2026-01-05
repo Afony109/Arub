@@ -889,65 +889,78 @@ async function refreshTradingBalancesSafe(reason = 'unknown') {
   }
 }
 
-function bindMaxButtonsSafe() {
-  const usdtEl = document.getElementById('usdtBalance');
-  const arubEl = document.getElementById('arubBalance');
+function bindMaxButtonsScoped() {
+  if (window.__maxScopedBound) return;
+  window.__maxScopedBound = true;
 
-  const parseShownNumber = (s) => {
-    const x = Number(String(s ?? '').replace(',', '.').trim());
-    return Number.isFinite(x) ? x : null;
+  const tradingRoot = document.getElementById('tradingInterface');
+  if (!tradingRoot) return;
+
+  const getNum = (id) => {
+    const t = document.getElementById(id)?.textContent ?? '';
+    const n = Number(String(t).replace(',', '.').trim());
+    return Number.isFinite(n) ? n : null;
   };
 
-  const findNearestInput = (btn) => {
-    // ищем input в ближайшем контейнере (чтобы BUY MAX не лез в SELL и наоборот)
-    const host =
-      btn.closest('.trade') ||
-      btn.closest('.card') ||
-      btn.closest('.panel') ||
-      btn.closest('.box') ||
-      btn.closest('section') ||
-      btn.parentElement;
+  const findSideContainer = (btn) => {
+    // Поднимаемся вверх, пока не дойдём до #tradingInterface, и ищем ближайший блок,
+    // который явно относится к "Купівля" или "Продаж"
+    let el = btn;
+    while (el && el !== tradingRoot) {
+      const txt = (el.innerText || '').toLowerCase();
+      const hasBuy = txt.includes('купівля') || txt.includes('buy');
+      const hasSell = txt.includes('продаж') || txt.includes('sell');
 
-    if (!host) return null;
+      // Берём контейнер, где есть одно из слов (и не оба сразу)
+      if (hasBuy && !hasSell) return { side: 'buy', box: el };
+      if (hasSell && !hasBuy) return { side: 'sell', box: el };
 
-    // выбираем первый “нормальный” input внутри этого контейнера
-    return host.querySelector('input[type="number"], input[type="text"]');
+      el = el.parentElement;
+    }
+    return null;
   };
 
-  // берём все кнопки с текстом "МАКС"
-  const maxButtons = [...document.querySelectorAll('button')]
-    .filter(b => b.textContent?.trim().toUpperCase() === 'МАКС');
+  const findInputInBox = (box) => {
+    // Ищем ближайший input именно в этом блоке
+    return box.querySelector('input[type="number"], input[type="text"]');
+  };
 
-  maxButtons.forEach((btn) => {
-    if (btn.dataset.maxBound === '1') return;
-    btn.dataset.maxBound = '1';
+  // CAPTURE: перехватить раньше любых старых обработчиков
+  tradingRoot.addEventListener('click', (e) => {
+    const btn = e.target.closest?.('button');
+    if (!btn) return;
 
-    btn.addEventListener('click', () => {
-      const input = findNearestInput(btn);
-      if (!input) return;
+    const label = (btn.textContent || '').trim().toUpperCase();
+    if (label !== 'МАКС' && label !== 'MAX') return;
 
-      // определяем BUY или SELL по содержимому контейнера
-      const hostText = (btn.closest('.trade') || btn.closest('.card') || btn.closest('section') || btn.parentElement)?.innerText || '';
-      const isSell = /Продаж|Sell/i.test(hostText);
+    const info = findSideContainer(btn);
+    if (!info) return;
 
-      const val = isSell
-        ? parseShownNumber(arubEl?.textContent)
-        : parseShownNumber(usdtEl?.textContent);
+    const input = findInputInBox(info.box);
+    if (!input) return;
 
-      if (val === null) return;
+    // Остановить старые кривые обработчики, чтобы не писали в BUY
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
 
-      // вставляем значение
-      input.value = String(val);
+    if (info.side === 'buy') {
+      const usdt = getNum('usdtBalance');
+      if (usdt === null) return;
+      input.value = usdt.toFixed(2);
+    } else {
+      const arub = getNum('arubBalance');
+      if (arub === null) return;
+      // ARUB лучше не резать до 2, оставим до 6 (или как у тебя)
+      input.value = String(arub);
+    }
 
-      // триггерим реакцию UI/логики (важно для твоего trading.js)
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-  });
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, true);
 }
 
-document.addEventListener('DOMContentLoaded', bindMaxButtonsSafe);
-window.addEventListener('walletStateChanged', bindMaxButtonsSafe);
+document.addEventListener('DOMContentLoaded', bindMaxButtonsScoped);
 
 // -------------------------
 // Helpers used by other parts
