@@ -621,3 +621,25 @@
   border-radius: 6px;
 }
 
+.wallet-items {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.wallet-item-textonly {
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1.25;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+}
+
+.wallet-item-textonly:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.wallet-item, .wallet-icon, .wallet-icon-placeholder { display: none !important; }
+
+

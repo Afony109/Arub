@@ -246,28 +246,18 @@ export async function renderWallets() {
   });
 
   // ------------------------------------------
-  // render buttons (with icon + rdns)
-  // ------------------------------------------
-  list.innerHTML = `
-    <div class="wallet-list-title">Оберіть гаманець</div>
-    ${norm.map(w => {
-      const iconHtml = w.icon
-        ? `<img class="wallet-icon" src="${escapeHtml(w.icon)}" alt="" referrerpolicy="no-referrer">`
-        : `<span class="wallet-icon-placeholder"></span>`;
-
-      const sub = (w.type === 'eip6963' && w.rdns) ? w.rdns : '';
-
-      return `
-        <button type="button" class="wallet-item" data-wallet-id="${escapeHtml(String(w.id))}">
-          ${iconHtml}
-          <span class="wallet-item-text">
-            <span class="wallet-name">${escapeHtml(String(w.label))}</span>
-            ${sub ? `<span class="wallet-sub">${escapeHtml(String(sub))}</span>` : ``}
-          </span>
-        </button>
-      `;
-    }).join('')}
-  `;
+// render list (text-only)
+// ------------------------------------------
+list.innerHTML = `
+  <div class="wallet-list-title">Оберіть гаманець</div>
+  <div class="wallet-items">
+    ${norm.map(w => `
+      <div class="wallet-item-textonly" data-wallet-id="${escapeHtml(String(w.id))}">
+        ${escapeHtml(String(w.label))}
+      </div>
+    `).join('')}
+  </div>
+`;
 
   console.log('[UI] wallet buttons rendered:', list.querySelectorAll('.wallet-item').length);
 
@@ -276,7 +266,7 @@ export async function renderWallets() {
     list.dataset.bound = '1';
 
     list.addEventListener('click', async (e) => {
-      const btn = e.target.closest?.('.wallet-item');
+      const btn = e.target.closest?.('.wallet-item-textonly');
       if (!btn) return;
 
       e.preventDefault();
