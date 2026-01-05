@@ -172,16 +172,6 @@ export function getAvailableWallets() {
     console.warn('[wallet] getAvailableWallets eip6963 read failed:', e?.message || e);
   }
 
-  // WalletConnect (если используете)
-  out.push({
-    walletId: 'walletconnect',
-    entryId: 'walletconnect',
-    entryName: 'WalletConnect',
-    type: 'walletconnect',
-    rdns: 'walletconnect',
-    icon: '',
-  });
-
   // fallback injected (если вообще ничего нет)
   if (out.length === 1 && out[0].type === 'walletconnect' && window.ethereum?.request) {
     out.push({
