@@ -264,7 +264,6 @@ function renderTrading() {
 // -----------------------------
 // Wallet change handler (single, idempotent)
 // -----------------------------
-let _tradingBound = false;
 
 function _onWalletChanged() {
   try { renderTrading(); } catch (e) { console.warn(e); }
@@ -289,6 +288,16 @@ export function initTradingModule() {
   try { renderTrading(); } catch (e) {
     console.warn('[TRADING] initial renderTrading failed:', e?.message || e);
   }
+
+  if (!window.__buyModeBound) {
+  window.__buyModeBound = true;
+
+  document.addEventListener('change', (e) => {
+    if (e.target?.name === 'buyMode') {
+      try { refreshBuyBonusBox(); } catch (_) {}
+    }
+  });
+}
 }
 
 function bindTradingHandlers() {}
@@ -310,9 +319,6 @@ function pickEthersMessage(e) {
     'Transaction failed'
   );
 }
-
-// Prevent overlapping apply cycles
-let applySeq = 0;
 
 // -----------------------------
 // DOM helpers
@@ -416,7 +422,7 @@ function renderTradingUI() {
   const host = getTradingHost();
   if (!host) return;
 
-  host.innerHTML = `
+host.innerHTML = `
   <div class="trade-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
     <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
       <h3 style="margin:0 0 10px 0;">Купівля</h3>
@@ -449,7 +455,9 @@ function renderTradingUI() {
         </div>
 
         <div id="buyBonusNote" style="margin-top:6px; opacity:0.85; display:none;">
-          Ліміти: мінімум 10 USDT · максимум 1000 USDT за покупку · 3000 USDT на гаманець
+          Ліміти: мінімум <span id="minBuy">10</span> USDT ·
+          максимум <span id="maxPerTx">—</span> USDT за покупку ·
+          <span id="maxPerWallet">—</span> USDT на гаманець
         </div>
       </div>
 
@@ -515,12 +523,28 @@ function renderTradingUI() {
         Активний лок бонусної покупки. Продаж вільних ARUB дозволено. Залишилось: <span id="sellLockLeft">—</span>
       </div>
 
+      <!-- Progress bar for wallet stats scan (uses existing setPresaleScanVisible/Progress) -->
+      <div id="presaleScanWrap" style="display:none; margin-top:10px;">
+        <div id="presaleScanPct" style="margin-bottom:6px;">0%</div>
+        <div style="height:10px; background:rgba(255,255,255,0.08); border-radius:8px; overflow:hidden;">
+          <div id="presaleScanBar" style="height:10px; width:0%; background:rgba(0,87,183,0.8);"></div>
+        </div>
+      </div>
+
       <div style="margin-top:10px; font-size:14px; opacity:0.9;">
         Баланс ARUB: <span id="arubBalance">—</span>
       </div>
     </div>
   </div>
 `;
+
+setTimeout(() => { try { refreshBuyBonusBox?.(); } catch (_) {} }, 0);
+
+document.addEventListener('change', (e) => {
+  if (e.target?.name === 'buyMode') {
+    try { refreshBuyBonusBox?.(); } catch (_) {}
+  }
+});
 
 try { bindUiOncePerRender?.(); } catch (e) { console.warn(e); }
 try { hardUnlock?.(); } catch (e) { console.warn(e); }
@@ -693,6 +717,19 @@ function parseTokenAmount(value, decimals) {
   return ethers.utils.parseUnits(normalized, Number(decimals));
 }
 
+function syncUserFromWalletState() {
+  try {
+    const a = window.walletState?.address || null;
+    if (!window.user) window.user = {};
+    window.user.address = a;
+  } catch (_) {}
+}
+
+window.addEventListener('walletStateChanged', () => {
+  syncUserFromWalletState();
+  refreshBuyBonusBox?.().catch?.(() => {});
+});
+
 // -----------------------------
 // Bonus mode UI box
 // -----------------------------
@@ -708,7 +745,7 @@ async function refreshBuyBonusBox() {
   box.style.display = isBonusMode ? '' : 'none';
   if (!isBonusMode) return;
 
-  if (!user.address) {
+  if (!user?.address) {
     pctEl.textContent = '—';
     slotsEl.textContent = '—';
     if (noteEl) noteEl.style.display = 'none';
@@ -718,6 +755,35 @@ async function refreshBuyBonusBox() {
   try {
     const presaleRO = await getReadOnlyPresale();
     if (!presaleRO) throw new Error('Read-only presale not ready');
+
+    // limits (safe)
+    try {
+      // ВАЖНО: ethers должен быть доступен в этом модуле
+      if (typeof ethers === 'undefined') throw new Error('ethers is not defined');
+
+      const [maxTxRaw, maxWalletRaw] = await Promise.all([
+        presaleRO.maxPurchasePerTx?.(),
+        presaleRO.maxPurchasePerWallet?.()
+      ]);
+
+      const maxTxEl = document.getElementById('maxPerTx');
+      const maxWalletEl = document.getElementById('maxPerWallet');
+      const minEl = document.getElementById('minBuy');
+
+      if (minEl) minEl.textContent = '10';
+
+      if (maxTxEl && maxTxRaw) {
+        const v = Number(ethers.utils.formatUnits(maxTxRaw, 6));
+        maxTxEl.textContent = Number.isFinite(v) ? v.toFixed(2) : '—';
+      }
+
+      if (maxWalletEl && maxWalletRaw) {
+        const v = Number(ethers.utils.formatUnits(maxWalletRaw, 6));
+        maxWalletEl.textContent = Number.isFinite(v) ? v.toFixed(2) : '—';
+      }
+    } catch (e) {
+      console.warn('[TRADING] limits update failed:', e?.message || e);
+    }
 
     // percent
     let percent = null;
@@ -732,11 +798,7 @@ async function refreshBuyBonusBox() {
       const usedBN = await presaleRO.totalDiscountBuyers();
 
       let maxBN = null;
-      try {
-        maxBN = await presaleRO.DISCOUNT_MAX_BUYERS();
-      } catch (_) {
-        maxBN = null;
-      }
+      try { maxBN = await presaleRO.DISCOUNT_MAX_BUYERS(); } catch (_) {}
 
       const used = Number(usedBN.toString());
 
@@ -750,12 +812,11 @@ async function refreshBuyBonusBox() {
     } catch (_) {}
 
     pctEl.textContent = percent != null ? `${percent}%` : '—';
+    slotsEl.textContent = left != null ? String(left) : '—';
     if (noteEl) noteEl.style.display = '';
 
     const bonusOut = document.getElementById('presaleBonusPct');
     if (bonusOut) bonusOut.textContent = percent != null ? `${percent}%` : '—';
-
-    slotsEl.textContent = left != null ? String(left) : '—';
   } catch (e) {
     console.warn('[TRADING] refreshBuyBonusBox failed:', e?.message || e);
     pctEl.textContent = '—';
@@ -956,6 +1017,14 @@ async function awaitWalletReady({
 }
 
 // -----------------------------
+// Trading UI state
+// -----------------------------
+let __tradingUiRendered = false;
+let applySeq = 0;
+let _tradingBound = false;
+
+
+// -----------------------------
 // Core event-driven state apply
 // -----------------------------
 async function applyWalletState(reason = 'unknown') {
@@ -976,6 +1045,8 @@ async function applyWalletState(reason = 'unknown') {
     tokenRW = null;
     usdtRW = null;
 
+    __tradingUiRendered = false;
+
     renderLocked();
     stopLockAutoRefresh();
     return;
@@ -986,7 +1057,17 @@ async function applyWalletState(reason = 'unknown') {
   user.signer = ws.signer || null;
   user.chainId = ws.chainId ?? null;
 
+  if (!__tradingUiRendered) {
   renderTradingUI();
+  __tradingUiRendered = true;
+  }
+
+  try { await refreshBuyBonusBox(); } catch (_) {}
+
+
+  // обновляем бонус-бокс и лимиты сразу после отрисовки UI
+  try { await refreshBuyBonusBox(); } catch (_) {}
+
 
   if (!hasSigner) {
     setControlsEnabled(false);
