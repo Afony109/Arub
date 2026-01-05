@@ -429,3 +429,25 @@ export function getSigner() { return signer; }
 export function getCurrentAddress() { return currentAddress; }
 export function getCurrentChainId() { return currentChainId; }
 export function getSelectedEip1193Provider() { return selectedEip1193; }
+
+// ==============================
+// Trading helper (required by trading.js)
+// ==============================
+export function requireArbitrumOrThrow() {
+  const ws = window.walletState;
+
+  // 1) Wallet connected?
+  if (!ws?.signer || !ws?.address) {
+    throw new Error('Wallet not connected');
+  }
+
+  // 2) Correct chain?
+  const expected = Number(CONFIG?.NETWORK?.chainId ?? 42161);
+  const actual = Number(ws?.chainId);
+
+  if (Number.isFinite(expected) && Number.isFinite(actual) && actual !== expected) {
+    throw new Error(`Wrong network: switch to Arbitrum One (chainId ${expected})`);
+  }
+
+  return true;
+}
