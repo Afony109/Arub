@@ -640,6 +640,21 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-.wallet-item, .wallet-icon, .wallet-icon-placeholder { display: none !important; }
+#walletDropdown .wallet-item,
+#walletDropdown .wallet-icon,
+#walletDropdown .wallet-icon-placeholder { display: none !important; }
+
+#walletDropdown .wallet-items { display: none; }
+#walletDropdown.open .wallet-items { display: block; }
+
+
+.wallet-item-textonly.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.wallet-item-textonly.is-selected {
+  background: rgba(0, 87, 183, 0.2);
+}
+
 
 

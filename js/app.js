@@ -120,6 +120,14 @@ export async function renderWallets() {
     return;
   }
 
+  // Close both wallet picker dropdown and the separate wallet menu (if present)
+  const closeWalletUI = () => {
+    dd.classList.remove('open'); // walletDropdown
+    document.getElementById('walletMenu')?.classList.remove('open'); // id walletMenu (trading menu)
+    document.querySelector('.wallet-menu')?.classList.remove('open'); // class wallet-menu (if used)
+    try { document.activeElement?.blur?.(); } catch (_) {}
+  };
+
   // bind dropdown handler once (stop propagation + disconnect)
   if (!dd.dataset.bound) {
     dd.dataset.bound = '1';
@@ -132,18 +140,16 @@ export async function renderWallets() {
 
       e.preventDefault();
 
-      // ⛔ блокируем повторные клики по disconnect
       if (dd.dataset.disconnecting === '1') return;
       dd.dataset.disconnecting = '1';
 
       try {
         await window.disconnectWallet?.();
 
-        // UI refresh after disconnect
         try { window.updateWalletUI?.('disconnected'); } catch (_) {}
         try { renderWallets?.(); } catch (_) {}
 
-        dd.classList.remove('open');
+        closeWalletUI();
       } catch (err) {
         console.warn('[UI] disconnectWallet failed:', err);
       } finally {
@@ -182,7 +188,6 @@ export async function renderWallets() {
   // ------------------------------------------
   let wallets = getWalletsSafe();
 
-  // EIP-6963 announceProvider приходит асинхронно — подождём чуть-чуть
   if (!wallets || wallets.length <= 1) {
     await new Promise(r => setTimeout(r, 120));
     wallets = getWalletsSafe();
@@ -200,33 +205,30 @@ export async function renderWallets() {
     return;
   }
 
-  console.log('[UI] wallets detected:', wallets);
-
   // ------------------------------------------
   // normalize + de-duplicate by id
   // ------------------------------------------
   const seen = new Set();
+  const norm = wallets
+    .map((w) => {
+      const id = w?.walletId ?? w?.id ?? w?.entryId ?? null;
+      const label =
+        w?.entryName ??
+        w?.name ??
+        w?.entryId ??
+        w?.walletId ??
+        w?.id ??
+        'Wallet';
 
-  const norm = wallets.map((w) => {
-    const id = w?.walletId ?? w?.id ?? w?.entryId ?? null;
-    const label =
-      w?.entryName ??
-      w?.name ??
-      w?.entryId ??
-      w?.walletId ??
-      w?.id ??
-      'Wallet';
-
-    const type = w?.type ?? '';
-    const rdns = w?.rdns ?? '';
-    const icon = w?.icon ?? '';
-
-    return { id, label, type, rdns, icon, raw: w };
-  }).filter(x => !!x.id).filter(x => {
-    if (seen.has(x.id)) return false;
-    seen.add(x.id);
-    return true;
-  });
+      const type = w?.type ?? '';
+      return { id, label, type };
+    })
+    .filter(x => !!x.id)
+    .filter(x => {
+      if (seen.has(x.id)) return false;
+      seen.add(x.id);
+      return true;
+    });
 
   if (norm.length === 0) {
     list.innerHTML = `
@@ -246,62 +248,46 @@ export async function renderWallets() {
   });
 
   // ------------------------------------------
-// render list (text-only)
-// ------------------------------------------
-list.innerHTML = `
-  <div class="wallet-list-title">Оберіть гаманець</div>
-  <div class="wallet-items">
-    ${norm.map(w => `
-      <div class="wallet-item-textonly" data-wallet-id="${escapeHtml(String(w.id))}">
-        ${escapeHtml(String(w.label))}
-      </div>
-    `).join('')}
-  </div>
-`;
+  // render list (text-only)
+  // ------------------------------------------
+  list.innerHTML = `
+    <div class="wallet-list-title">Оберіть гаманець</div>
+    <div class="wallet-items">
+      ${norm.map(w => `
+        <div class="wallet-item-textonly" data-wallet-id="${escapeHtml(String(w.id))}">
+          ${escapeHtml(String(w.label))}
+        </div>
+      `).join('')}
+    </div>
+  `;
 
-  console.log('[UI] wallet buttons rendered:', list.querySelectorAll('.wallet-item').length);
+  console.log('[UI] wallet items rendered:', list.querySelectorAll('.wallet-item-textonly').length);
 
   // bind click handler once (event delegation) for wallet items
   if (!list.dataset.bound) {
     list.dataset.bound = '1';
 
     list.addEventListener('click', async (e) => {
-      const btn = e.target.closest?.('.wallet-item-textonly');
-      if (!btn) return;
+      const item = e.target.closest?.('.wallet-item-textonly');
+      if (!item) return;
 
-      e.preventDefault();
       e.stopPropagation();
 
-      const walletId = btn.getAttribute('data-wallet-id');
-      if (!walletId) {
-        console.warn('[UI] wallet-item has no data-wallet-id');
-        return;
-      }
+      const walletId = item.getAttribute('data-wallet-id');
+      if (!walletId) return;
 
-      // ⛔ блокируем повторные клики
       if (window.__uiConnecting) return;
       window.__uiConnecting = true;
-      btn.disabled = true;
 
       try {
-        // ВАЖНО: это реальный connectWallet({walletId})
+        closeWalletUI(); // закрываем сразу
         await window.connectWallet?.({ walletId });
-
         try { window.updateWalletUI?.('connected'); } catch (_) {}
-        dd.classList.remove('open');
+        closeWalletUI(); // закрываем повторно
       } catch (err) {
         console.warn('[UI] connectWallet failed (walletId=%s):', walletId, err);
-        console.warn('[UI] connectWallet failed details:', {
-          walletId,
-          message: err?.message,
-          code: err?.code,
-          data: err?.data,
-          reason: err?.reason,
-          stack: err?.stack
-        });
       } finally {
         window.__uiConnecting = false;
-        btn.disabled = false;
       }
     });
   }
@@ -905,3 +891,5 @@ function initApp() {
 document.addEventListener('DOMContentLoaded', initApp);
 document.addEventListener('DOMContentLoaded', () => applyWalletToUI(window.walletState));
 document.addEventListener('DOMContentLoaded', () => syncTradingLock('DOMContentLoaded'));
+
+setupGlobalEventListeners();
