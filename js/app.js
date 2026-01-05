@@ -872,7 +872,8 @@ async function refreshTradingBalancesSafe(reason = 'unknown') {
     if (usdtEl && CONFIG.USDT_ADDRESS) {
       const usdt = new ethers.Contract(CONFIG.USDT_ADDRESS, ERC20, provider);
       const [bal, dec] = await Promise.all([usdt.balanceOf(addr), usdt.decimals()]);
-      usdtEl.textContent = ethers.utils.formatUnits(bal, dec);
+     const usdtVal = Number(ethers.utils.formatUnits(bal, dec));
+     usdtEl.textContent = usdtVal.toFixed(2);
     }
 
     // ARUB (token)
@@ -887,6 +888,43 @@ async function refreshTradingBalancesSafe(reason = 'unknown') {
     console.warn('[UI] refreshTradingBalancesSafe failed:', e?.message || e);
   }
 }
+
+function bindMaxButtonsSafe() {
+  const maxButtons = [...document.querySelectorAll('button')]
+    .filter(b => b.textContent?.trim().toUpperCase() === 'МАКС');
+
+  const usdtEl = document.getElementById('usdtBalance');
+  const arubEl = document.getElementById('arubBalance');
+
+  maxButtons.forEach(btn => {
+    if (btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+
+    btn.addEventListener('click', () => {
+      // BUY side (USDT)
+      if (usdtEl && usdtEl.textContent && usdtEl.textContent !== '—') {
+        const input = document.querySelector('input[type="number"], input[type="text"]');
+        if (input) {
+          input.value = usdtEl.textContent;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          return;
+        }
+      }
+
+      // SELL side (ARUB) — если потребуется позже
+      if (arubEl && arubEl.textContent && arubEl.textContent !== '—') {
+        const input = document.querySelector('input[type="number"], input[type="text"]');
+        if (input) {
+          input.value = arubEl.textContent;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', bindMaxButtonsSafe);
+window.addEventListener('walletStateChanged', bindMaxButtonsSafe);
 
 // -------------------------
 // Helpers used by other parts
