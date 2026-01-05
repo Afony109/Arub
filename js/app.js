@@ -890,35 +890,58 @@ async function refreshTradingBalancesSafe(reason = 'unknown') {
 }
 
 function bindMaxButtonsSafe() {
-  const maxButtons = [...document.querySelectorAll('button')]
-    .filter(b => b.textContent?.trim().toUpperCase() === 'МАКС');
-
   const usdtEl = document.getElementById('usdtBalance');
   const arubEl = document.getElementById('arubBalance');
 
-  maxButtons.forEach(btn => {
-    if (btn.dataset.bound === '1') return;
-    btn.dataset.bound = '1';
+  const parseShownNumber = (s) => {
+    const x = Number(String(s ?? '').replace(',', '.').trim());
+    return Number.isFinite(x) ? x : null;
+  };
+
+  const findNearestInput = (btn) => {
+    // ищем input в ближайшем контейнере (чтобы BUY MAX не лез в SELL и наоборот)
+    const host =
+      btn.closest('.trade') ||
+      btn.closest('.card') ||
+      btn.closest('.panel') ||
+      btn.closest('.box') ||
+      btn.closest('section') ||
+      btn.parentElement;
+
+    if (!host) return null;
+
+    // выбираем первый “нормальный” input внутри этого контейнера
+    return host.querySelector('input[type="number"], input[type="text"]');
+  };
+
+  // берём все кнопки с текстом "МАКС"
+  const maxButtons = [...document.querySelectorAll('button')]
+    .filter(b => b.textContent?.trim().toUpperCase() === 'МАКС');
+
+  maxButtons.forEach((btn) => {
+    if (btn.dataset.maxBound === '1') return;
+    btn.dataset.maxBound = '1';
 
     btn.addEventListener('click', () => {
-      // BUY side (USDT)
-      if (usdtEl && usdtEl.textContent && usdtEl.textContent !== '—') {
-        const input = document.querySelector('input[type="number"], input[type="text"]');
-        if (input) {
-          input.value = usdtEl.textContent;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          return;
-        }
-      }
+      const input = findNearestInput(btn);
+      if (!input) return;
 
-      // SELL side (ARUB) — если потребуется позже
-      if (arubEl && arubEl.textContent && arubEl.textContent !== '—') {
-        const input = document.querySelector('input[type="number"], input[type="text"]');
-        if (input) {
-          input.value = arubEl.textContent;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      }
+      // определяем BUY или SELL по содержимому контейнера
+      const hostText = (btn.closest('.trade') || btn.closest('.card') || btn.closest('section') || btn.parentElement)?.innerText || '';
+      const isSell = /Продаж|Sell/i.test(hostText);
+
+      const val = isSell
+        ? parseShownNumber(arubEl?.textContent)
+        : parseShownNumber(usdtEl?.textContent);
+
+      if (val === null) return;
+
+      // вставляем значение
+      input.value = String(val);
+
+      // триггерим реакцию UI/логики (важно для твоего trading.js)
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
     });
   });
 }
