@@ -840,6 +840,54 @@ function syncTradingLock(reason = 'sync') {
 
 window.addEventListener('walletStateChanged', () => syncTradingLock('walletStateChanged'));
 
+async function refreshTradingBalancesSafe(reason = 'unknown') {
+  try {
+    const ws = window.walletState;
+    const addr = ws?.address;
+    const signer = ws?.signer;
+
+    const usdtEl = document.getElementById('usdtBalance');
+    const arubEl = document.getElementById('arubBalance');
+
+    // если этих элементов нет на странице — тихо выходим
+    if (!usdtEl && !arubEl) return;
+
+    // если не подключены — показываем прочерк
+    if (!addr || !signer) {
+      if (usdtEl) usdtEl.textContent = '—';
+      if (arubEl) arubEl.textContent = '—';
+      return;
+    }
+
+    const provider = signer.provider;
+    if (!provider) return;
+
+    // минимальный ERC20 ABI
+    const ERC20 = [
+      'function balanceOf(address) view returns (uint256)',
+      'function decimals() view returns (uint8)'
+    ];
+
+    // USDT
+    if (usdtEl && CONFIG.USDT_ADDRESS) {
+      const usdt = new ethers.Contract(CONFIG.USDT_ADDRESS, ERC20, provider);
+      const [bal, dec] = await Promise.all([usdt.balanceOf(addr), usdt.decimals()]);
+      usdtEl.textContent = ethers.utils.formatUnits(bal, dec);
+    }
+
+    // ARUB (token)
+    if (arubEl && CONFIG.TOKEN_ADDRESS) {
+      const arub = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20, provider);
+      const [bal, dec] = await Promise.all([arub.balanceOf(addr), arub.decimals()]);
+      arubEl.textContent = ethers.utils.formatUnits(bal, dec);
+    }
+
+    console.log('[UI] balances updated', { reason });
+  } catch (e) {
+    console.warn('[UI] refreshTradingBalancesSafe failed:', e?.message || e);
+  }
+}
+
 // -------------------------
 // Helpers used by other parts
 // -------------------------
@@ -878,6 +926,11 @@ function applyWalletToUI(ws) {
 window.addEventListener('wallet:state', (e) => applyWalletToUI(e.detail));
 window.addEventListener('wallet:connected', (e) => applyWalletToUI(e.detail));
 window.addEventListener('wallet:disconnected', (e) => applyWalletToUI(e.detail));
+window.addEventListener('walletStateChanged', () => refreshTradingBalancesSafe('walletStateChanged'));
+document.addEventListener('DOMContentLoaded', () => refreshTradingBalancesSafe('DOMContentLoaded'));
+window.addEventListener('contractsInitialized', () => refreshTradingBalancesSafe('contractsInitialized'));
+setupGlobalEventListeners();
+
 
 // -------------------------
 // Single init
@@ -916,4 +969,4 @@ document.addEventListener('DOMContentLoaded', initApp);
 document.addEventListener('DOMContentLoaded', () => applyWalletToUI(window.walletState));
 document.addEventListener('DOMContentLoaded', () => syncTradingLock('DOMContentLoaded'));
 
-setupGlobalEventListeners();
+
