@@ -662,5 +662,16 @@
   background: rgba(0, 87, 183, 0.2);
 }
 
+/* HIDE wallet picker content when dropdown is closed */
+#walletDropdown .wallet-list {
+  display: none !important;
+}
+
+/* SHOW only when dropdown is open */
+#walletDropdown.open .wallet-list {
+  display: block !important;
+}
+
+
 
 
