@@ -279,6 +279,28 @@ export function initTradingModule() {
   }
   _tradingBound = true;
 
+  // Read-only RPC/contracts for balances and limits
+  try { initReadOnly(); } catch (e) {
+    console.warn('[TRADING] initReadOnly failed:', e?.message || e);
+  }
+
+  // Keep UI/state in sync with wallet lifecycle
+  const safeApply = (reason) => () => {
+    try { applyWalletState(reason); } catch (err) {
+      console.warn('[TRADING] applyWalletState failed:', err?.message || err);
+    }
+  };
+
+  window.addEventListener('walletStateChanged', safeApply('walletStateChanged'));
+  window.addEventListener('wallet:connected', safeApply('wallet:connected'));
+  window.addEventListener('wallet:disconnected', safeApply('wallet:disconnected'));
+  document.addEventListener('DOMContentLoaded', safeApply('DOMContentLoaded'));
+
+  // Initial state sync (balances + stats)
+  try { applyWalletState('init'); } catch (e) {
+    console.warn('[TRADING] applyWalletState init failed:', e?.message || e);
+  }
+
   // bind handlers (если есть) — не критично
   try { bindTradingHandlers?.(); } catch (e) {
     console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e);
