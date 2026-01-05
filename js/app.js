@@ -6,39 +6,37 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
-import {initWalletModule, getEthersProvider, getAvailableWallets, connectWallet, disconnectWallet} from './wallet.js';
+import { initWalletModule, getEthersProvider, getAvailableWallets, connectWallet, disconnectWallet } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
-  try { await renderWallets(); } catch (e) { console.warn(e); }
-});
+initWalletModule(); // важно: до любых renderWallets()
+
+// Публикуем API кошелька ОДИН РАЗ и НЕ ПЕРЕЗАТИРАЕМ ниже
+window.getAvailableWallets = getAvailableWallets;
+window.connectWallet = connectWallet;           // реальный connectWallet({walletId})
+window.disconnectWallet = disconnectWallet;
 
 if (typeof window.walletState === 'undefined') window.walletState = null;
-
-// если UI использует window.*, то публикуем тут (это 100% выполняется после импорта)
-window.getAvailableWallets = getAvailableWallets;
-window.connectWallet = connectWallet;
-window.disconnectWallet = disconnectWallet;
 
 console.log('[app] wallet api ready', typeof window.getAvailableWallets, typeof window.connectWallet);
 
 // -----------------------------
 // Read-only provider (stable RPC)
 // -----------------------------
-
 console.log('[APP] module loaded:', import.meta.url);
 
 let tradingInitDone = false;
+let tradingMounted = false;
 
+// -----------------------------
+// Trading UI init (idempotent)
+// -----------------------------
 async function ensureTradingUI(reason = 'unknown') {
-  // trading.html: контейнер существует
   const box = document.getElementById('tradingInterface');
   if (!box) return;
 
-  // ВАЖНО: initTradingModule должен быть идемпотентным.
-  // Если он не идемпотентен — смотрите пункт 2 ниже.
   try {
     await initTradingModule();
     tradingInitDone = true;
@@ -48,7 +46,7 @@ async function ensureTradingUI(reason = 'unknown') {
   }
 }
 
-// 1) после загрузки DOM (чтобы #tradingInterface точно был в DOM)
+// 1) после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
   ensureTradingUI('DOMContentLoaded');
 });
@@ -58,88 +56,42 @@ window.addEventListener('walletStateChanged', () => {
   ensureTradingUI('walletStateChanged');
 });
 
-function ensureWalletDropdownBinding() {
-  const connectBtn = document.getElementById('connectBtn');
-  const dropdown = document.getElementById('walletDropdown');
-
-  if (!connectBtn || !dropdown) {
-    return false;
-  }
-
-  if (connectBtn.dataset.bound === '1') return true;
-  connectBtn.dataset.bound = '1';
-
-  connectBtn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    try {
-      await renderWallets(); // ВАЖНО: прямой вызов, не window.renderWallets
-    } catch (err) {
-      console.warn('[UI] renderWallets failed:', err?.message || err);
-    }
-
-    dropdown.classList.toggle('open');
-  });
-
-  dropdown.addEventListener('click', (e) => e.stopPropagation());
-
-  document.addEventListener('click', (e) => {
-    if (!dropdown.classList.contains('open')) return;
-    const area = document.querySelector('.wallet-button-area') || connectBtn.closest('.wallet-wrap') || connectBtn.parentElement;
-    if (area && !area.contains(e.target)) dropdown.classList.remove('open');
-  });
-
-  console.log('[UI] wallet dropdown binding OK');
-  return true;
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  // пробуем сразу
-  if (ensureWalletDropdownBinding()) return;
-
-  // если DOM дорисовывается позже — пробуем несколько раз
-  let tries = 0;
-  const t = setInterval(() => {
-    tries += 1;
-    if (ensureWalletDropdownBinding() || tries >= 20) clearInterval(t);
-  }, 100);
-});
-
+// -----------------------------
+// Debug helpers
+// -----------------------------
 async function debugPresaleMath(address) {
   const provider = await getReadOnlyProviderAsync();
 
   const arub = new ethers.Contract(
     CONFIG.TOKEN_ADDRESS,
-    ["function decimals() view returns (uint8)"],
+    ['function decimals() view returns (uint8)'],
     provider
   );
 
   const oracle = new ethers.Contract(
     CONFIG.ORACLE_ADDRESS,
-    ["function rate() view returns (uint256)"],
+    ['function rate() view returns (uint256)'],
     provider
   );
 
   const arubDecimals = await arub.decimals();
   const oracleRateRaw = await oracle.rate();
 
-  console.log("[DEBUG] ARUB decimals =", arubDecimals);
-  console.log("[DEBUG] Oracle rate raw =", oracleRateRaw.toString());
+  console.log('[DEBUG] ARUB decimals =', arubDecimals);
+  console.log('[DEBUG] Oracle rate raw =', oracleRateRaw.toString());
 }
 
+// -----------------------------
+// Wallet UI update hook
+// -----------------------------
 window.addEventListener('walletStateChanged', () => updateWalletUI('walletStateChanged'));
 
-// чтобы старый onclick="connectWallet()" продолжал работать:
+// Legacy: keep CONFIG global
 window.CONFIG = window.CONFIG || CONFIG;
 
-// app.js (глобально)
-
-function getWalletDropdownEl() {
-  return document.getElementById('walletDropdown') || null;
-}
-
+// -----------------------------
 // Compatibility: unify ids across pages
+// -----------------------------
 (function () {
   const d1 = document.getElementById('disconnectWalletBtn');
   const d2 = document.getElementById('walletDisconnect');
@@ -152,8 +104,9 @@ function getWalletDropdownEl() {
   if (!dropdown && menu) menu.id = 'walletDropdown';
 })();
 
-let uiConnecting = false;
-
+// -----------------------------
+// Wallet dropdown rendering
+// -----------------------------
 export async function renderWallets() {
   console.log('[UI] renderWallets() start', {
     hasDropdown: !!document.getElementById('walletDropdown'),
@@ -229,8 +182,7 @@ export async function renderWallets() {
   // ------------------------------------------
   let wallets = getWalletsSafe();
 
-  // Если пришёл только WalletConnect/Injected — подождём чуть-чуть announceProvider
-  // (это частая причина "был список, стал один")
+  // EIP-6963 announceProvider приходит асинхронно — подождём чуть-чуть
   if (!wallets || wallets.length <= 1) {
     await new Promise(r => setTimeout(r, 120));
     wallets = getWalletsSafe();
@@ -243,7 +195,7 @@ export async function renderWallets() {
   if (!Array.isArray(wallets) || wallets.length === 0) {
     list.innerHTML = `
       <div class="wallet-list-title">Гаманці не знайдено</div>
-      <div class="wallet-list-hint">Увімкніть розширення гаманця або WalletConnect.</div>
+      <div class="wallet-list-hint">Увімкніть розширення гаманця (MetaMask / Trust / Phantom / Uniswap).</div>
     `;
     return;
   }
@@ -285,8 +237,8 @@ export async function renderWallets() {
     return;
   }
 
-  // сортировка: eip6963 -> walletconnect -> injected, дальше по имени
-  const rank = (t) => (t === 'eip6963' ? 0 : t === 'walletconnect' ? 1 : 2);
+  // сортировка: eip6963 -> injected, дальше по имени
+  const rank = (t) => (t === 'eip6963' ? 0 : 1);
   norm.sort((a, b) => {
     const ra = rank(a.type), rb = rank(b.type);
     if (ra !== rb) return ra - rb;
@@ -303,7 +255,7 @@ export async function renderWallets() {
         ? `<img class="wallet-icon" src="${escapeHtml(w.icon)}" alt="" referrerpolicy="no-referrer">`
         : `<span class="wallet-icon-placeholder"></span>`;
 
-      const sub = (w.type === 'eip6963' && w.rdns) ? w.rdns : (w.type === 'walletconnect' ? 'QR / Deeplink' : '');
+      const sub = (w.type === 'eip6963' && w.rdns) ? w.rdns : '';
 
       return `
         <button type="button" class="wallet-item" data-wallet-id="${escapeHtml(String(w.id))}">
@@ -337,11 +289,12 @@ export async function renderWallets() {
       }
 
       // ⛔ блокируем повторные клики
-      if (window.uiConnecting) return;
-      window.uiConnecting = true;
+      if (window.__uiConnecting) return;
+      window.__uiConnecting = true;
       btn.disabled = true;
 
       try {
+        // ВАЖНО: это реальный connectWallet({walletId})
         await window.connectWallet?.({ walletId });
 
         try { window.updateWalletUI?.('connected'); } catch (_) {}
@@ -357,7 +310,7 @@ export async function renderWallets() {
           stack: err?.stack
         });
       } finally {
-        window.uiConnecting = false;
+        window.__uiConnecting = false;
         btn.disabled = false;
       }
     });
@@ -379,10 +332,13 @@ function shortAddr(a) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
+// -----------------------------
+// Wallet menu / UI helpers
+// -----------------------------
 function bindWalletUiTradingPage() {
   const connectBtn = document.getElementById('connectBtn');
-  const toggleBtn  = document.getElementById('walletMenuToggle');
-  const menu       = document.getElementById('walletMenu');
+  const toggleBtn = document.getElementById('walletMenuToggle');
+  const menu = document.getElementById('walletMenu');
 
   // toggle wallet menu
   toggleBtn?.addEventListener('click', (e) => {
@@ -394,21 +350,17 @@ function bindWalletUiTradingPage() {
   // close menu on outside click
   document.addEventListener('click', (e) => {
     if (!menu || !toggleBtn) return;
-    const wrap = menu.parentElement; // .wallet-dropdown
+    const wrap = menu.parentElement;
     if (menu.classList.contains('open') && wrap && !wrap.contains(e.target)) {
       menu.classList.remove('open');
     }
   });
 
-  // connect button opens your wallet picker (если так задумано)
+  // connect button opens your wallet picker
   connectBtn?.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
-
-    // если у вас подключение делается через dropdown/рендер кошельков — вызовите это
-    try { renderWallets?.(); } catch (_) {}
-    // либо напрямую коннект:
-    // await window.connectWallet?.();
+    try { await renderWallets?.(); } catch (_) {}
   });
 
   // explorer
@@ -423,28 +375,23 @@ function bindWalletUiTradingPage() {
   document.getElementById('walletDisconnect')?.addEventListener('click', async () => {
     try { await disconnectWallet?.(); } catch (_) {}
     menu?.classList.remove('open');
-  });// главный: слушаем изменения кошелька
+  });
 }
 
 function updateWalletUI(reason = 'unknown') {
   const ws = window.walletState;
-
   const connected = !!ws?.address && !!ws?.signer;
 
   console.log('[UI] updateWalletUI', { reason, connected, address: ws?.address, chainId: ws?.chainId });
 
-  // ---------
-  // Общая кнопка connect (есть на обеих страницах)
-  // ---------
+  // Общая кнопка connect
   const connectBtn = document.getElementById('connectBtn');
   if (connectBtn) {
     connectBtn.textContent = connected ? shortAddr(ws.address) : 'Підключити гаманець';
     connectBtn.classList.toggle('connected', connected);
   }
 
-  // ---------
   // INDEX / dashboard: dropdown + disconnectWalletBtn
-  // ---------
   const disconnectBtn = document.getElementById('disconnectWalletBtn');
   const dropdown = document.getElementById('walletDropdown');
 
@@ -461,14 +408,12 @@ function updateWalletUI(reason = 'unknown') {
     };
   }
 
-  // ---------
   // TRADING page: wallet menu toggle + menu address + disconnect
-  // ---------
   const toggleBtn = document.getElementById('walletMenuToggle');
-  const menuAddr  = document.getElementById('walletMenuAddress');
+  const menuAddr = document.getElementById('walletMenuAddress');
 
   if (toggleBtn) toggleBtn.hidden = !connected;
-  if (menuAddr)  menuAddr.textContent = connected ? ws.address : '—';
+  if (menuAddr) menuAddr.textContent = connected ? ws.address : '—';
 
   const explorerBtn = document.getElementById('walletViewOnExplorer');
   if (explorerBtn) {
@@ -489,7 +434,7 @@ function updateWalletUI(reason = 'unknown') {
     };
   }
 
-  // Вызвать ваши колбэки из inline-скрипта trading.html (если есть)
+  // callbacks (if present)
   if (connected) {
     try { window.onWalletConnected?.(ws.address, { chainId: ws.chainId }); } catch (_) {}
   } else {
@@ -497,8 +442,10 @@ function updateWalletUI(reason = 'unknown') {
   }
 }
 
+// -----------------------------
+// Dropdown close + disconnect binding (optional)
+// -----------------------------
 function setupWalletMenu() {
-  // защита от повторного навешивания
   if (window.__walletMenuBound) return;
   window.__walletMenuBound = true;
 
@@ -519,17 +466,21 @@ function setupWalletMenu() {
   // клики внутри dropdown не закрывают его
   getMenuEl()?.addEventListener('click', (e) => e.stopPropagation());
 
-  // Disconnect button (ID как в вашем HTML!)
+  // Disconnect button
   document.getElementById('disconnectWalletBtn')?.addEventListener('click', async (e) => {
-  e.preventDefault();
-  e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
-  document.getElementById('walletDropdown')?.classList.remove('open');
-  await disconnectWallet();
-  try { renderWallets(); } catch (_) {}
-  try { updateWalletUI?.('disconnected'); } catch (_) {}
-});
+    document.getElementById('walletDropdown')?.classList.remove('open');
+    await disconnectWallet();
+    try { renderWallets(); } catch (_) {}
+    try { updateWalletUI?.('disconnected'); } catch (_) {}
+  });
+}
 
+// -----------------------------
+// Global stats
+// -----------------------------
 async function updateGlobalStats() {
   try {
     const [arubPriceInfo, totalSupply] = await Promise.all([
@@ -555,19 +506,16 @@ async function updateGlobalStats() {
 
 // =======================
 // PRESALE / ORACLE STATS
-// вставить сразу после renderWalletButtons(...)
 // =======================
-
-
 const PRESALE_ABI_MIN = [
-  "function totalDeposited(address) view returns (uint256)",
-  "function lockedPrincipalArub(address) view returns (uint256)",
-  "function lockedBonusArub(address) view returns (uint256)"
+  'function totalDeposited(address) view returns (uint256)',
+  'function lockedPrincipalArub(address) view returns (uint256)',
+  'function lockedBonusArub(address) view returns (uint256)'
 ];
 
 const ORACLE_ABI_MIN = [
-  "function getRate() view returns (uint256,uint256)",
-  "function rate() view returns (uint256)"
+  'function getRate() view returns (uint256,uint256)',
+  'function rate() view returns (uint256)'
 ];
 
 function setText(id, value) {
@@ -579,6 +527,12 @@ function calcDiscount(avgPrice, currentPrice) {
   if (!avgPrice || !currentPrice || currentPrice <= 0) return null;
   return (1 - avgPrice / currentPrice) * 100;
 }
+
+const USDT_DECIMALS = 6;
+const ARUB_DECIMALS = 6;
+
+// 2025-12-15 16:30:03 UTC (ваш деплой)
+const PRESALE_DEPLOY_UTC_MS = Date.parse('2025-12-15T16:30:03Z');
 
 async function loadPresaleStats(user, provider) {
   const c = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_ABI_MIN, provider);
@@ -616,14 +570,8 @@ async function loadCurrentArubPrice(provider) {
 
 // Event ABI: Purchased(buyer, usdtAmount, arubTotal, bonusArub, ...)
 const PRESALE_EVENTS_ABI = [
-  "event Purchased(address indexed buyer, uint256 usdtAmount, uint256 arubTotal, uint256 bonusArub, uint256 discountPercent, uint256 discountAppliedEq)"
+  'event Purchased(address indexed buyer, uint256 usdtAmount, uint256 arubTotal, uint256 bonusArub, uint256 discountPercent, uint256 discountAppliedEq)'
 ];
-
-const USDT_DECIMALS = 6;
-const ARUB_DECIMALS = 6;
-
-// 2025-12-15 16:30:03 UTC (ваш деплой)
-const PRESALE_DEPLOY_UTC_MS = Date.parse("2025-12-15T16:30:03Z");
 
 // Находим ближайший блок по timestamp (бинарный поиск)
 async function findBlockByTimestamp(provider, targetTsSec) {
@@ -631,7 +579,6 @@ async function findBlockByTimestamp(provider, targetTsSec) {
   let lo = 1;
   let hi = latest;
 
-  // быстрые границы
   const bLo = await provider.getBlock(lo);
   if (bLo && bLo.timestamp >= targetTsSec) return lo;
 
@@ -647,6 +594,22 @@ async function findBlockByTimestamp(provider, targetTsSec) {
     else hi = mid;
   }
   return lo; // ближайший <= target
+}
+
+function setPresaleScanVisible(visible) {
+  const wrap = document.getElementById('presaleScanWrap');
+  if (!wrap) return;
+  wrap.style.display = visible ? 'block' : 'none';
+}
+
+function setPresaleScanProgress(pct) {
+  const bar = document.getElementById('presaleScanBar');
+  const label = document.getElementById('presaleScanPct');
+  if (!bar || !label) return;
+
+  const p = Math.max(0, Math.min(100, Math.floor(pct)));
+  label.textContent = `${p}%`;
+  bar.style.width = `${p}%`;
 }
 
 // Сканируем Purchased в чанках, чтобы не упираться в лимиты RPC
@@ -670,7 +633,6 @@ async function loadPresaleStatsFromEvents(user, provider) {
 
   const STEP = 120_000;
 
-  // --- progress setup ---
   const totalRanges = Math.max(1, Math.ceil((endBlock - startBlock + 1) / STEP));
   let doneRanges = 0;
 
@@ -680,24 +642,14 @@ async function loadPresaleStatsFromEvents(user, provider) {
   try {
     for (let from = startBlock; from <= endBlock; from += STEP) {
       const to = Math.min(endBlock, from + STEP - 1);
-
       const logs = await presale.queryFilter(filter, from, to);
 
       for (const ev of logs) {
-        console.log("[PURCHASED]", {
-          block: ev.blockNumber,
-          tx: ev.transactionHash,
-          usdt: ethers.utils.formatUnits(ev.args.usdtAmount, USDT_DECIMALS),
-          arub: ethers.utils.formatUnits(ev.args.arubTotal, ARUB_DECIMALS),
-          bonus: ethers.utils.formatUnits(ev.args.bonusArub, ARUB_DECIMALS),
-        });
-
         paidRaw = paidRaw.add(ev.args.usdtAmount);
         arubTotalRaw = arubTotalRaw.add(ev.args.arubTotal);
         bonusRaw = bonusRaw.add(ev.args.bonusArub);
       }
 
-      // --- progress update per range ---
       doneRanges += 1;
       setPresaleScanProgress((doneRanges / totalRanges) * 100);
     }
@@ -706,37 +658,17 @@ async function loadPresaleStatsFromEvents(user, provider) {
 
     const paidUSDT = Number(ethers.utils.formatUnits(paidRaw, USDT_DECIMALS));
     const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
-    const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, USDT_DECIMALS)); // <-- нет, см. ниже
-    const bonusARUB2 = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
-    const principalARUB = Math.max(0, totalARUB - bonusARUB2);
+    const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
+    const principalARUB = Math.max(0, totalARUB - bonusARUB);
     const avgPrice = totalARUB > 0 ? paidUSDT / totalARUB : null;
 
-    return { paidUSDT, totalARUB, principalARUB, bonusARUB: bonusARUB2, avgPrice };
+    return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice };
   } finally {
-    // даже если упадёт RPC — UI не зависнет “на загрузке”
     setPresaleScanVisible(false);
   }
 }
 
-function setPresaleScanVisible(visible) {
-  const wrap = document.getElementById('presaleScanWrap');
-  if (!wrap) return;
-  wrap.style.display = visible ? 'block' : 'none';
-}
-
-function setPresaleScanProgress(pct) {
-  const bar = document.getElementById('presaleScanBar');
-  const label = document.getElementById('presaleScanPct');
-  if (!bar || !label) return;
-
-  const p = Math.max(0, Math.min(100, Math.floor(pct)));
-  label.textContent = `${p}%`;
-  bar.style.width = `${p}%`;
-}
-
 async function refreshPresaleUI(address) {
-  
-  // Единый read-only провайдер (proxy-first) из contracts.js
   const provider = await getReadOnlyProviderAsync();
 
   let presale = await loadPresaleStatsFromEvents(address, provider);
@@ -747,54 +679,42 @@ async function refreshPresaleUI(address) {
   const currentPrice = await loadCurrentArubPrice(provider);
   const discount = calcDiscount(presale.avgPrice, currentPrice);
 
-  setText("presalePurchased", presale.totalARUB.toFixed(6));
-  setText("presalePaid", presale.paidUSDT.toFixed(2));
-  setText("presaleAvgPrice", presale.avgPrice ? presale.avgPrice.toFixed(6) : "—");
-  setText("presaleDiscount", discount !== null ? discount.toFixed(2) + "%" : "—");
+  setText('presalePurchased', presale.totalARUB.toFixed(6));
+  setText('presalePaid', presale.paidUSDT.toFixed(2));
+  setText('presaleAvgPrice', presale.avgPrice ? presale.avgPrice.toFixed(6) : '—');
+  setText('presaleDiscount', discount !== null ? discount.toFixed(2) + '%' : '—');
 }
 
 window.refreshPresaleUI = refreshPresaleUI;
 
-
-// =======================
-// END PRESALE / ORACLE STATS
-// =======================
-
-
 // -------------------------
 // Legacy / Global hooks (HTML compatibility)
 // -------------------------
-
 window.CONFIG = window.CONFIG || CONFIG;
 
-// если где-то в HTML дергают connectWalletUI напрямую
-window.connectWalletUI = connectWalletUI;
+// ВАЖНО: connectWalletUI должен существовать (у вас его не было) — делаем alias на openWalletMenu
+window.connectWalletUI = () => window.openWalletMenu?.();
 
-// чтобы старый onclick="connectWallet()" продолжал работать
-window.connectWallet = () => {
-  const dd =
-    document.getElementById('walletDropdown') ||
-    document.getElementById('walletMenu');
-
+// Открытие dropdown (НЕ перезатирает window.connectWallet!)
+window.openWalletMenu = async () => {
+  const dd = document.getElementById('walletDropdown') || document.getElementById('walletMenu');
   if (!dd) {
     showNotification?.('Wallet menu not found in DOM', 'error');
     return;
   }
 
-  // если не подключены — перерендерим список кошельков
   const connected = !!window.walletState?.address && !!window.walletState?.signer;
   if (!connected) {
-    try { renderWallets(); } catch (_) {}
+    try { await renderWallets(); } catch (_) {}
     const hasAny = (getAvailableWallets() || []).length > 0;
     if (!hasAny) {
       showNotification?.(
-        'Web3-гаманець не знайдено. Встановіть MetaMask/Trust або відкрийте сайт у dApp-браузері.',
+        'Web3-гаманець не знайдено. Встановіть MetaMask/Trust/Phantom/Uniswap або відкрийте сайт у dApp-браузері.',
         'error'
       );
     }
   }
 
-  // единый способ открытия/закрытия: класс open
   dd.classList.toggle('open');
 };
 
@@ -802,10 +722,11 @@ window.connectWallet = () => {
 window.addTokenToWallet = async (symbol) => {
   try {
     if (!window.walletState?.signer) {
-      window.connectWallet?.();
+      await window.openWalletMenu?.();
       showNotification?.('Спочатку оберіть гаманець і підключіться.', 'info');
       return;
     }
+    // addTokenToWalletImpl должен быть определён в вашем проекте
     return await addTokenToWalletImpl(symbol);
   } catch (e) {
     console.error(e);
@@ -815,13 +736,9 @@ window.addTokenToWallet = async (symbol) => {
 };
 
 // -------------------------
-// Optional: wallet account menu (copy/change/disconnect)
-// Делает то, что ты пытался сделать в "setupWalletMenu", но корректно
+// Misc global event listeners
 // -------------------------
-
-
 function setupGlobalEventListeners() {
-  // обновление статистики, когда контракты готовы
   window.addEventListener('contractsInitialized', () => {
     if (typeof updateGlobalStats === 'function') {
       try { updateGlobalStats(); } catch (e) {
@@ -830,7 +747,6 @@ function setupGlobalEventListeners() {
     }
   });
 
-  // плавный скролл по якорям (UX, безопасно)
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
       e.preventDefault();
@@ -840,24 +756,22 @@ function setupGlobalEventListeners() {
   });
 }
 
-function setupWalletDropdownUI() {
-  try { renderWallets?.(); } catch (_) {}
-  try { setupWalletMenu?.(); } catch (_) {}
-}
-
+// -------------------------
+// Bind connect button (dropdown)
+// -------------------------
 function bindConnectButton() {
-  if (window.__connectBtnBound) return;
-  window.__connectBtnBound = true;
-
   const btn = document.getElementById('connectBtn');
-  const dd  = document.getElementById('walletDropdown');
+  const dd = document.getElementById('walletDropdown');
   if (!btn || !dd) return;
 
-  btn.addEventListener('click', (e) => {
+  if (btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+
+  btn.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    try { renderWallets(); } catch (err) {
+    try { await renderWallets(); } catch (err) {
       console.warn('[UI] renderWallets failed:', err?.message || err);
     }
 
@@ -865,10 +779,17 @@ function bindConnectButton() {
   });
 
   dd.addEventListener('click', (e) => e.stopPropagation());
+
+  document.addEventListener('click', (e) => {
+    if (!dd.classList.contains('open')) return;
+    const area = document.querySelector('.wallet-button-area') || btn.closest('.wallet-wrap') || btn.parentElement;
+    if (area && !area.contains(e.target)) dd.classList.remove('open');
+  });
 }
 
-let tradingMounted = false;
-
+// -------------------------
+// Trading lock/unlock UI
+// -------------------------
 function renderTradingLocked() {
   const box = document.getElementById('tradingInterface');
   if (!box) return;
@@ -885,19 +806,14 @@ async function renderTradingUnlocked() {
   const box = document.getElementById('tradingInterface');
   if (!box) return;
 
-  // 1) Если у вас есть модуль торговли, который должен отрендерить UI — дерните его здесь.
-  // Подставьте вашу реальную функцию: initTradingModule(), renderTradingUI(), mountTrading(), etc.
   if (!tradingMounted) {
     tradingMounted = true;
-
-    // пример: если вы делали window.initTradingModule в app.js
+    // если вы где-то публикуете initTradingModule в window — оставим страховку
     if (typeof window.initTradingModule === 'function') {
       await window.initTradingModule();
     }
   }
 
-  // 2) Если никакого рендера пока нет — хотя бы уберём замок и покажем заглушку "готово"
-  // (чтобы отличать проблему рендера от проблемы коннекта)
   if (!box.innerHTML || box.textContent.includes('Підключіть гаманець')) {
     box.innerHTML = `
       <div style="text-align:center; padding:30px;">
@@ -922,80 +838,16 @@ function syncTradingLock(reason = 'sync') {
   }
 }
 
-// дергаем при изменении кошелька + при старте страницы
 window.addEventListener('walletStateChanged', () => syncTradingLock('walletStateChanged'));
-document.addEventListener('DOMContentLoaded', () => syncTradingLock('DOMContentLoaded'));
-
-function onWalletUIChange(reason = 'walletStateChanged') {
-  updateWalletUI(reason);
-
-  const ws = window.walletState;
-  const connected = !!ws?.address && !!ws?.signer;
-  const onArbitrum = Number(ws?.chainId) === 42161;
-
-  if (connected && onArbitrum) {
-    renderTradingUnlocked();
-  } else {
-    renderTradingLocked();
-  }
-}
-
-window.addEventListener('walletStateChanged', () => onWalletUIChange('walletStateChanged'));
-
-document.addEventListener('DOMContentLoaded', () => {
-  // начальная синхронизация (важно, если кошелек уже подключен при загрузке)
-  onWalletUIChange('DOMContentLoaded');
-});
 
 // -------------------------
-// initApp() — оставляем initWalletModule только здесь
+// Helpers used by other parts
 // -------------------------
-async function initApp() {
-  console.log('[APP] Boot (Vault-only)');
-
-  const safe = async (label, fn) => {
-    try { return await fn?.(); }
-    catch (e) {
-      console.warn(`[APP] ${label} failed:`, e?.message || e);
-      return null;
-    }
-  };
-
-  try {
-    const roOk = await safe('initReadOnlyContracts', initReadOnlyContracts);
-
-    await safe('initWalletModule', initWalletModule);
-    await safe('bindConnectButton', bindConnectButton);
-    await safe('setupWalletMenu', setupWalletMenu);
-
-    await safe('initTradingModule', initTradingModule);
-    await safe('setupGlobalEventListeners', setupGlobalEventListeners);
-
-    await safe('updateWalletUI(startup)', () => updateWalletUI?.('startup'));
-
-    if (roOk && typeof updateGlobalStats === 'function') {
-      setTimeout(() => { try { updateGlobalStats(); } catch {} }, 400);
-
-      const intervalMs = Number(CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000);
-      const ms = Number.isFinite(intervalMs) && intervalMs >= 3000 ? intervalMs : 15000;
-
-      setInterval(() => { try { updateGlobalStats(); } catch {} }, ms);
-    }
-
-    console.log('[APP] Ready');
-  } catch (e) {
-    console.error('[APP] Fatal init error:', e);
-    showNotification?.('❌ Помилка ініціалізації додатку', 'error');
-  }
-}
-}
-
 function isConnected(ws) {
   return !!ws?.address && !!ws?.signer && Number(ws?.chainId) === 42161;
 }
 
 function applyWalletToUI(ws) {
-  // 1) Кнопка "Подключить" -> адрес
   const connectBtn = document.getElementById('connectBtn');
   if (connectBtn) {
     if (ws?.address) {
@@ -1008,46 +860,58 @@ function applyWalletToUI(ws) {
     }
   }
 
-  // 2) Разблокировать торговлю
   const enabled = isConnected(ws);
 
-  // Вариант А: если у вас есть готовая функция
   if (typeof window.setTradingEnabled === 'function') {
     window.setTradingEnabled(enabled);
   }
 
-  // Вариант B: прямое включение контролов (универсально)
   document.querySelectorAll('[data-requires-wallet]').forEach((el) => {
     el.classList.toggle('locked', !enabled);
   });
 
-  // Пример: отключаем/включаем кнопки buy/sell
   document.querySelectorAll('.trade button, #buyBtn, #sellBtn').forEach((btn) => {
     btn.disabled = !enabled;
   });
 }
 
-// Подписка на события кошелька
 window.addEventListener('wallet:state', (e) => applyWalletToUI(e.detail));
 window.addEventListener('wallet:connected', (e) => applyWalletToUI(e.detail));
 window.addEventListener('wallet:disconnected', (e) => applyWalletToUI(e.detail));
 
-// И ПРИНУДИТЕЛЬНО применить текущее состояние при старте
-document.addEventListener('DOMContentLoaded', () => {
-  applyWalletToUI(window.walletState);
-});
-
+// -------------------------
+// Single init
+// -------------------------
 function initApp() {
-  // 1) Привязка UI кошелька
+  // 1) bind UI
+  bindConnectButton();
+  setupWalletMenu();
   bindWalletUiTradingPage();
 
-  // 2) Начальная отрисовка/синхронизация
+  // 2) init read-only contracts + stats
+  (async () => {
+    try {
+      const roOk = await initReadOnlyContracts();
+      if (roOk && typeof updateGlobalStats === 'function') {
+        setTimeout(() => { try { updateGlobalStats(); } catch {} }, 400);
+
+        const intervalMs = Number(CONFIG?.UI?.STATS_UPDATE_INTERVAL ?? 15000);
+        const ms = Number.isFinite(intervalMs) && intervalMs >= 3000 ? intervalMs : 15000;
+
+        setInterval(() => { try { updateGlobalStats(); } catch {} }, ms);
+      }
+    } catch (e) {
+      console.warn('[APP] initReadOnlyContracts failed:', e?.message || e);
+    }
+  })();
+
+  // 3) initial UI sync
   try { updateWalletUI?.('initApp'); } catch (_) {}
-  try { window.dispatchEvent(new CustomEvent('walletStateChanged', { detail: window.walletState ?? null })); } catch (_) {}
+  try { syncTradingLock('initApp'); } catch (_) {}
+
+  console.log('[APP] Ready');
 }
 
-// ВАЖНО: только после загрузки DOM
 document.addEventListener('DOMContentLoaded', initApp);
-
-
-
+document.addEventListener('DOMContentLoaded', () => applyWalletToUI(window.walletState));
+document.addEventListener('DOMContentLoaded', () => syncTradingLock('DOMContentLoaded'));
