@@ -261,37 +261,35 @@ function renderTrading() {
   renderTradingUI();
 }
 
+// -----------------------------
+// Wallet change handler (single, idempotent)
+// -----------------------------
 let _tradingBound = false;
-
-function _onWalletChanged() {
-  try { renderTrading(); }
-  catch (e) { console.warn('[TRADING] renderTrading failed on walletStateChanged:', e?.message || e); }
-}
-
-export function initTradingModule() {
-  if (_tradingBound) {
-    // повторный вызов init — просто перерендерим
-    _onWalletChanged();
-    return;
-  }
-  _tradingBound = true;
-
-  // bind handlers (если есть) — не критично
-  try { bindTradingHandlers?.(); }
-  catch (e) { console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e); }
-
-  // первый рендер
-  _onWalletChanged();
-
-  // КРИТИЧНО: гарантируем одну подписку
-  window.removeEventListener('walletStateChanged', _onWalletChanged);
-  window.addEventListener('walletStateChanged', _onWalletChanged);
-}
 
 function _onWalletChanged() {
   try { renderTrading(); } catch (e) { console.warn(e); }
 }
 
+export function initTradingModule() {
+  if (_tradingBound) {
+    // просто перерендер, без повторных addEventListener
+    try { renderTrading(); } catch (e) {
+      console.warn('[TRADING] renderTrading failed (repeat init):', e?.message || e);
+    }
+    return;
+  }
+  _tradingBound = true;
+
+  // bind handlers (если есть) — не критично
+  try { bindTradingHandlers?.(); } catch (e) {
+    console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e);
+  }
+
+  // initial render
+  try { renderTrading(); } catch (e) {
+    console.warn('[TRADING] initial renderTrading failed:', e?.message || e);
+  }
+}
 
 function bindTradingHandlers() {}
 
