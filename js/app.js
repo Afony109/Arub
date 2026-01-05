@@ -123,9 +123,11 @@ export async function renderWallets() {
   // Close both wallet picker dropdown and the separate wallet menu (if present)
   const closeWalletUI = () => {
   dd.classList.remove('open');
-  dd.querySelector('.wallet-list')?.classList.add('is-hidden');
+  dd.querySelector('.wallet-list')?.style.setProperty('display', 'none');
+
   document.getElementById('walletMenu')?.classList.remove('open');
   document.querySelector('.wallet-menu')?.classList.remove('open');
+
   try { document.activeElement?.blur?.(); } catch (_) {}
 };
 
@@ -198,14 +200,17 @@ export async function renderWallets() {
     wallets = getWalletsSafe();
   }
 
-  if (!Array.isArray(wallets) || wallets.length === 0) {
-    list.innerHTML = 
-    list.classList.remove('is-hidden');`
-      <div class="wallet-list-title">Гаманці не знайдено</div>
-      <div class="wallet-list-hint">Увімкніть розширення гаманця (MetaMask / Trust / Phantom / Uniswap).</div>
-    `;
-    return;
-  }
+if (!Array.isArray(wallets) || wallets.length === 0) {
+  list.innerHTML = `
+    <div class="wallet-list-title">Гаманці не знайдено</div>
+    <div class="wallet-list-hint">Увімкніть розширення гаманця (MetaMask / Trust / Phantom / Uniswap).</div>
+  `;
+
+  // железобетонно скрываем список, если dropdown закрыт
+  list.style.display = dd.classList.contains('open') ? 'block' : 'none';
+
+  return;
+}
 
   // ------------------------------------------
   // normalize + de-duplicate by id
@@ -237,6 +242,7 @@ export async function renderWallets() {
       <div class="wallet-list-title">Гаманці не знайдено</div>
       <div class="wallet-list-hint">Невірний формат списку гаманців (walletId/id відсутній).</div>
     `;
+    list.style.display = dd.classList.contains('open') ? 'block' : 'none';
     console.warn('[UI] wallets list has no usable ids:', wallets);
     return;
   }
@@ -262,6 +268,7 @@ export async function renderWallets() {
       `).join('')}
     </div>
   `;
+  list.style.display = dd.classList.contains('open') ? 'block' : 'none';
 
   console.log('[UI] wallet items rendered:', list.querySelectorAll('.wallet-item-textonly').length);
 
@@ -430,6 +437,13 @@ function setupWalletMenu() {
   const getMenuEl = () => document.getElementById('walletDropdown');
   const getAreaEl = () => document.querySelector('.wallet-button-area');
 
+  const setDropdownOpen = (open) => {
+    const menu = getMenuEl();
+    if (!menu) return;
+    menu.classList.toggle('open', !!open);
+    menu.querySelector('.wallet-list')?.style.setProperty('display', open ? 'block' : 'none');
+  };
+
   // закрытие dropdown по клику вне
   document.addEventListener('click', (e) => {
     const menu = getMenuEl();
@@ -437,7 +451,7 @@ function setupWalletMenu() {
     if (!menu || !area) return;
 
     if (menu.classList.contains('open') && !area.contains(e.target)) {
-      menu.classList.remove('open');
+      setDropdownOpen(false);
     }
   });
 
@@ -449,13 +463,13 @@ function setupWalletMenu() {
     e.preventDefault();
     e.stopPropagation();
 
-    document.getElementById('walletDropdown')?.classList.remove('open');
+    setDropdownOpen(false);
+
     await disconnectWallet();
     try { renderWallets(); } catch (_) {}
     try { updateWalletUI?.('disconnected'); } catch (_) {}
   });
 }
-
 // -----------------------------
 // Global stats
 // -----------------------------
@@ -745,6 +759,11 @@ function bindConnectButton() {
   if (btn.dataset.bound === '1') return;
   btn.dataset.bound = '1';
 
+  const setDropdownOpen = (open) => {
+    dd.classList.toggle('open', !!open);
+    dd.querySelector('.wallet-list')?.style.setProperty('display', open ? 'block' : 'none');
+  };
+
   btn.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -753,7 +772,8 @@ function bindConnectButton() {
       console.warn('[UI] renderWallets failed:', err?.message || err);
     }
 
-    dd.classList.toggle('open');
+    // toggle + sync display
+    setDropdownOpen(!dd.classList.contains('open'));
   });
 
   dd.addEventListener('click', (e) => e.stopPropagation());
@@ -761,7 +781,9 @@ function bindConnectButton() {
   document.addEventListener('click', (e) => {
     if (!dd.classList.contains('open')) return;
     const area = document.querySelector('.wallet-button-area') || btn.closest('.wallet-wrap') || btn.parentElement;
-    if (area && !area.contains(e.target)) dd.classList.remove('open');
+    if (area && !area.contains(e.target)) {
+      setDropdownOpen(false);
+    }
   });
 }
 
