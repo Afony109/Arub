@@ -122,11 +122,12 @@ export async function renderWallets() {
 
   // Close both wallet picker dropdown and the separate wallet menu (if present)
   const closeWalletUI = () => {
-    dd.classList.remove('open'); // walletDropdown
-    document.getElementById('walletMenu')?.classList.remove('open'); // id walletMenu (trading menu)
-    document.querySelector('.wallet-menu')?.classList.remove('open'); // class wallet-menu (if used)
-    try { document.activeElement?.blur?.(); } catch (_) {}
-  };
+  dd.classList.remove('open');
+  dd.querySelector('.wallet-list')?.classList.add('is-hidden');
+  document.getElementById('walletMenu')?.classList.remove('open');
+  document.querySelector('.wallet-menu')?.classList.remove('open');
+  try { document.activeElement?.blur?.(); } catch (_) {}
+};
 
   // bind dropdown handler once (stop propagation + disconnect)
   if (!dd.dataset.bound) {
@@ -198,7 +199,8 @@ export async function renderWallets() {
   }
 
   if (!Array.isArray(wallets) || wallets.length === 0) {
-    list.innerHTML = `
+    list.innerHTML = 
+    list.classList.remove('is-hidden');`
       <div class="wallet-list-title">Гаманці не знайдено</div>
       <div class="wallet-list-hint">Увімкніть розширення гаманця (MetaMask / Trust / Phantom / Uniswap).</div>
     `;

@@ -644,8 +644,14 @@
 #walletDropdown .wallet-icon,
 #walletDropdown .wallet-icon-placeholder { display: none !important; }
 
-#walletDropdown .wallet-items { display: none; }
-#walletDropdown.open .wallet-items { display: block; }
+/* Скрываем весь список целиком, когда dropdown закрыт */
+#walletDropdown .wallet-list { display: none; }
+
+/* Показываем список только когда dropdown открыт */
+#walletDropdown.open .wallet-list { display: block; }
+
+#walletDropdown .wallet-list.is-hidden { display: none !important; }
+
 
 
 .wallet-item-textonly.is-disabled {
