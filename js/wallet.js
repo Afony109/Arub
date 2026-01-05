@@ -1,20 +1,13 @@
 // wallet.js — FINAL (EIP-6963 only, NO WalletConnect)
 //
-// Works in pure browser ESM without bundlers.
+// Pure browser ESM (no bundlers).
 // - Lists injected wallets via EIP-6963 (MetaMask / Trust / Phantom / Uniswap / Bybit ...)
 // - Connects to the конкретный provider выбранного кошелька
 // - Auto-switches to Arbitrum One (42161) with add-chain fallback
 //
 // Requires:
 // - ethers v5.7.2 ESM
-// - CONFIG from ./config.js with CONFIG.NETWORK fields exactly like you posted
-//
-// App integration example (app.js):
-//   import { initWalletModule, getAvailableWallets, connectWallet, disconnectWallet } from './wallet.js';
-//   initWalletModule();
-//   window.getAvailableWallets = getAvailableWallets;
-//   window.connectWallet = connectWallet;
-//   window.disconnectWallet = disconnectWallet;
+// - CONFIG from ./config.js with CONFIG.NETWORK fields
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
@@ -36,7 +29,7 @@ let isConnecting = false;
 // -----------------------------
 const eip6963Store = {
   inited: false,
-  // key: uuid (string) -> entry
+  // key: uuid(string) -> entry
   map: new Map(),
 };
 
@@ -88,6 +81,9 @@ export function initWalletModule() {
     }
   });
 
+  // expose helpers for legacy UI code (optional)
+  try { publishWalletHelpersToWindow(); } catch (_) {}
+
   requestEip6963Providers();
   console.log('[wallet] initWalletModule: eip6963 init ok');
 }
@@ -96,6 +92,7 @@ export function initWalletModule() {
 // Public: list wallets for dropdown
 // -----------------------------
 export function getAvailableWallets() {
+  // nudge discovery every time (announce приходит асинхронно)
   requestEip6963Providers();
 
   const out = [];
@@ -116,7 +113,7 @@ export function getAvailableWallets() {
     console.warn('[wallet] getAvailableWallets failed:', e?.message || e);
   }
 
-  // fallback single injected if EIP-6963 returns nothing
+  // fallback: single injected if EIP-6963 returns nothing
   if (out.length === 0 && window.ethereum?.request) {
     out.push({
       walletId: 'injected:ethereum',
@@ -185,6 +182,7 @@ async function onAccountsChanged(accounts) {
     const acc = Array.isArray(accounts) && accounts[0] ? accounts[0] : null;
     currentAddress = acc ? ethers.utils.getAddress(acc) : null;
     await publishGlobals();
+    // legacy
     window.dispatchEvent(new Event('walletChanged'));
   } catch (e) {
     console.warn('[wallet] accountsChanged handler failed:', e?.message || e);
@@ -196,6 +194,7 @@ async function onChainChanged(chainIdHex) {
     const parsed = Number.parseInt(String(chainIdHex), 16);
     currentChainId = Number.isFinite(parsed) ? parsed : currentChainId;
     await publishGlobals();
+    // legacy
     window.dispatchEvent(new Event('walletChanged'));
   } catch (e) {
     console.warn('[wallet] chainChanged handler failed:', e?.message || e);
@@ -218,54 +217,10 @@ function withTimeout(promise, ms, label = 'timeout') {
   ]);
 }
 
-async function trySwitchToArbitrum() {
-  const prov = selectedEip1193;
-  if (!prov?.request) return false;
-
-  const chainIdHex = CONFIG?.NETWORK?.chainIdHex || '0xa4b1';
-  const chainId = Number(CONFIG?.NETWORK?.chainId || 42161);
-
-  // already correct?
+function emit(name, detail) {
   try {
-    const hex = await prov.request({ method: 'eth_chainId' });
-    const cid = Number.parseInt(String(hex), 16);
-    if (cid === chainId) return true;
+    window.dispatchEvent(new CustomEvent(name, { detail }));
   } catch (_) {}
-
-  // switch
-  try {
-    await prov.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: chainIdHex }],
-    });
-    return true;
-  } catch (e) {
-    const msg = String(e?.message || '').toLowerCase();
-    const code = e?.code;
-
-    // chain not added
-    if (code === 4902 || msg.includes('unrecognized chain') || msg.includes('unknown chain')) {
-      try {
-        await prov.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: chainIdHex,
-            chainName: 'Arbitrum One',
-            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-            rpcUrls: (CONFIG?.NETWORK?.walletRpcUrls?.length
-              ? CONFIG.NETWORK.walletRpcUrls
-              : [CONFIG?.NETWORK?.readOnlyRpcUrl].filter(Boolean)),
-            blockExplorerUrls: CONFIG?.NETWORK?.blockExplorerUrls || ['https://arbiscan.io'],
-          }],
-        });
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    return false;
-  }
 }
 
 // -----------------------------
@@ -283,13 +238,88 @@ export async function publishGlobals() {
 
     window.walletState = state;
 
-    console.log('[wallet] publishGlobals', state);
+    // основной сигнал для UI/trading
     window.dispatchEvent(new Event('walletStateChanged'));
+
+    // полезные именованные события (не ломают код, если никто не слушает)
+    if (state.address && state.signer) emit('wallet:state', state);
+
+    console.log('[wallet] publishGlobals', state);
     return state;
   } catch (e) {
     console.warn('[wallet] publishGlobals failed:', e?.message || e);
     return null;
   }
+}
+
+// ==============================
+// Network switch helper (exported)
+// ==============================
+export async function trySwitchToArbitrum() {
+  const prov = selectedEip1193 || window.ethereum;
+  if (!prov?.request) return false;
+
+  const chainIdHex = String(CONFIG?.NETWORK?.chainIdHex || '0xa4b1');
+  const chainIdDec = Number(CONFIG?.NETWORK?.chainId || 42161);
+
+  // if already correct - ok
+  try {
+    const hex = await prov.request({ method: 'eth_chainId' });
+    const cid = Number.parseInt(String(hex), 16);
+    if (cid === chainIdDec) return true;
+  } catch (_) {}
+
+  try {
+    // 1) try switch
+    await prov.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: chainIdHex }],
+    });
+    return true;
+  } catch (e) {
+    const code = e?.code;
+    const msg = String(e?.message || '').toLowerCase();
+
+    // 4902: chain not added OR wallet-specific message
+    if (code === 4902 || msg.includes('unrecognized chain') || msg.includes('unknown chain')) {
+      try {
+        await prov.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: chainIdHex,
+            chainName: 'Arbitrum One',
+            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+            rpcUrls: (CONFIG?.NETWORK?.walletRpcUrls?.length
+              ? CONFIG.NETWORK.walletRpcUrls
+              : [CONFIG?.NETWORK?.readOnlyRpcUrl]).filter(Boolean),
+            blockExplorerUrls: CONFIG?.NETWORK?.blockExplorerUrls || ['https://arbiscan.io'],
+          }],
+        });
+
+        // after add: switch again (важно!)
+        await prov.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: chainIdHex }],
+        });
+
+        return true;
+      } catch (e2) {
+        console.warn('[wallet] wallet_addEthereumChain failed:', e2?.message || e2);
+        return false;
+      }
+    }
+
+    console.warn('[wallet] wallet_switchEthereumChain failed:', e?.message || e);
+    return false;
+  } finally {
+    // best-effort refresh walletState
+    try { await publishGlobals(); } catch (_) {}
+  }
+}
+
+// expose helper for legacy UI code that calls window.trySwitchToArbitrum
+export function publishWalletHelpersToWindow() {
+  try { window.trySwitchToArbitrum = trySwitchToArbitrum; } catch (_) {}
 }
 
 // -----------------------------
@@ -303,7 +333,7 @@ export async function connectWallet({ walletId = null } = {}) {
   isConnecting = true;
 
   try {
-    // Important: nudge EIP-6963 before reading list
+    // nudge EIP-6963 before reading list
     requestEip6963Providers();
 
     const wallets = getAvailableWallets();
@@ -363,7 +393,6 @@ export async function connectWallet({ walletId = null } = {}) {
     }
 
     attachProviderListeners();
-
     await publishGlobals();
 
     // auto switch to Arbitrum One (once)
@@ -388,7 +417,9 @@ export async function connectWallet({ walletId = null } = {}) {
     }
 
     try { window.showNotification?.(`Wallet connected: ${currentAddress}`, 'success'); } catch (_) {}
-    try { dispatchConnected?.(); } catch (_) {}
+
+    emit('wallet:connected', window.walletState);
+    // legacy
     window.dispatchEvent(new Event('walletChanged'));
 
     return currentAddress;
@@ -400,6 +431,7 @@ export async function connectWallet({ walletId = null } = {}) {
     signer = null;
     currentChainId = null;
     currentAddress = null;
+
     try { await publishGlobals(); } catch (_) {}
     throw e;
   } finally {
@@ -419,7 +451,9 @@ export async function disconnectWallet() {
   await publishGlobals();
 
   try { window.showNotification?.('Wallet disconnected', 'info'); } catch (_) {}
-  try { dispatchDisconnected?.(); } catch (_) {}
+
+  emit('wallet:disconnected', window.walletState);
+  // legacy
   window.dispatchEvent(new Event('walletChanged'));
 }
 

@@ -26,7 +26,7 @@ import {
   getReadOnlyPresale,
 } from './contracts.js';
 import { CONFIG } from './config.js';
-import { requireArbitrumOrThrow } from './wallet.js';
+import { requireArbitrumOrThrow, trySwitchToArbitrum } from './wallet.js';
 
 console.log('[TRADING] trading.js loaded, build:', Date.now());
 
@@ -47,6 +47,26 @@ const TERMS_NOTICE = {
   ua: 'Натискаючи кнопку, ви підтверджуєте, що ознайомилися та погоджуєтеся з умовами і правилами смарт-контракту.',
   en: 'By clicking the button, you confirm that you have read and agree to the smart contract terms and rules.',
 };
+
+const btn = document.getElementById('switchToArbBtn');
+if (btn) {
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      const ok = await trySwitchToArbitrum();
+      if (!ok) {
+        console.warn('[TRADING] trySwitchToArbitrum returned false');
+      } else {
+        // после переключения перерисуем торговлю
+        try { renderTrading(); } catch (_) {}
+      }
+    } catch (e) {
+      console.warn('[TRADING] trySwitchToArbitrum failed:', e?.message || e);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
 
 // -----------------------------
 // Module state
@@ -243,28 +263,35 @@ function renderTrading() {
 
 let _tradingBound = false;
 
+function _onWalletChanged() {
+  try { renderTrading(); }
+  catch (e) { console.warn('[TRADING] renderTrading failed on walletStateChanged:', e?.message || e); }
+}
+
 export function initTradingModule() {
   if (_tradingBound) {
-    try { renderTrading(); } catch (e) { console.warn('[TRADING] renderTrading failed (repeat init):', e?.message || e); }
+    // повторный вызов init — просто перерендерим
+    _onWalletChanged();
     return;
   }
   _tradingBound = true;
 
   // bind handlers (если есть) — не критично
-  try { bindTradingHandlers?.(); } catch (e) {
-    console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e);
-  }
+  try { bindTradingHandlers?.(); }
+  catch (e) { console.warn('[TRADING] bindTradingHandlers failed:', e?.message || e); }
 
-  try { renderTrading(); } catch (e) {
-    console.warn('[TRADING] initial renderTrading failed:', e?.message || e);
-  }
+  // первый рендер
+  _onWalletChanged();
 
-  window.addEventListener('walletStateChanged', () => {
-    try { renderTrading(); } catch (e) {
-      console.warn('[TRADING] renderTrading failed on walletStateChanged:', e?.message || e);
-    }
-  });
+  // КРИТИЧНО: гарантируем одну подписку
+  window.removeEventListener('walletStateChanged', _onWalletChanged);
+  window.addEventListener('walletStateChanged', _onWalletChanged);
 }
+
+function _onWalletChanged() {
+  try { renderTrading(); } catch (e) { console.warn(e); }
+}
+
 
 function bindTradingHandlers() {}
 
