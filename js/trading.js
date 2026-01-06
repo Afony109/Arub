@@ -681,8 +681,10 @@ function ensurePresaleUI() {
   const box = document.createElement('div');
   box.id = 'presaleStats';
   box.style.marginTop = '8px';
-  box.style.fontSize = '13px';
-  box.style.opacity = '0.85';
+  box.style.fontSize = '14px';
+  box.style.fontWeight = '500';
+  box.style.fontFamily = 'inherit';
+  box.style.opacity = '0.9';
   box.innerHTML = `
   <div>??????? ?? ????????: <span id="presalePurchased">?</span> ARUB</div>
   <div>? ???? ????? ???????: <span id="presaleBonusAmount">?</span> ARUB</div>
