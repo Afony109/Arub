@@ -481,16 +481,31 @@ async function updateGlobalStats() {
     ]);
 
     const arubPrice = arubPriceInfo?.price;
+    const priceSource = arubPriceInfo?.isFallback ? 'Резервний оракул' : 'Ончейн оракул';
 
     const setTextLocal = (id, val) => {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
     };
 
-    setTextLocal('arubPriceValue', Number.isFinite(arubPrice) ? arubPrice.toFixed(6) : '—');
+    const priceOk = Number.isFinite(arubPrice);
+    setTextLocal('arubPriceValue', priceOk ? arubPrice.toFixed(6) : '—');
+    setTextLocal('arubPriceSource', priceOk ? `Джерело курсу: ${priceSource}` : 'Джерело курсу: —');
 
-    const supplyEl = document.getElementById('totalSupplyArub');
-    if (supplyEl) supplyEl.textContent = formatTokenAmount(totalSupply) + ' ARUB';
+    const supplyHuman = formatTokenAmount(totalSupply) + ' ARUB';
+    const supplyUsd = priceOk ? `$${(Number(ethers.utils.formatUnits(totalSupply, 6)) * arubPrice).toFixed(2)}` : '—';
+
+    setTextLocal('totalSupplyArub', supplyHuman);
+    setTextLocal('arub-supply', supplyHuman);
+    setTextLocal('arub-supply-usd', supplyUsd);
+
+    setTextLocal('dashHeroTvl', supplyUsd);
+    setTextLocal('dashHeroTier', 'Arbitrum One');
+
+    const loading = document.getElementById('dashLoadingText');
+    if (loading && priceOk) {
+      loading.textContent = 'Дані оновлено';
+    }
   } catch (e) {
     console.warn('[APP] updateGlobalStats failed:', e?.message || e);
   }
