@@ -1044,6 +1044,7 @@ async function awaitWalletReady({
 let __tradingUiRendered = false;
 let applySeq = 0;
 let _tradingBound = false;
+let _presaleUiFor = null;
 
 
 // -----------------------------
@@ -1063,6 +1064,7 @@ async function applyWalletState(reason = 'unknown') {
     user.provider = null;
     user.signer = null;
     user.chainId = null;
+    _presaleUiFor = null;
 
     tokenRW = null;
     usdtRW = null;
@@ -1117,6 +1119,17 @@ async function applyWalletState(reason = 'unknown') {
     await refreshLockPanel();
     await refreshSellFee();
     startLockAutoRefresh();
+
+    const needPresaleUi = user.address && user.address !== _presaleUiFor;
+    if (needPresaleUi) {
+      try {
+        await window.refreshPresaleUI?.(user.address);
+        _presaleUiFor = user.address;
+      } catch (e) {
+        console.warn('[TRADING] refreshPresaleUI failed:', e?.message || e);
+        _presaleUiFor = null;
+      }
+    }
   }
 
   console.log('[TRADING] applyWalletState:', {
