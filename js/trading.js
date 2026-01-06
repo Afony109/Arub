@@ -676,7 +676,14 @@ function initWithSigner() {
 function ensurePresaleUI() {
   const bal = document.getElementById('arubBalance');
   if (!bal) return;
-  if (document.getElementById('presaleStats')) return;
+  const existing = document.getElementById('presaleStats');
+  if (existing) {
+    existing.style.fontSize = '14px';
+    existing.style.fontWeight = '500';
+    existing.style.fontFamily = 'inherit';
+    existing.style.opacity = '0.9';
+    return;
+  }
 
   const box = document.createElement('div');
   box.id = 'presaleStats';
