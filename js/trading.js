@@ -539,6 +539,9 @@ host.innerHTML = `
 
       <div style="margin-top:10px; font-size:13px; opacity:0.9;">
         Комісія при продажу: <span id="sellFee">—</span>
+        <div style="margin-top:4px; line-height:1.45; opacity:0.85;">
+          3,00% діє до визначеної договором дати (залишилось: —). Після цього — 2% до: —, далі — 1%.
+        </div>
       </div>
 
       <div id="sellLockHint" style="display:none; margin-top:6px; font-size:13px; opacity:0.85;">
