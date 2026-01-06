@@ -1115,6 +1115,7 @@ async function applyWalletState(reason = 'unknown') {
 
   if (readyForTrading) {
     initWithSigner();
+    try { ensurePresaleUI(); } catch (_) {}
     await refreshBalances();
     await refreshLockPanel();
     await refreshSellFee();
