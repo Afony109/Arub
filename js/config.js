@@ -15,10 +15,14 @@ export const CONFIG = {
   // Network
   // -----------------------------
  NETWORK: {
-  readOnlyRpcUrl: 'https://rpc.antirub.com', // может падать — это нормально
+  // Switched primary read-only RPC to a more stable public endpoint
+  readOnlyRpcUrl: 'https://arbitrum.llamarpc.com',
   walletRpcUrls: [
+    'https://arb1.arbitrum.io/rpc',
     'https://arbitrum-one-rpc.publicnode.com',
-    'https://arb1.arbitrum.io/rpc'
+    'https://1rpc.io/arb',
+    // Add your Alchemy key if available:
+    // 'https://arb-mainnet.g.alchemy.com/v2/<key>',
   ],
   chainId: 42161,
   chainIdHex: '0xa4b1',
