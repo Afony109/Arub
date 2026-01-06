@@ -412,6 +412,8 @@ function formatRemaining(sec) {
 }
 
 let lockRefreshTimer = null;
+let sellFeeCountdownTimer = null;
+let sellFeeDropTs = null;
 
 function startLockAutoRefresh() {
   if (lockRefreshTimer) clearInterval(lockRefreshTimer);
@@ -423,6 +425,11 @@ function startLockAutoRefresh() {
 function stopLockAutoRefresh() {
   if (lockRefreshTimer) clearInterval(lockRefreshTimer);
   lockRefreshTimer = null;
+}
+
+function stopSellFeeTimer() {
+  if (sellFeeCountdownTimer) clearInterval(sellFeeCountdownTimer);
+  sellFeeCountdownTimer = null;
 }
 
 // -----------------------------
@@ -540,7 +547,8 @@ host.innerHTML = `
       <div style="margin-top:10px; font-size:13px; opacity:0.9;">
         Комісія при продажу: <span id="sellFee">—</span>
         <div style="margin-top:4px; line-height:1.45; opacity:0.85;">
-          3,00% діє до визначеної договором дати (залишилось: —). Після цього — 2% до: —, далі — 1%.
+          <span id="sellFeeCurrentPct">—</span> діє до <span id="sellFeeUntil">—</span> (залишилось: <span id="sellFeeLeft">—</span>).<br>
+          Після цього — <span id="sellFeeNextPct">—</span> з <span id="sellFeeNextAt">—</span>, далі — <span id="sellFeeFinalPct">1%</span>.
         </div>
       </div>
 
@@ -861,9 +869,115 @@ async function refreshBuyBonusBox() {
 // -----------------------------
 // Sell fee (separate async function — no top-level await)
 // -----------------------------
+function resetSellFeeScheduleUI() {
+  stopSellFeeTimer();
+  sellFeeDropTs = null;
+  setText('sellFeeCurrentPct', '—');
+  setText('sellFeeUntil', '—');
+  setText('sellFeeLeft', '—');
+  setText('sellFeeNextPct', '—');
+  setText('sellFeeNextAt', '—');
+  setText('sellFeeFinalPct', '1%');
+}
+
+function updateSellFeeCountdown() {
+  if (!sellFeeDropTs) {
+    setText('sellFeeLeft', '—');
+    setText('sellFeeUntil', '—');
+    setText('sellFeeNextAt', '—');
+    return;
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const left = Math.max(0, sellFeeDropTs - nowSec);
+  setText('sellFeeLeft', formatRemaining(left));
+  setText('sellFeeUntil', formatJerusalemDate(sellFeeDropTs));
+  setText('sellFeeNextAt', formatJerusalemDate(sellFeeDropTs));
+}
+
+async function refreshSellFeeSchedule(currentFeeBps) {
+  const nextEl = el('sellFeeNextPct');
+  if (!nextEl) return;
+
+  if (!user.address) {
+    resetSellFeeScheduleUI();
+    return;
+  }
+
+  stopSellFeeTimer();
+
+  const tryGetNext = async (src) => {
+    try {
+      if (src?.getNextFeeDropETA) {
+        const res = await src.getNextFeeDropETA(user.address);
+        if (Array.isArray(res) && res.length >= 2) return res;
+        if (res && typeof res === 'object' && 'secondsToNext' in res && 'nextFeeBps' in res) {
+          return [res.secondsToNext, res.nextFeeBps];
+        }
+      }
+    } catch (_) {}
+    return null;
+  };
+
+  let info = await tryGetNext(getPresaleAsSigner());
+  if (!info) {
+    const ro = await getReadOnlyPresale();
+    info = await tryGetNext(ro);
+  }
+
+  let secondsToNext = null;
+  let nextFeeBps = null;
+  if (info) {
+    secondsToNext = Number(info[0]);
+    nextFeeBps = info[1];
+  }
+
+  const nextPct =
+    nextFeeBps != null ? Number(nextFeeBps.toString?.() ?? nextFeeBps) / 100 : null;
+  if (Number.isFinite(nextPct)) {
+    setText('sellFeeNextPct', `${nextPct.toFixed(2)}%`);
+  } else {
+    setText('sellFeeNextPct', '—');
+  }
+
+  if (Number.isFinite(secondsToNext) && secondsToNext > 0) {
+    sellFeeDropTs = Math.floor(Date.now() / 1000) + Math.floor(secondsToNext);
+    updateSellFeeCountdown();
+    sellFeeCountdownTimer = setInterval(() => {
+      updateSellFeeCountdown();
+      if (sellFeeDropTs && Math.floor(Date.now() / 1000) >= sellFeeDropTs) {
+        stopSellFeeTimer();
+        refreshSellFee().catch(() => {});
+      }
+    }, 30_000);
+  } else {
+    sellFeeDropTs = null;
+    setText('sellFeeLeft', '—');
+    setText('sellFeeUntil', '—');
+    setText('sellFeeNextAt', '—');
+  }
+
+  const finalEl = el('sellFeeFinalPct');
+  if (finalEl && Number.isFinite(nextPct) && nextPct <= 1.01) {
+    setText('sellFeeFinalPct', `${nextPct.toFixed(2)}%`);
+  }
+
+  if (currentFeeBps != null && Number.isFinite(Number(currentFeeBps))) {
+    const currentPct = Number(currentFeeBps.toString?.() ?? currentFeeBps) / 100;
+    if (Number.isFinite(currentPct)) {
+      const formatted = `${currentPct.toFixed(2)}%`;
+      setText('sellFee', formatted);
+      setText('sellFeeCurrentPct', formatted);
+    }
+  }
+}
+
 async function refreshSellFee() {
   try {
-    if (!user.address) return;
+    if (!user.address) {
+      resetSellFeeScheduleUI();
+      return;
+    }
 
     let feeBps = null;
 
@@ -883,8 +997,14 @@ async function refreshSellFee() {
 
     if (feeBps != null) {
       const pct = Number(feeBps.toString()) / 100;
-      setText('sellFee', `${pct.toFixed(2)}%`);
+      const formatted = `${pct.toFixed(2)}%`;
+      setText('sellFee', formatted);
+      setText('sellFeeCurrentPct', formatted);
     }
+
+    try {
+      await refreshSellFeeSchedule(feeBps);
+    } catch (_) {}
   } catch (_) {}
 }
 
@@ -1110,6 +1230,7 @@ async function applyWalletState(reason = 'unknown') {
       const lp = el('lockPanel');
       if (lp) lp.style.display = 'none';
     } catch (_) {}
+    resetSellFeeScheduleUI();
 
     const ws2 = await awaitWalletReady({ requireSigner: true });
     if (seq !== applySeq) return;
