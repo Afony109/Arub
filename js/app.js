@@ -623,7 +623,9 @@ async function loadPresaleStatsFromEvents(user, provider) {
   let arubTotalRaw = ethers.BigNumber.from(0);
   let bonusRaw = ethers.BigNumber.from(0);
 
-  const STEP = 120_000;
+  // Some RPC providers cap eth_getLogs ranges (e.g. 50k blocks). Keep the
+  // step conservative to avoid SERVER_ERROR -32701 "exceed maximum block range".
+  const STEP = 50_000;
 
   const totalRanges = Math.max(1, Math.ceil((endBlock - startBlock + 1) / STEP));
   let doneRanges = 0;
@@ -634,7 +636,17 @@ async function loadPresaleStatsFromEvents(user, provider) {
   try {
     for (let from = startBlock; from <= endBlock; from += STEP) {
       const to = Math.min(endBlock, from + STEP - 1);
-      const logs = await presale.queryFilter(filter, from, to);
+
+      let logs;
+      try {
+        logs = await presale.queryFilter(filter, from, to);
+      } catch (err) {
+        // If provider still rejects the range, shrink the window and retry once.
+        const mid = Math.floor((from + to) / 2);
+        const firstHalf = await presale.queryFilter(filter, from, mid);
+        const secondHalf = await presale.queryFilter(filter, mid + 1, to);
+        logs = firstHalf.concat(secondHalf);
+      }
 
       for (const ev of logs) {
         paidRaw = paidRaw.add(ev.args.usdtAmount);
