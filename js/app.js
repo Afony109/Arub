@@ -542,7 +542,7 @@ async function loadPresaleStats(user, provider) {
 
   const avgPrice = totalARUB > 0 ? (paidUSDT / totalARUB) : null;
 
-  return { paidUSDT, totalARUB, avgPrice };
+  return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice };
 }
 
 async function loadCurrentArubPrice(provider) {
@@ -682,10 +682,13 @@ async function refreshPresaleUI(address) {
 
   const currentPrice = await loadCurrentArubPrice(provider);
   const discount = calcDiscount(presale.avgPrice, currentPrice);
+  const bonusPct = presale.totalARUB > 0 ? (presale.bonusARUB / presale.totalARUB) * 100 : null;
 
   setText('presalePurchased', presale.totalARUB.toFixed(6));
+  setText('presaleBonusAmount', presale.bonusARUB != null ? presale.bonusARUB.toFixed(6) : '—');
   setText('presalePaid', presale.paidUSDT.toFixed(2));
   setText('presaleAvgPrice', presale.avgPrice ? presale.avgPrice.toFixed(6) : '—');
+  setText('presaleBonusPct', bonusPct !== null ? bonusPct.toFixed(2) + '%' : '—');
   setText('presaleDiscount', discount !== null ? discount.toFixed(2) + '%' : '—');
 }
 
