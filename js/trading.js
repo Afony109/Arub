@@ -693,15 +693,15 @@ function ensurePresaleUI() {
   box.style.fontFamily = 'inherit';
   box.style.opacity = '0.9';
   box.innerHTML = `
-  <div>??????? ?? ????????: <span id="presalePurchased">?</span> ARUB</div>
-  <div>? ???? ????? ???????: <span id="presaleBonusAmount">?</span> ARUB</div>
-  <div>????????: <span id="presalePaid">?</span> USDT</div>
-  <div>??????? ???? ???????: <span id="presaleAvgPrice">?</span> USDT/ARUB</div>
-  <div>???????? ?????: <span id="presaleBonusPct">?</span></div>
+  <div>Куплено на пресейлі: <span id="presalePurchased">—</span> ARUB</div>
+  <div>У тому числі бонусом: <span id="presaleBonusAmount">—</span> ARUB</div>
+  <div>Сплачено: <span id="presalePaid">—</span> USDT</div>
+  <div>Середня ціна купівлі: <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
+  <div>Середній бонус: <span id="presaleBonusPct">—</span></div>
 
   <div id="presaleScanWrap" style="display:none; margin-top:10px;">
     <div style="display:flex; justify-content:space-between; font-size:12px; opacity:.85;">
-      <span>???????? ??????? ?????????</span>
+      <span>Скануємо історію покупок…</span>
       <span id="presaleScanPct">0%</span>
     </div>
     <div style="height:8px; background:rgba(255,255,255,.12); border-radius:999px; overflow:hidden; margin-top:6px;">
