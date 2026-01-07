@@ -778,7 +778,6 @@ async function refreshBalances() {
       allowed: formatTokenAmount(allowed, DECIMALS_ARUB, 6),
     });
 
-    const freeEl = el('sellFreeAllowed');
     if (freeEl) {
       freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
     }
@@ -1442,7 +1441,6 @@ export async function setMaxSell() {
       allowed: formatTokenAmount(allowed, DECIMALS_ARUB, 6),
     });
 
-    const freeEl = el('sellFreeAllowed');
     if (freeEl) {
       freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
     }
