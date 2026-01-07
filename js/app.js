@@ -555,7 +555,7 @@ async function loadPresaleStats(user, provider) {
   const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
   const totalARUB = principalARUB + bonusARUB;
 
-  const avgPrice = totalARUB > 0 ? (paidUSDT / totalARUB) : null;
+  const avgPrice = paidUSDT > 0 ? (principalARUB / paidUSDT) : null;
 
   return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice };
 }
@@ -679,7 +679,7 @@ async function loadPresaleStatsFromEvents(user, provider) {
     const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
     const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
     const principalARUB = Math.max(0, totalARUB - bonusARUB);
-    const avgPrice = totalARUB > 0 ? paidUSDT / totalARUB : null;
+    const avgPrice = paidUSDT > 0 ? principalARUB / paidUSDT : null;
 
     return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice };
   } finally {
