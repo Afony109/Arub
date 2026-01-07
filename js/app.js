@@ -690,9 +690,24 @@ async function loadPresaleStatsFromEvents(user, provider) {
 async function refreshPresaleUI(address) {
   const provider = await getReadOnlyProviderAsync();
 
-  // Fast path: use direct contract reads first, fall back to event scan only if needed.
-  let presale = await loadPresaleStats(address, provider);
-  if (!presale || (!presale.totalARUB && !presale.paidUSDT)) {
+  // Fast path: use direct contract reads first; fall back only if fast reads fail.
+  let presale = null;
+  let usedScan = false;
+  const loadingNote = document.getElementById('presaleLoadingNote');
+  if (loadingNote) loadingNote.style.display = 'none';
+  try {
+    presale = await loadPresaleStats(address, provider);
+  } catch (_) {}
+
+  const hasFast =
+    presale &&
+    Number.isFinite(presale.totalARUB) &&
+    Number.isFinite(presale.paidUSDT) &&
+    Number.isFinite(presale.bonusARUB);
+
+  if (!hasFast) {
+    usedScan = true;
+    if (loadingNote) loadingNote.style.display = '';
     presale = await loadPresaleStatsFromEvents(address, provider);
   }
 
@@ -706,6 +721,8 @@ async function refreshPresaleUI(address) {
   setText('presaleAvgPrice', presale.avgPrice ? presale.avgPrice.toFixed(6) : '—');
   setText('presaleBonusPct', bonusPct !== null ? bonusPct.toFixed(2) + '%' : '—');
   setText('presaleDiscount', discount !== null ? discount.toFixed(2) + '%' : '—');
+
+  if (loadingNote) loadingNote.style.display = 'none';
 }
 
 window.refreshPresaleUI = refreshPresaleUI;
