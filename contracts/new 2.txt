@@ -1,0 +1,2 @@
+git clone https://github.com/Afony109/Arub/REPO.git
+cd REPO

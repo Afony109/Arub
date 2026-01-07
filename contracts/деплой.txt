@@ -1,0 +1,310 @@
+Ниже — полный, последовательный чек-лист деплоя под Arbitrum One mainnet с конкретными аргументами и местами, куда что подставлять.
+
+0. Базовые вещи
+
+Сеть:
+
+Network: Arbitrum One (chainId 42161)
+
+Стейблы (6 decimals):
+
+USDT_TOKEN = 0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9
+
+USDC_TOKEN (USDC.e, мостовой) = 0xff970a61a04b1ca14834a43f5de4533ebddb5cc8
+
+Их мы будем использовать:
+
+в AntiRUB (USDT)
+
+в ARUBPresale (USDT + USDC)
+
+1. Деплой оракула (ArubOracle)
+
+В Remix у тебя уже открыт Oracl.sol и контракт в скрине выглядит как простой:
+
+contract ArubOracle is Ownable {
+    uint256 public rate;       // USD/RUB * 1e6
+    uint256 public updatedAt;
+
+    constructor(uint256 initialRate) { ... }
+    function setRate(uint256 newRate) external onlyOwner { ... }
+    function usdRub() external view returns (uint256) { return rate; }
+    function getRate() external view returns (uint256, uint256) { ... }
+}
+
+1.1. Deploy
+
+В Remix: ENVIRONMENT — Injected Provider (MetaMask, сеть Arbitrum One).
+
+CONTRACT: ArubOracle (или как он у тебя называется в выпадающем списке).
+
+В разделе DEPLOY:
+
+initialRate = 77
+(как мы обсуждали: контракт умножает на 1e6 внутри, т.е. 1 ARUB ≈ 77 USDT).
+
+Нажимаешь transact → получаешь адрес оракула, назовём его:
+
+ARUB_ORACLE
+
+1.2. Быстрая проверка
+
+В блоке Deployed Contracts → ArubOracle:
+
+usdRub() → должно вернуть 77000000.
+
+getRate() → [77000000, <timestamp>].
+
+2. Деплой ARUBToken (upgradeable, но без прокси)
+
+Файл: token.sol, контракт: ARUBToken (UUPS, 6 decimals).
+
+2.1. Deploy контракта
+
+У ARUBToken нет конструктора, есть initialize(uint256 _maxSupply).
+
+В Remix:
+
+Выбираешь контракт ARUBToken.
+
+В Deploy — просто нажать Deploy без аргументов (это деплой implementation-контракта, который мы будем использовать как обычный).
+
+Получаешь адрес:
+
+ARUB_TOKEN
+
+2.2. Вызвать initialize
+
+В блоке ARUBToken at <address>:
+
+Вызвать initialize(_maxSupply).
+
+Рекомендуемый пример:
+
+Хочешь максимум 10 000 000 ARUB, при 6 decimals:
+
+_maxSupply = 10_000_000 * 1_000_000 = 10_000_000_000_000
+
+В Remix это пишется без подчёркиваний:
+
+_maxSupply = 10000000000000
+
+(Подгони под свою целевую максимальную эмиссию, формула одна: кол-во ARUB * 1e6.)
+
+2.3. Привязка оракула
+
+Сразу после initialize:
+
+Вызвать setOracle(address _oracle) на этом же контракте:
+
+_oracle = ARUB_ORACLE (из шага 1)
+
+Результат: ARUBToken теперь знает курс через getRate() оракула.
+
+3. Деплой AntiRUB
+
+Файл: antirub.sol, контракт: AntiRUB.
+
+3.1. Аргументы конструктора
+
+Конструктор:
+
+constructor(
+    address _usdtToken,
+    address _arubToken,
+    address _oracle
+)
+
+
+В Remix при деплое:
+
+_usdtToken = USDT_TOKEN = 0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9
+
+_arubToken = ARUB_TOKEN (из шага 2)
+
+_oracle = ARUB_ORACLE (из шага 1)
+
+Нажимаешь Deploy → получаешь адрес:
+
+ANTI_RUB
+
+3.2. Раздача ролей минтера в ARUBToken
+
+У ARUBToken есть MINTER_ROLE. Ему нужно разрешить минт ARUB протоколу AntiRUB и пресейлу.
+
+В блоке ARUBToken найди:
+
+bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
+
+В Remix у grantRole(bytes32 role, address account):
+
+role = значение MINTER_ROLE (Remix позволяет выбрать константу из выпадающего списка).
+
+account = ANTI_RUB.
+
+Нажать transact.
+
+(Позже добавим туда ещё PRESALE, см. шаг 5.)
+
+4. Деплой стейкинга ARUBStakingV2
+
+Файл: staking.sol, контракт: ARUBStakingV2.
+
+4.1. Deploy
+
+Конструктор:
+
+constructor(address _usdtToken, address _arubToken)
+
+
+В Remix:
+
+_usdtToken = USDT_TOKEN = 0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9
+
+_arubToken = ARUB_TOKEN
+
+Нажать Deploy → адрес:
+
+STAKING_V2
+
+Внутри контракта owner = msg.sender (твой EOA).
+
+4.2. Привязать стейкинг в AntiRUB
+
+В блоке AntiRUB:
+
+вызвать setStakingContract(address _staking):
+
+_staking = STAKING_V2
+
+Теперь AntiRUB знает, куда слать награды через sendStakingRewards.
+
+5. Деплой ARUBPresale (upgradeable, без прокси)
+
+Файл: precale.sol, контракт: ARUBPresale.
+
+Это UUPS-контракт с initialize, но мы тоже деплоим его напрямую и один раз инициализируем.
+
+5.1. Deploy контракта
+
+В Remix:
+
+Выбери контракт ARUBPresale.
+
+Нажми Deploy (без аргументов).
+
+Адрес:
+
+ARUB_PRESALE
+
+5.2. Вызвать initialize
+
+Сигнатура:
+
+function initialize(
+    address _arubTokenAddress,
+    address _usdtAddress,
+    address _usdcAddress,
+    address initialOwner
+) external initializer
+
+
+В Remix:
+
+_arubTokenAddress = ARUB_TOKEN
+
+_usdtAddress = USDT_TOKEN = 0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9
+
+_usdcAddress = USDC_TOKEN = 0xff970a61a04b1ca14834a43f5de4533ebddb5cc8 (USDC.e)
+
+initialOwner = твой основной админ-кошелёк / мультисиг
+
+Нажать transact.
+
+5.3. Привязать AntiRUB к пресейлу
+
+В ARUBPresale:
+
+вызвать setAntiRUB(address _antiRUB):
+
+_antiRUB = ANTI_RUB
+
+Теперь функции типа sendFeesToAntiRUB смогут выводить накопленные комиссии (USDT-эквивалент) в протокол.
+
+5.4. Раздать минт пресейлу
+
+В ARUBToken:
+
+grantRole(MINTER_ROLE, ARUB_PRESALE)
+
+(через grantRole как и для AntiRUB).
+
+Теперь:
+
+ANTI_RUB может минтить ARUB под залог USDT.
+
+ARUB_PRESALE может минтить ARUB при покупке на пресейле.
+
+6. Финальная настройка ролей и проверка
+6.1. Роли ARUBToken
+
+Через ARUBToken:
+
+hasRole(MINTER_ROLE, ANTI_RUB) → true
+
+hasRole(MINTER_ROLE, ARUB_PRESALE) → true
+
+Рекомендуемо:
+
+Оставить DEFAULT_ADMIN_ROLE и owner на мультисиге, а не на личном EOA.
+
+Если заведёшь мультисиг:
+
+grantRole(DEFAULT_ADMIN_ROLE, MULTISIG)
+
+transferOwnership(MULTISIG)
+
+Со своего EOA: renounceRole(DEFAULT_ADMIN_ROLE, <твой_EOA>)
+
+6.2. Связи между контрактами
+
+Проверка по адресу:
+
+ARUBToken.oracle() → ARUB_ORACLE
+
+AntiRUB.usdtToken() → USDT_TOKEN
+
+AntiRUB.arubToken() → ARUB_TOKEN
+
+AntiRUB.oracle() → ARUB_ORACLE
+
+AntiRUB.stakingContract() → STAKING_V2
+
+ARUBPresale.arubTokenAddress() → ARUB_TOKEN
+
+ARUBPresale.usdtAddress() → USDT_TOKEN
+
+ARUBPresale.usdcAddress() → USDC_TOKEN
+
+ARUBPresale.antiRUB() → ANTI_RUB
+
+7. Краткий реестр адресов (для фронта и констант)
+
+После деплоя у тебя должны быть:
+
+USDT_TOKEN = 0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9
+
+USDC_TOKEN = 0xff970a61a04b1ca14834a43f5de4533ebddb5cc8
+
+ARUB_ORACLE = <адрес из шага 1>
+
+ARUB_TOKEN = <адрес из шага 2>
+
+ANTI_RUB = <адрес из шага 3>
+
+STAKING_V2 = <адрес из шага 4>
+
+ARUB_PRESALE = <адрес из шага 5>
+
+Эти значения можно уже жёстко забивать в фронт, бота, .env и т.п.

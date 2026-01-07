@@ -19,7 +19,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { showNotification, formatTokenAmount } from './ui.js';
-import { ERC20_ABI, ERC20_ABI_MIN } from './abis.js';
+import { ERC20_ABI, ERC20_ABI_MIN, UNISWAP_V2_ROUTER_ABI } from './abis.js';
 import {
   initReadOnlyContracts,
   getReadOnlyProviderAsync,
@@ -42,6 +42,8 @@ const ARUB_TOKEN_ADDRESS =
   '0x161296CD7F742220f727e1B4Ccc02cAEc71Ed2C6';
 const USDT_ADDRESS =
   CONFIG?.USDT_ADDRESS || '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
+const UNISWAP_V2_ROUTER_ADDRESS =
+  CONFIG?.UNISWAP_V2_ROUTER_ADDRESS || '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24';
 
 const TERMS_NOTICE = {
   ua: 'Натискаючи кнопку, ви підтверджуєте, що ознайомилися та погоджуєтеся з умовами і правилами смарт-контракту.',
@@ -374,15 +376,27 @@ function getTradingHost() {
 }
 
 function setControlsEnabled(enabled) {
-  ['buyBtn', 'sellBtn', 'maxBuyBtn', 'maxSellBtn', 'buyAmount', 'sellAmount'].forEach(
-    (id) => {
-      const node = el(id);
-      if (!node) return;
-      if ('disabled' in node) node.disabled = !enabled;
-      node.style.pointerEvents = enabled ? 'auto' : 'none';
-      node.style.opacity = enabled ? '' : '0.75';
-    }
-  );
+  [
+    'buyBtn',
+    'sellBtn',
+    'maxBuyBtn',
+    'maxSellBtn',
+    'buyAmount',
+    'sellAmount',
+    'lpAddBtn',
+    'lpArubAmount',
+    'lpUsdtAmount',
+    'lpMaxArubBtn',
+    'lpMaxUsdtBtn',
+    'lpSlippage',
+    'lpDeadline',
+  ].forEach((id) => {
+    const node = el(id);
+    if (!node) return;
+    if ('disabled' in node) node.disabled = !enabled;
+    node.style.pointerEvents = enabled ? 'auto' : 'none';
+    node.style.opacity = enabled ? '' : '0.75';
+  });
 }
 
 async function refreshUiAfterRpcError({
@@ -471,6 +485,69 @@ function renderTradingUI() {
   if (!host) return;
 
 host.innerHTML = `
+  <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04); margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+      <h3 style="margin:0;">Add liquidity (Uniswap V2)</h3>
+      <div style="font-size:12px; opacity:0.7;">ARUB / USDT</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+      <div>
+        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">ARUB amount</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="lpArubAmount" type="number" inputmode="decimal" placeholder="0.0"
+                 style="flex:1; padding:12px; border-radius:12px;
+                        border:1px solid rgba(255,255,255,0.12);
+                        background: rgba(0,0,0,0.25); color:#fff;">
+          <button id="lpMaxArubBtn" type="button"
+                  style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
+                         background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
+            MAX
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">USDT amount</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="lpUsdtAmount" type="number" inputmode="decimal" placeholder="0.0"
+                 style="flex:1; padding:12px; border-radius:12px;
+                        border:1px solid rgba(255,255,255,0.12);
+                        background: rgba(0,0,0,0.25); color:#fff;">
+          <button id="lpMaxUsdtBtn" type="button"
+                  style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
+                         background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
+            MAX
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
+      <div>
+        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Slippage %</div>
+        <input id="lpSlippage" type="number" inputmode="decimal" value="0.5" min="0" step="0.1"
+               style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
+                      background: rgba(0,0,0,0.25); color:#fff;">
+      </div>
+      <div>
+        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Deadline (min)</div>
+        <input id="lpDeadline" type="number" inputmode="numeric" value="20" min="1" step="1"
+               style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
+                      background: rgba(0,0,0,0.25); color:#fff;">
+      </div>
+    </div>
+
+    <button id="lpAddBtn" type="button"
+            style="margin-top:12px; width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+      Add liquidity
+    </button>
+
+    <div style="margin-top:8px; font-size:12px; opacity:0.75;">
+      If the pool does not exist, the first LP sets the initial price.
+    </div>
+  </div>
+
   <div class="trade-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
     <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
       <h3 style="margin:0 0 10px 0;">Купівля</h3>
@@ -795,6 +872,122 @@ function parseTokenAmount(value, decimals) {
   if (!v || v === '.' || v === ',') throw new Error('Enter amount');
   const normalized = v.replace(',', '.');
   return ethers.utils.parseUnits(normalized, Number(decimals));
+}
+
+function readDisplayedNumber(id) {
+  const t = el(id)?.textContent ?? '';
+  const n = Number(String(t).replace(',', '.').trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+function setInputValue(id, value) {
+  const node = el(id);
+  if (!node) return;
+  node.value = value;
+  node.dispatchEvent(new Event('input', { bubbles: true }));
+  node.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function getLpSlippageBps() {
+  const raw = Number(el('lpSlippage')?.value ?? '');
+  const pct = Number.isFinite(raw) && raw >= 0 ? raw : 0.5;
+  const bps = Math.round(pct * 100);
+  return Math.min(Math.max(bps, 0), 5000);
+}
+
+function getLpDeadlineSeconds() {
+  const raw = Number(el('lpDeadline')?.value ?? '');
+  const minutes = Number.isFinite(raw) && raw > 0 ? raw : 20;
+  return Math.floor(Date.now() / 1000) + Math.round(minutes * 60);
+}
+
+async function addLiquidity() {
+  const ws = window.walletState;
+  if (!ws?.signer || !ws?.address) {
+    showNotification?.('Connect wallet first', 'error');
+    return;
+  }
+
+  try {
+    requireArbitrumOrThrow(ws);
+  } catch (e) {
+    showNotification?.(e?.message || 'Wrong network. Please switch to Arbitrum', 'error');
+    return;
+  }
+
+  if (!UNISWAP_V2_ROUTER_ADDRESS) {
+    showNotification?.('Uniswap V2 router is not configured', 'error');
+    return;
+  }
+
+  let arubAmountBN;
+  let usdtAmountBN;
+  try {
+    arubAmountBN = parseTokenAmount(el('lpArubAmount')?.value ?? '', DECIMALS_ARUB);
+    usdtAmountBN = parseTokenAmount(el('lpUsdtAmount')?.value ?? '', DECIMALS_USDT);
+  } catch (e) {
+    showNotification?.(e?.message || 'Invalid amount', 'error');
+    return;
+  }
+
+  if (arubAmountBN.isZero?.() === true || usdtAmountBN.isZero?.() === true) {
+    showNotification?.('Enter amounts greater than 0', 'error');
+    return;
+  }
+
+  const bps = getLpSlippageBps();
+  const amountAMin = arubAmountBN.mul(10000 - bps).div(10000);
+  const amountBMin = usdtAmountBN.mul(10000 - bps).div(10000);
+  const deadline = getLpDeadlineSeconds();
+
+  const arub = new ethers.Contract(ARUB_TOKEN_ADDRESS, ERC20_ABI_MIN, ws.signer);
+  const usdt = new ethers.Contract(USDT_ADDRESS, ERC20_ABI_MIN, ws.signer);
+  const router = new ethers.Contract(UNISWAP_V2_ROUTER_ADDRESS, UNISWAP_V2_ROUTER_ABI, ws.signer);
+
+  try {
+    const [allowArub, allowUsdt] = await Promise.all([
+      arub.allowance(ws.address, UNISWAP_V2_ROUTER_ADDRESS),
+      usdt.allowance(ws.address, UNISWAP_V2_ROUTER_ADDRESS),
+    ]);
+
+    if (allowArub.lt(arubAmountBN)) {
+      showNotification?.('Approving ARUB...', 'success');
+      const txA = await arub.approve(UNISWAP_V2_ROUTER_ADDRESS, arubAmountBN);
+      await txA.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
+    }
+
+    if (allowUsdt.lt(usdtAmountBN)) {
+      showNotification?.('Approving USDT...', 'success');
+      const txU = await usdt.approve(UNISWAP_V2_ROUTER_ADDRESS, usdtAmountBN);
+      await txU.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
+    }
+
+    showNotification?.('Adding liquidity...', 'success');
+    const tx = await router.addLiquidity(
+      ARUB_TOKEN_ADDRESS,
+      USDT_ADDRESS,
+      arubAmountBN,
+      usdtAmountBN,
+      amountAMin,
+      amountBMin,
+      ws.address,
+      deadline
+    );
+
+    await tx.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
+    showNotification?.('Liquidity added', 'success');
+
+    try { await refreshBalances?.(); } catch (_) {}
+    return tx;
+  } catch (e) {
+    console.error('[LP] addLiquidity error:', e);
+    if (isUserRejectedTx(e)) {
+      showNotification?.('Transaction rejected in wallet', 'error');
+      return;
+    }
+    showNotification?.(pickEthersMessage(e), 'error');
+    return;
+  }
 }
 
 function syncUserFromWalletState() {
@@ -1236,6 +1429,36 @@ function bindUiOncePerRender() {
       } catch (e) {
         showNotification?.(e?.message || 'Cannot set max sell', 'error');
       }
+    };
+  }
+
+  const lpAddBtn = el('lpAddBtn');
+  if (lpAddBtn) {
+    lpAddBtn.onclick = async () => {
+      try {
+        await addLiquidity();
+      } catch (e) {
+        console.error('[UI] add liquidity error:', e);
+        showNotification?.(e?.message || 'Add liquidity failed', 'error');
+      }
+    };
+  }
+
+  const lpMaxArubBtn = el('lpMaxArubBtn');
+  if (lpMaxArubBtn) {
+    lpMaxArubBtn.onclick = () => {
+      const bal = readDisplayedNumber('arubBalance');
+      if (bal == null) return;
+      setInputValue('lpArubAmount', String(bal));
+    };
+  }
+
+  const lpMaxUsdtBtn = el('lpMaxUsdtBtn');
+  if (lpMaxUsdtBtn) {
+    lpMaxUsdtBtn.onclick = () => {
+      const bal = readDisplayedNumber('usdtBalance');
+      if (bal == null) return;
+      setInputValue('lpUsdtAmount', String(bal));
     };
   }
 

@@ -1,0 +1,250 @@
+1. Рекомендованные параметры для AntiRUBArbitrageManager
+
+Под твою модель (USDT-коллатерал, ARUB с комиссией, ранний этап, не супер глубокая ликвидность) я бы поставил такие стартовые значения:
+
+minProfitBps          = 200;      // 2% относительной прибыли
+minProfitAbsolute     = 20e6;     // 20 USDT (6 decimals)
+maxSlippageBps        = 300;      // 3% допустимая разница с getAmountsOut
+maxTradeUsdt          = 5_000e6;  // максимум 5 000 USDT за одну сделку
+minCollateralRatioBps = 10800;    // CR минимум 108% для арбитража
+
+
+Расшифровка:
+
+minProfitBps = 200
+Не даём боту гонять сделки ради копеек.
+Требуем минимум 2% профита от объёма, чтобы:
+
+покрывать газ,
+
+не плодить лишние движения.
+
+minProfitAbsolute = 20 USDT
+Если объём маленький, 2% могут быть меньше, чем газ → добавляем “пол”:
+
+сделка должна приносить хотя бы 20 USDT чистой выгоды.
+
+maxSlippageBps = 300 (3%)
+Ограничиваем “сколько можно уступить” относительно getAmountsOut:
+
+minOut в транзакции не должен быть ниже, чем expectedOut * 97%,
+
+защищает от того, что кто-то выставит слишком низкий minOut и сольёт сделку.
+
+maxTradeUsdt = 5000 USDT
+На старте не надо стрелять из пушки:
+
+максимум 5k USDT в одном цикле,
+
+потом, когда вырастет ликвидность и уверенность → можно поднять до 10–20k.
+
+minCollateralRatioBps = 10800 (108%)
+Арбитраж → это прибыль в протокол, но он не должен работать, если система уже близка к просадке:
+
+не даём арбитражу работать, пока CR < 108%,
+
+чтобы не вымывался коллатерал в момент стресса.
+
+Как это будет выглядеть в конструкторе
+constructor(address _antiRub)
+    AntiRUBArbitrageManager(
+        _antiRub,
+        200,        // minProfitBps = 2%
+        20e6,       // minProfitAbsolute = 20 USDT
+        300,        // maxSlippageBps = 3%
+        5_000e6,    // maxTradeUsdt = 5000 USDT
+        10800       // minCollateralRatioBps = 108%
+    )
+{}
+
+
+Или задашь через setParams после деплоя.
+
+2. Как организовать off-chain бота (логика)
+
+Предлагаю логику:
+
+Периодически (каждые N секунд) бот:
+
+читает:
+
+баланс USDT этого арбитраж-контракта,
+
+simulateMintSell и simulateBuyBurn,
+
+параметры minProfitBps, minProfitAbsolute.
+
+выбирает, какой сценарий выгоднее (если вообще выгоден).
+
+Если profit > 0 и ≥ требуемого:
+
+вызывает arbitrageMintSell или arbitrageBuyBurn.
+
+Делает gasPrice/maxFeePerGas из разумного диапазона.
+
+3. Псевдокод бота (на русском)
+loop:
+  sleep(10-30 сек)
+
+  usdtBalance = USDT.balanceOf(arbitrageManager)
+
+  если usdtBalance == 0:
+    continue
+
+  // Попытка mint -> sell
+  (arubMinted, expectedOut, profit1) = arbitrageManager.simulateMintSell(
+      usdtIn = min(usdtBalance, maxTradeUsdt),
+      router = uniswapRouter,
+      path   = [ARUB, USDT]
+  )
+
+  // Попытка buy -> burn
+  (arubBought, usdtFromBurn, profit2) = arbitrageManager.simulateBuyBurn(
+      usdtIn = min(usdtBalance, maxTradeUsdt),
+      router = uniswapRouter,
+      path   = [USDT, ARUB]
+  )
+
+  // Выбираем лучшую сделку
+  bestScenario = none
+  bestProfit   = 0
+
+  если profit1 > bestProfit:
+    bestProfit = profit1
+    bestScenario = "MINT_SELL"
+
+  если profit2 > bestProfit:
+    bestProfit = profit2
+    bestScenario = "BUY_BURN"
+
+  если bestScenario == none или bestProfit <= 0:
+    continue
+
+  // Дополнительно проверяем minProfit через контракт (можно не делать, уже в функции есть require)
+  // Но тут можно заложить свою дополнительную логику: например, не торговать при gas>threshold
+
+  если bestScenario == "MINT_SELL":
+      tx = arbitrageManager.arbitrageMintSell(
+          usdtIn,
+          router,
+          [ARUB, USDT],
+          minOut = expectedOut * 0.98,  // или использовать expectedOut-3%
+          deadline = now + 300
+      )
+  иначе если bestScenario == "BUY_BURN":
+      tx = arbitrageManager.arbitrageBuyBurn(
+          usdtIn,
+          router,
+          [USDT, ARUB],
+          minArubOut = arubBought * 0.98,
+          deadline = now + 300
+      )
+
+  ждать подтверждение tx
+
+4. Пример на TypeScript (ethers v6-подобный стиль, упрощённо)
+import { ethers } from "ethers";
+import arbAbi from "./AntiRUBArbitrageManager.json" assert { type: "json" };
+
+const RPC = process.env.RPC!;
+const PRIVATE_KEY = process.env.PK!;
+const provider = new ethers.JsonRpcProvider(RPC);
+const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+
+const ARBITRAGE_MANAGER = "0xArbManager...";
+const ROUTER = "0xUniswapRouter...";
+const ARUB = "0xAntiRub...";
+const USDT = "0xUsdt...";
+
+const arb = new ethers.Contract(ARBITRAGE_MANAGER, arbAbi, wallet);
+
+async function loop() {
+  while (true) {
+    try {
+      const usdt = new ethers.Contract(
+        USDT,
+        ["function balanceOf(address) view returns (uint256)"],
+        provider
+      );
+      const usdtBal: bigint = await usdt.balanceOf(ARBITRAGE_MANAGER);
+      if (usdtBal === 0n) {
+        await new Promise(r => setTimeout(r, 15000));
+        continue;
+      }
+
+      const maxTradeUsdt: bigint = await arb.maxTradeUsdt();
+      const amountIn = usdtBal < maxTradeUsdt ? usdtBal : maxTradeUsdt;
+
+      const pathMintSell = [ARUB, USDT];
+      const pathBuyBurn = [USDT, ARUB];
+
+      const [mintArub, expectedOut, profit1] =
+        await arb.simulateMintSell(amountIn, ROUTER, pathMintSell);
+      const [arubBought, usdtFromBurn, profit2] =
+        await arb.simulateBuyBurn(amountIn, ROUTER, pathBuyBurn);
+
+      let best = "NONE";
+      let bestProfit = 0n;
+
+      if (profit1 > bestProfit) {
+        bestProfit = profit1;
+        best = "MINT_SELL";
+      }
+      if (profit2 > bestProfit) {
+        bestProfit = profit2;
+        best = "BUY_BURN";
+      }
+
+      if (best === "NONE" || bestProfit <= 0n) {
+        console.log("no profitable arb");
+        await new Promise(r => setTimeout(r, 15000));
+        continue;
+      }
+
+      console.log(`Best scenario: ${best}, profit ~ ${bestProfit}`);
+
+      const gasPrice = await provider.getGasPrice(); // или руками лимит
+
+      if (best === "MINT_SELL") {
+        const minOut = (expectedOut * 97n) / 100n; // 3% запас
+        const tx = await arb.arbitrageMintSell(
+          amountIn,
+          ROUTER,
+          pathMintSell,
+          minOut,
+          BigInt(Math.floor(Date.now() / 1000)) + 300n,
+          { gasPrice }
+        );
+        console.log("tx MINT_SELL:", tx.hash);
+        await tx.wait();
+      } else {
+        const minArubOut = (arubBought * 97n) / 100n;
+        const tx = await arb.arbitrageBuyBurn(
+          amountIn,
+          ROUTER,
+          pathBuyBurn,
+          minArubOut,
+          BigInt(Math.floor(Date.now() / 1000)) + 300n,
+          { gasPrice }
+        );
+        console.log("tx BUY_BURN:", tx.hash);
+        await tx.wait();
+      }
+    } catch (e) {
+      console.error("arb loop error:", e);
+      // sleep подольше если ошибка
+      await new Promise(r => setTimeout(r, 30000));
+    }
+  }
+}
+
+loop().catch(console.error);
+
+
+Это скелет, в реальном боте ещё надо:
+
+нормальную обработку BigInt↔ethers (я показал схему, не production-код),
+
+подключить ABI роутера, если хочешь сам считать getAmountsOut,
+
+свой логгер, алерты в телеграм и т.п.

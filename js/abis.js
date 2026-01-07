@@ -117,6 +117,13 @@ export const VAULT_ABI = [
 ];
 
 // --------------------------------------------------
+// Uniswap V2 Router (addLiquidity only)
+// --------------------------------------------------
+export const UNISWAP_V2_ROUTER_ABI = [
+  "function addLiquidity(address tokenA,address tokenB,uint amountADesired,uint amountBDesired,uint amountAMin,uint amountBMin,address to,uint deadline) returns (uint amountA,uint amountB,uint liquidity)",
+];
+
+// --------------------------------------------------
 // Presale READ ABI (ARUBPresale.sol, UUPS)
 // ВАЖНО: redeem лимитируется redeemableBalance(user)
 // --------------------------------------------------

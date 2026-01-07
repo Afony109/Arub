@@ -1,0 +1,1102 @@
+1) Участники и активы
+Токены
+
+USDT (6 decimals).
+
+ARUB (в проекте также используете 6 decimals по всем расчётам; это критично для UI и on-chain арифметики).
+
+LP-токен пары ARUB/USDT (DEX-пул ликвидности, UniswapV2/PancakeV2-совместимый).
+
+Роли
+
+Owner / Admin (управляет параметрами, апгрейдами UUPS, добавлением ликвидности, включением/паузой).
+
+Пользователь (покупает ARUB за USDT, может получать бонус, может иметь lock, может продавать обратно через redeem, если разрешено условиями).
+
+Treasury (кошелёк/контракт, где аккумулируются средства проекта; в текущем решении treasury остаётся в PresaleSoldProxy и/или на Vault в зависимости от сценария).
+
+2) Главные контракты и их ответственность
+A) ARUBToken (токен/экономика)
+
+Функции:
+
+mint(to, amount) / burn(from, amount) — минт/сжигание (под контролем доверенного контракта/ролей).
+
+calculateArubAmount(usdtAmount) — конверсия USDT→ARUB по формуле проекта.
+
+calculateUsdtAmount(arubAmount) — конверсия ARUB→USDT (для redeem).
+
+Назначение:
+
+Единая “ценообразующая” функция для buy/redeem.
+
+Базовый референс для UI отображения “сколько ARUB получу за X USDT” и наоборот.
+
+B) PresaleSoldProxy (продажа/трейдинг-контракт)
+
+Функции (логически, по вашим фрагментам и предыдущим обсуждениям):
+
+Buy за USDT:
+
+Пользователь переводит USDT в контракт.
+
+Контракт рассчитывает arubAmount по calculateArubAmount.
+
+Минтит ARUB пользователю.
+
+Может начислять bonus (если purchase discounted/bonus program).
+
+Если покупка со скидкой/бонусом — ставится lock (запрет на redeem до даты).
+
+Redeem (sell back):
+
+Пользователь отдаёт ARUB контракту (transferFrom).
+
+Контракт рассчитывает эквивалент USDT по calculateUsdtAmount.
+
+Применяется динамическая комиссия (fee bps зависит от юзера/правил).
+
+Выплачивается USDT пользователю, а fee копится как accumulatedFees.
+
+Важная защита: запрет redeem при активном lock (ваш патч: require(lockedDepositUntil[msg.sender]==0 || now>=lockedDepositUntil[msg.sender])).
+
+Назначение:
+
+Это “касса” buy/redeem и место, где реализуются:
+
+lock-логика,
+
+бонусы/скидки,
+
+динамические fee для продаж,
+
+накопление fee.
+
+Ключевое решение из последних сообщений:
+Treasury не усложняем через setTreasury() прямо сейчас — оставляем treasuries там, где они уже зафиксированы в PresaleSoldProxy, а управление ликвидностью/переводами делаем административно (переводы в пул/на vault при необходимости).
+
+C) ARUBVault (центральный Vault для ликвидности и будущих фич)
+
+Исходная роль Vault (до апгрейда):
+
+Контракт создавался “под пул ликвидности”, хранит активы, умеет взаимодействовать с DEX (router/factory/pair), и/или со strategy (deposit/withdraw в LP/фарм).
+
+Ключевая идея: не создавать новый контракт, а апгрейдить существующий ARUBVault.sol.
+
+После последнего апгрейда Vault получил дополнительную функцию:
+
+Owner-driven пополнение пула ликвидности ARUB/USDT через router:
+
+Vault берёт ARUB и USDT, которые уже лежат на нём.
+
+Вызывает addLiquidity (UniswapV2-compatible).
+
+LP токены минтятся и отправляются на lpReceiver (по умолчанию — Vault, но можно направить в locker/burn/другой адрес).
+
+Новые элементы Vault (последняя фича):
+
+lpReceiver — получатель LP от административного addLiquidity.
+
+setLPReceiver(newReceiver) — owner.
+
+addLiquidityFromVault(...) — owner: добавление ликвидности из средств Vault.
+
+Назначение Vault в общей системе:
+
+“Операционный центр” по созданию/поддержанию пула ликвидности.
+
+Возможность аккуратно:
+
+поддерживать глубину рынка,
+
+формировать LP,
+
+потенциально включать locked liquidity (через lpReceiver → locker).
+
+3) Денежные потоки (как реально движутся деньги)
+Поток 1: Buy (USDT → ARUB)
+
+Пользователь approve USDT → PresaleSoldProxy.
+
+PresaleSoldProxy получает USDT.
+
+Рассчитывает ARUB по формуле токена.
+
+Mint ARUB пользователю.
+
+Если “discount/bonus purchase”:
+
+начисляется bonus (в ARUB или отдельным учётом),
+
+фиксируется lock на redeem на срок (например, 90 дней — как вы обсуждали).
+
+Где в итоге USDT:
+
+В PresaleSoldProxy (как касса).
+
+Далее по вашему управлению: часть может быть переведена на Vault для формирования LP, часть — в treasury/операционные расходы.
+
+Поток 2: Redeem (ARUB → USDT)
+
+Пользователь approve ARUB → PresaleSoldProxy.
+
+PresaleSoldProxy проверяет:
+
+нет активного lock (или срок истёк),
+
+соблюдён минимум redeem в USDT-эквиваленте.
+
+Рассчитывает USDT эквивалент.
+
+Применяет fee bps (динамическая комиссия).
+
+Выплачивает USDT пользователю (или частично, если не хватает — ваша логика с debt).
+
+Fee накапливается в accumulatedFees.
+
+Поток 3: Пополнение ликвидности (через Vault)
+
+Админ/owner переводит (или заранее держит) на Vault:
+
+USDT,
+
+ARUB (или Vault может получить ARUB минтом, если предусмотрено).
+
+Owner вызывает addLiquidityFromVault(...).
+
+Vault делает approve на router и добавляет ликвидность.
+
+LP токены уходят на lpReceiver:
+
+Vault (по умолчанию),
+
+или locker,
+
+или burn (жёсткая блокировка),
+
+или другой адрес, если нужно.
+
+Смысл “locked liquidity” в вашей терминологии:
+
+Мы формируем LP и отправляем LP не на “живой” кошелёк, а в место, где их нельзя быстро вытащить (locker/burn/таймлок).
+
+4) Lock / Bonus / “Золочение” (как это связывается с ликвидностью)
+
+Ваша изначальная идея: “скидки/бонусы на покупки и ‘золочить’ их на 90 дней” — и чтобы эти средства имели смысл (могли участвовать в ликвидности).
+
+Текущее согласованное понимание:
+
+Пользовательский бонус/дисконт влияет на поведение пользователя (в первую очередь через lock и/или бонусный баланс).
+
+Ликвидность формируется и поддерживается проектом через Vault, а не напрямую “из бонусов пользователя” на смарт-контрактном уровне (иначе сложно и рискованно).
+
+Но экономически вы можете трактовать так:
+
+бонусная программа стимулирует приток USDT,
+
+часть USDT/ARUB из оборота направляется в LP через Vault,
+
+а LP можно “локать” для доверия.
+
+5) Комиссии (динамические) и их назначение
+
+На redeem применяется fee bps, который может зависеть от пользователя/условий.
+
+Комиссия:
+
+снижает арбитраж и “быстрый выход”,
+
+создает доход проекта,
+
+может направляться:
+
+в treasury,
+
+на поддержку ликвидности (перевод USDT на Vault → addLiquidity),
+
+на маркетинг/операционные нужды.
+
+6) Риски и контрольные точки (чтобы не запутаться и не сломать)
+Самые важные “инварианты”
+
+Decimals = 6 в расчётах USDT/ARUB (UI и контракты должны совпадать).
+
+Redeem запрещён при активном lock (это уже внесено).
+
+Vault addLiquidity — только owner, и желательно с параметрами min/slippage и deadline.
+
+Если LP считается “locked liquidity”, то:
+
+lpReceiver должен быть locker/burn,
+
+и это должно быть прозрачно отображено в UI/документации.
+
+Где нельзя “случайно” сломать
+
+Storage layout в upgradeable контрактах (переменные добавляются только в конец).
+
+Разные источники “treasury” (сейчас вы решили не усложнять и держать treasury в PresaleSoldProxy; Vault отвечает за LP, а не за учёт treasury-адресов).
+
+7) Как это выглядит для пользователя (в интерфейсе)
+
+Минимальный UX:
+
+Подключить кошелёк.
+
+Купить ARUB за USDT.
+
+Если purchase со скидкой/бонусом:
+
+UI показывает lock до даты,
+
+показывает bonus (если отдельным учётом).
+
+Продать (redeem) возможно только если lock истёк.
+
+Отдельно (админский раздел/скрытый):
+
+добавить ликвидность из Vault,
+
+задать lpReceiver (locker/burn/vault).
+
+8) Что сейчас “зафиксировано решениями” и что ещё можно развивать
+
+Зафиксировано:
+
+Treasury в PresaleSoldProxy не усложняем setTreasury прямо сейчас.
+
+Vault апгрейдим (не создаём новый), и Vault умеет пополнять LP.
+
+Redeem блокируется при активном lock.
+
+Динамическая комиссия на sell/redeem.
+
+Следующие логичные расширения (когда будете готовы):
+
+Отдельный LP Locker контракт (если хотите “честный” locked liquidity на срок).
+
+Политика “какая доля USDT идёт в LP” (автоматизация или ручное управление).
+
+Прозрачный dashboard: баланс treasury, баланс vault, размер LP, статус лока.
+
+
+
+# ARUB Project – Full Technical Specification
+
+## 1. Purpose of the Document
+
+This document defines the **single source of truth** for the ARUB project architecture, smart‑contract responsibilities, token flows, administrative actions, and user‑level behavior. Its goal is to prevent logical drift, missed assumptions, or contradictory implementations during further development, audits, and UI work.
+
+---
+
+## 2. Core Assets and Standards
+
+### 2.1 Tokens
+
+* **USDT**
+
+  * Decimals: **6**
+  * External ERC‑20 token
+
+* **ARUB**
+
+  * Decimals: **6** (mandatory invariant across contracts and UI)
+  * Mintable/Burnable by authorized contracts only
+
+* **LP Token (ARUB/USDT)**
+
+  * Issued by a UniswapV2‑compatible DEX
+  * Represents pooled liquidity
+
+---
+
+## 3. Main Contracts and Responsibilities
+
+### 3.1 ARUBToken
+
+**Role:**
+Central pricing and supply controller for ARUB.
+
+**Responsibilities:**
+
+* Mint ARUB during purchases or liquidity provisioning
+* Burn ARUB during redeem (if required by logic)
+* Provide deterministic conversion functions
+
+**Key Functions:**
+
+* `mint(address to, uint256 amount)`
+* `burn(address from, uint256 amount)`
+* `calculateArubAmount(uint256 usdtAmount)`
+* `calculateUsdtAmount(uint256 arubAmount)`
+
+**Notes:**
+
+* All financial logic depends on these conversion functions
+* Any pricing change impacts **buy**, **redeem**, and **liquidity provisioning** simultaneously
+
+---
+
+### 3.2 PresaleSoldProxy (Buy / Redeem Contract)
+
+**Role:**
+User‑facing trading contract (USDT ↔ ARUB).
+
+#### Buy Flow (USDT → ARUB)
+
+1. User approves USDT
+2. User calls buy function
+3. Contract:
+
+   * Transfers USDT from user
+   * Calculates ARUB amount
+   * Mints ARUB to user
+4. Optional:
+
+   * Applies **bonus**
+   * Sets **lock period** if discounted purchase
+
+#### Redeem Flow (ARUB → USDT)
+
+1. User approves ARUB
+2. Contract verifies:
+
+   * `amount > 0`
+   * **No active lock** (or lock expired)
+   * Minimum redeem threshold met
+3. Calculates USDT equivalent
+4. Applies **dynamic sell fee (bps)**
+5. Pays USDT to user
+6. Accumulates protocol fee internally
+
+#### Key Invariants
+
+* Redeem is **strictly forbidden** during active lock
+* Fee logic applies only on redeem (sell)
+* Contract holds USDT liquidity for redemptions
+
+#### Treasury Handling
+
+* Treasury logic remains **internal to PresaleSoldProxy**
+* No `setTreasury()` introduced at this stage
+* Funds may later be moved manually to Vault or LP
+
+---
+
+### 3.3 ARUBVault (Liquidity & Strategy Vault)
+
+**Role:**
+Central operational contract for liquidity creation and long‑term pool management.
+
+#### Original Responsibilities
+
+* Hold ARUB / USDT
+* Interact with DEX router & pair
+* Optionally interact with farming strategies
+
+#### New Responsibilities (Upgrade)
+
+* Owner‑controlled **liquidity provisioning**
+* Optional **locked liquidity** via LP receiver
+
+#### Key Storage Variables
+
+* `router` – UniswapV2‑compatible router
+* `pair` – ARUB/USDT pair (cached or resolved)
+* `lpReceiver` – destination for newly minted LP tokens
+
+#### Liquidity Provision Flow
+
+1. Vault already holds ARUB + USDT
+2. Owner calls `addLiquidityFromVault(...)`
+3. Vault:
+
+   * Approves router
+   * Calls `addLiquidity`
+4. LP tokens minted
+5. LP tokens sent to `lpReceiver`
+
+#### LP Receiver Options
+
+* Vault itself (default)
+* LP Locker contract (preferred for trust)
+* Burn address (permanent lock)
+
+#### Admin Controls
+
+* `setLPReceiver(address)`
+* `addLiquidityFromVault(...)`
+
+**Security:**
+
+* Owner‑only
+* `nonReentrant`
+* Slippage + deadline required
+
+---
+
+## 4. Lock, Bonus, and Discount Logic
+
+### Purpose
+
+To incentivize long‑term holding and discourage fast arbitrage.
+
+### Mechanism
+
+* Discounted or bonus purchases trigger a **time‑based lock**
+* Lock applies to **redeem only** (ARUB remains transferable)
+* Bonus value is logical/economic, not directly linked to LP shares
+
+### Effect
+
+* Users cannot exit early
+* Project gains predictable liquidity window
+* Supports LP growth strategy indirectly
+
+---
+
+## 5. Dynamic Fees
+
+### Applied On
+
+* Redeem (sell ARUB → USDT)
+
+### Goals
+
+* Discourage short‑term speculation
+* Protect USDT reserves
+* Generate protocol income
+
+### Fee Usage
+
+* Accumulated in contract
+* May later be:
+
+  * Sent to treasury
+  * Routed into liquidity (via Vault)
+  * Used for operations
+
+---
+
+## 6. Liquidity Philosophy
+
+### Key Principle
+
+**Liquidity is a project‑level responsibility, not a user‑level one.**
+
+Users contribute capital; the project:
+
+* Decides *when* to add liquidity
+* Decides *how much* to lock
+* Decides *where* LP is stored
+
+This keeps logic simple, auditable, and flexible.
+
+---
+
+## 7. Upgrade & Safety Rules
+
+* All core contracts are **upgradeable (UUPS)**
+* Storage variables added **only at the end**
+* `__gap` adjusted carefully
+* Admin actions restricted to `onlyOwner`
+
+---
+
+## 8. UI / Frontend Expectations
+
+### User View
+
+* Buy ARUB
+* See bonus / lock expiration
+* Redeem button disabled if locked
+
+### Admin View
+
+* Vault balances
+* LP size
+* Liquidity add controls
+* LP receiver status (locked / burn / vault)
+
+---
+
+## 9. Mental Model Summary
+
+* **PresaleSoldProxy** = cash register + rules
+* **Vault** = liquidity engine
+* **ARUBToken** = pricing & supply brain
+
+No contract does more than its role.
+
+---
+
+## 10. Status
+
+This specification reflects the **current agreed architecture** and should be updated **only** when a conscious design decision is made.
+
+
+
+
+Опис проекту: Стейкінг-пул з токеном ARUB (AntiRUB)
+Цей проект — децентралізована система стейкінгу на базі блокчейну (рекомендується Arbitrum для низьких комісій та сумісності з USDT/USDC). Ключовий посыл: токен ARUB (AntiRUB) жорстко прив'язаний до курсу російського рубля (RUB) до долара США (USD). Це "анти-рубль": його ціна в USD дорівнює курсу USD/RUB, символізуючи опозицію режиму Путіна. Проект орієнтований на противників Путіна як інструмент фінансової та символічної підтримки (анти-російський нарратив через прив'язку до ослаблення RUB). Якщо рубль знецінюється, ARUB дорожчає, підкреслюючи економічні проблеми РФ. Курс ARUB оновлюється оракулом (роль PRICE_SETTER_ROLE) на основі реального ринкового курсу USD/RUB, з обмеженням 50–500 USD за 1 ARUB для стабільності. Проект розроблений з фокусом на безпеку, газоефективність, оновлюваність та прозорість. Він еволюціонував від базової версії з вразливостями до повної системи, готової до аудиту та запуску.
+1. Загальна архітектура та посыл "анти-рубля"
+Концепція AntiRUB: ARUB — токен, ціна якого в USD дорівнює курсу USD/RUB. Приклад: якщо USD/RUB = 82 (82 рублі за 1 долар), то 1 ARUB = 82 USD. Оракул (окремий гаманець з роллю PRICE_SETTER_ROLE) оновлює currentRate = USD/RUB × 1e6 (наприклад, 82_000_000). Це не хедж проти інфляції RUB, а символічний інструмент для противників Путіна: зростання ARUB підкреслює ослаблення російської економіки як форма фінансового протесту. Актуальний курс USD/RUB на 7 грудня 2025 ≈76.50 RUB за USD, тож 1 ARUB ≈76.50 USD. Компоненти:
+ARUBToken: ERC20-upgradeable токен з UUPS-проксі.
+StakingPool: Три інстанси для стейкінгу ARUB, USDT, USDC.
+ARUBPresale: Довгостроковий контракт для покупки (mint) та продажу (redeem) ARUB за USDT/USDC, з обробкою боргів при недостатній ліквідності та розумним арбітражем з DEX для поповнення казни.
+Технології: Solidity 0.8.24, OpenZeppelin (Upgradeable, AccessControl, Pausable, ReentrancyGuard, SafeERC20).
+2. Токен ARUB (ARUBToken)
+Властивості: Назва "AntiRUB" (символ "ARUB"), 18 decimals, без фіксованого supply — емісія через нагороди/пресейл. Прив'язка до рубля: currentRate жорстко слідує USD/RUB, відображаючи анти-путінський нарратив. Оракул оновлює вручну/автоматично (слідкувати за своєчасними оновленнями). Обмеження: 50_000_000–500_000_000 (50–500 USD). Функції:
+mint(to, usdtAmount): Мінт за USDT-еквівалентом (формула: arubAmount = usdtAmount * 1e18 / currentRate). Тільки MINTER_ROLE.
+burn(from, amount): Спалення (опціонально, для owner buyback).
+calculateUsdtAmount(arubAmount) / calculateArubAmount(usdtAmount): Конвертація.
+setRate(_rate): Оновлення курсу оракулом.
+Ролі: MINTER_ROLE (пули/пресейл), PRICE_SETTER_ROLE (оракул), owner (оновлення/rescue). Емісія: Тільки через пули (нагороди) та пресейл. Після налаштування — renounce адмін-ролей.
+
+4. Покупка/Продаж ARUB через Presale (ARUBPresale)
+Довгостроковий механізм: Presale залишений як постійний інтерфейс для мінту/продажу на сайті (не тільки початкова фаза). MINTER_ROLE не revoke'ється після пресейлу — залишається для підтримки ліквідності. Покупка (mint за USDT/USDC): Через сайт: користувач переводить USDT/USDC, контракт мінтить ARUB за курсом (еквівалент = usdtAmount), з tiered знижкою (20% для перших 50 гаманців, 15% для 51-100, 10% для 101-200) бонусом ARUB з лок на мінімум 90 днів (unlockBonus після). Фронтенд повинен показати умови проекту (анти-путінський нарратив, ризики) та отримати згоду (наприклад, checkbox "Я ознайомлений і згоден") перед транзакцією. Емітить подію TermsAcknowledgmentRequired для фронтенду. Продаж (redeem через сайт): Користувач переводить ARUB в казну (без burn), отримує USDT/USDC за курсом (usdtAmount = arubAmount * currentRate / 1e18). При redeem стягується комісія на продаж ARUB у розмірі 1-3%, tiered залежно від обсягу/часу холдингу: 1% для холдерів >180 днів, 2% для 90-180 днів, 3% для <90 днів. Комісія утримується з виплати в USDT/USDC та направляється в казну проекту для підтримки ліквідності, нагород у стейкінгу або розвитку. Якщо недостатньо ліквідності — видає борг в USDT-еквіваленті. Розумний арбітраж з DEX: Контракт моніторить ціну ARUB на DEX vs. internal rate, купує/продає для поповнення казни.
+5. Деплой та управління
+Скрипт: Hardhat для деплою/проксі. Оракул: Окремий гаманець — слідкувати за оновленнями USD/RUB (джерела: Xe.com, Wise). Ризики: Оракул-ризик мінімальний завдяки трьом незалежним джерелам; у разі збою — зберігається останній курс.
+Загальна архітектура проекту AntiRUB
+Проект AntiRUB — інтегрована DeFi-система навколо токена ARUB, що символізує опозицію Путіну через прив'язку до USD/RUB. Включає ARUBToken (ядро), StakingV2 (пули стейкінгу) та ARUBPresale (механізм покупки/продажу). Компоненти пов'язані через смарт-контракти, ролі доступу та логіку курсу/емісії.
+Потоки: Покупка через Presale → mint ARUB; Redeem → казна для нагород у StakingV2; Нагороди в пулах → mint ARUB.
+Безпека: Модульна структура, renounce ролей після запуску, арбітраж для ліквідності.
+
+Описание проекта: Staking Pool с токеном ARUB (AntiRUB)
+Этот проект — децентрализованная система стейкинга на базе блокчейна (рекомендуется Arbitrum для низких комиссий и совместимости с USDT/USDC). Ключевой посыл: токен ARUB (AntiRUB) жёстко привязан к курсу российского рубля (RUB) к доллару США (USD). Это "анти-рубль": его цена в USD равна курсу USD/RUB, символизируя оппозицию режиму Путина. Проект ориентирован на противников Путина, как инструмент финансовой и символической поддержки (анти-российский нарратив через привязку к ослаблению RUB). Если рубль дешевеет, ARUB дорожает, подчёркивая экономические проблемы РФ. Курс ARUB обновляется оракулом (роль PRICE_SETTER_ROLE) на основе реального рыночного курса USD/RUB, с ограничением 50–500 USD за 1 ARUB для стабильности.
+Проект разработан с фокусом на безопасность, газоэффективность, апгрейдабельность и прозрачность. Он эволюционировал от базовой версии с уязвимостями до полной системы, готовой к аудиту и запуску.
+1. Общая архитектура и посыл "анти-рубля"
+AntiRUB концепция: ARUB — это токен, цена которого в USD равна курсу USD/RUB. Пример: если USD/RUB = 82 (82 рубля за 1 доллар), то 1 ARUB = 82 USD. Оракул (отдельный кошелёк с ролью PRICE_SETTER_ROLE) обновляет currentRate = USD/RUB × 1e6 (например, 82_000_000). Это не хедж против инфляции RUB, а символический инструмент для противников Путина: рост ARUB подчёркивает ослабление российской экономики, как форма финансового протеста. Текущий курс USD/RUB на 07 декабря 2025 ≈76.50 RUB за USD, так что 1 ARUB ≈76.50 USD.
+Компоненты:
+
+ARUBToken: ERC20-upgradeable токен с UUPS-прокси.
+StakingPool: Три инстанса для стейкинга ARUB, USDT, USDC.
+ARUBPresale: Долгосрочный контракт для покупки (mint) и продажи (redeem) ARUB за USDT/USDC, с обработкой долгов при недостатке ликвидности и умным арбитражем с DEX для пополнения казны.
+
+Технологии: Solidity 0.8.24, OpenZeppelin (Upgradeable, AccessControl, Pausable, ReentrancyGuard, SafeERC20).
+2. Токен ARUB (ARUBToken)
+Свойства: Название "AntiRUB" (символ "ARUB"), 18 decimals, нет фиксированного supply — эмиссия через награды/пресейл.
+Привязка к рублю: currentRate жёстко следует USD/RUB, отражая анти-путинский нарратив. Оракул обновляет вручную/автоматически (следить за timely апдейтами). Ограничения: 50_000_000–500_000_000 (50–500 USD).
+Функции:
+
+mint(to, usdtAmount): Минт по USDT-эквиваленту (формула: arubAmount = usdtAmount * 1e18 / currentRate). Только MINTER_ROLE.
+burn(from, amount): Сжигание (опционально, для owner buyback).
+calculateUsdtAmount(arubAmount) / calculateArubAmount(usdtAmount): Конвертация.
+setRate(_rate): Обновление курса оракулом.
+
+Роли: MINTER_ROLE (пулы/пресейл), PRICE_SETTER_ROLE (оракул), owner (апгрейд/rescue).
+Эмиссия: Только через пулы (награды) и пресейл. После настройки — renounce админ-ролей.
+3. Staking Pools
+Стейкинг: Stake стейблов (USDT/USDC) или ARUB → награды в ARUB. Бонус от роста курса: TVL ARUB-пула растёт с USD/RUB, символизируя "прибыль от падения RUB" для противников Путина.
+APY: Лесенка от 25% (низкий TVL) до 6% (>50M USDT). Награды: (time * userTVL * APY) / (365 days * 100).
+Функции: stake, withdraw (dust-fix), claimRewards (mint ARUB), pendingRewards (view).
+TVL: Фиксированный для totalTVL, актуальный для userTVL в ARUB-пуле.
+Безопасность: Pausable, rescue (не для stake/reward токенов).
+4. Покупка/Продажа ARUB через Presale (ARUBPresale)
+Долгосрочный механизм: Presale оставлен как постоянный интерфейс для минта/продажи на сайте (не только начальная фаза). MINTER_ROLE не revoke'ится после пресейла — остаётся для поддержания ликвидности.
+Покупка (mint за USDT/USDC): Через сайт: пользователь переводит USDT/USDC, контракт минтит ARUB по курсу (эквивалент = usdtAmount), с tiered скидкой (20% для первых 50 кошельков, 15% для 51-100, 10% для 101-200) бонусом ARUB с локом на минимум 90 дней (unlockBonus после). Фронтенд должен показать условия проекта (анти-путинский нарратив, риски) и получить согласие (e.g., checkbox "Я ознакомлен и согласен") перед транзакцией. Эмитит событие TermsAcknowledgmentRequired для фронтенда.
+Продажа (redeem через сайт): Сайт с redeem: пользователь переводит ARUB в казну (без burn), получает USDT/USDC по курсу (usdtAmount = arubAmount * currentRate / 1e18). При redeem взимается комиссия на продажу ARUB в размере 1-3%, tiered в зависимости от объёма/времени холдинга: 1% для холдеров >180 дней, 2% для 90-180 дней, 3% для <90 дней). Комиссия удерживается из выплаты в USDT/USDC и направляется в казну проекта для поддержки ликвидности, наград в стейкинге или развития (например, на transferArubToPool или арбитраж). Накопленный ARUB в казне используется для следующих покупателей (resale через mint), переносится в пулы для наград (transferArubToPool) или на DEX для ликвидности (transferArubToDEX). Если недостаточно ликвидности в казне — выдаёт долг в USDT-эквиваленте (mapping debtUsdtEquivalent — "условные ARUB"). Долг клеймится позже, когда казна пополнена (owner депозитит). Это для начального этапа: прибыль от роста курса выплачивается в условных ARUB, выкупаемых по мере роста проекта.
+Умный арбитраж с DEX для пополнения казны: Добавлена функция в presale для автоматического арбитража: контракт мониторит цену ARUB на DEX (Uniswap oracle или Chainlink) vs. internal rate. Если ARUB дешевле на DEX — presale покупает его (swap USDT → ARUB), минтит новый по rate и продаёт с прибылью, пополняя казну. Это обеспечивает ликвидность для redeem, предотвращая нехватку долларов. Арбитраж запускается owner'ом или автоматизировано (cron-job off-chain). Газ низкий на Arbitrum (~0.01 USD/tx).
+5. Деплой и управление
+Скрипт: Hardhat для деплоя/прокси.
+Оракул: Отдельный кошелёк — следить за обновлениями USD/RUB (источники: Xe.com, Wise).
+Риски: Оракул-риск практически отсутствует, поскольку используется три независимых источника курса (Xe.com, Wise, и третий); в случае падения — оставляется последний курс, пока оракул не восстановится или не вмешается владелец.
+Общая архитектура проекта AntiRUB: Увязка Presale с ARUBToken, StakingV2 и другими компонентами
+Проект AntiRUB — это интегрированная DeFi-система, построенная вокруг токена ARUB (AntiRUB), который символизирует оппозицию режиму Путина через жёсткую привязку к курсу USD/RUB. Архитектура включает ARUBToken (основной токен), StakingV2 (обновлённые пулы стейкинга для наград) и ARUBPresale (долгосрочный механизм покупки/продажи). Все компоненты связаны через смарт-контракты, роли доступа (AccessControl) и общую логику курса/эмиссии. Ниже я опишу увязку шаг за шагом, с фокусом на интеграцию Presale, чтобы показать, как они работают вместе как единое целое.
+1. Центральный компонент: ARUBToken (токен AntiRUB)
+Роль в архитектуре: Это ядро системы — ERC20-upgradeable токен с UUPS-прокси для апгрейдов. Он управляет эмиссией (mint), сжиганием (burn) и расчётом курса (calculateArubAmount / calculateUsdtAmount). Курс currentRate (USD/RUB × 1e6) обновляется оракулом (PRICE_SETTER_ROLE), отражая анти-российский нарратив: рост ARUB при ослаблении RUB.
+Увязка с Presale:
+
+Presale использует IARUBToken интерфейс для вызова mint (при покупке) и calculateUsdtAmount (при redeem). Presale имеет MINTER_ROLE в ARUBToken, что позволяет ему минтить ARUB по USDT-эквиваленту без прямого доступа пользователей.
+При redeem Presale не вызывает burn — ARUB копится в казне Presale для reuse (продажа следующим покупателям или перенос в StakingV2). Комиссия на продажу (1-3%) интегрируется здесь: она рассчитывается на основе arubAmount и удерживается из usdtAmount перед выплатой, пополняя казну дополнительно.
+
+Увязка со StakingV2:
+
+StakingV2 (обновлённая версия пулов) вызывает mint для наград в ARUB. Пулы имеют MINTER_ROLE, аналогично Presale.
+TVL в ARUB-пуле использует calculateUsdtAmount для актуального эквивалента, связывая staking с курсом токена.
+
+Безопасность: MINTER_ROLE renounce после настройки — эмиссия только через Presale/пулы.
+2. StakingV2 (пулы стейкинга)
+Роль в архитектуре: Три инстанса (для ARUB, USDT, USDC) для стейкинга с наградами в ARUB. APY-лесенка зависит от totalTVL, награды начисляются по времени/TVL. StakingV2 — это V2 с улучшениями (dust-fix, pausable, rescue), фокусирующаяся на yield'е для холдеров.
+Увязка с Presale:
+
+Накопленный ARUB в Presale может переноситься в StakingV2 через transferArubToPool (onlyOwner), пополняя награды. Это связывает presale с staking: ARUB от redeem используется для boost'а yield'а. Комиссия от продаж (1-3%) может частично направляться сюда для усиления наград.
+В Presale бонус (скидочная часть ARUB) лочится на 90 дней в казне, но может быть интегрирован с StakingV2 для автостейка (если добавим интерфейс). Пользователи из presale мотивированы стейкать, чтобы получить бонус.
+
+Увязка с ARUBToken:
+
+ClaimRewards вызывает mint ARUB по накопленному usdtEq. getUserTVL использует calculateUsdtAmount для ARUB-пула, синхронизируя staking с курсом токена.
+
+Безопасность: Pausable для всех, rescue только посторонних токенов.
+3. ARUBPresale (пресейл/маркетмейкер)
+Роль в архитектуре: Долгосрочный интерфейс для покупки/продажи ARUB на сайте. Поддерживает tiered скидку (15/10%/5% для первых 34/33/33 кошельков, max 1000 USDT per wallet) и лок бонуса на 90 дней (скидочная часть и тело депозита ARUB). Обеспечивает ликвидность через арбитраж с DEX. Добавлена комиссия на продажу ARUB (1-3%) для стимулирования долгосрочного холдинга и пополнения казны.
+
+Увязка с ARUBToken:
+
+Вызовы mint при buy и calculateUsdtAmount при redeem. Presale — минтер (MINTER_ROLE), но без burn при redeem (ARUB копится).
+Бонус минтится и лочится в Presale, используя calculateArubAmount для расчёта. Комиссия на redeem рассчитывается как процент от usdtAmount и вычитается перед выплатой.
+
+Увязка со StakingV2:
+
+Owner может transfer накопленный ARUB в пулы для наград (transferArubToPool). Это связывает redeem с staking: ARUB от продаж пополняет yield. Часть комиссии (1-3%) может быть направлена на пулы для дополнительных наград.
+Бонус (lockedBonusArub) — залочен в Presale, но unlockBonus отправляет его пользователю. Можно добавить автостейк в StakingV2, если интегрировать интерфейс.
+
+Безопасность: NonReentrant, debt coverage при withdraw, TermsAcknowledgmentRequired для compliance.
+4. Общая увязка и поток данных
+Поток покупки/продажи: Пользователь → Presale (USDT → mint ARUB от ARUBToken) → ARUB к пользователю/лок бонуса. При redeem: ARUB → Presale казна, USDT обратно (или долг), с вычетом комиссии 1-3% из выплаты. Казна ARUB → StakingV2 (награды) или DEX (ликвидность).
+Поток наград: StakingV2 начисляет usdtEq → claimRewards вызывает mint от ARUBToken → ARUB к пользователю.
+Курс и оракул: ARUBToken's currentRate используется во всех (staking TVL, presale convert). Оракул — внешний, но с 3 источниками для resilience.
+Децентрализация: После launch — renounce ролей, эмиссия только через пулы/presale. Presale вечный для ликвидности, с арбитражем для баланса казны.
+Архитектура — модульная, с разделением ролей для безопасности. Presale — "шлюз" для входа/выхода, ARUBToken — ядро, StakingV2 — engine yield'а.
+
+
+описание проекта: Staking Pool с токеном ARUB (AntiRUB)
+
+Этот проект — децентрализованная система стейкинга на базе блокчейна (рекомендуется Arbitrum для низких комиссий и совместимости с USDT/USDC). Ключевой посыл: токен ARUB (AntiRUB) жёстко привязан к курсу российского рубля (RUB) к доллару США (USD). Это "анти-рубль": его цена в USD равна курсу USD/RUB, символизируя оппозицию режиму Путина. Проект ориентирован на противников Путина, как инструмент финансовой и символической поддержки (анти-российский нарратив через привязку к ослаблению RUB). Если рубль дешевеет, ARUB дорожает, подчёркивая экономические проблемы РФ. Курс ARUB обновляется оракулом (роль PRICE_SETTER_ROLE) на основе реального рыночного курса USD/RUB, с ограничением 50–500 USD за 1 ARUB для стабильности.
+Проект разработан с фокусом на безопасность, газоэффективность, апгрейдабельность и прозрачность. Он эволюционировал от базовой версии с уязвимостями до полной системы, готовой к аудиту и запуску.
+
+1. Общая архитектура и посыл "анти-рубля"
+
+AntiRUB концепция: ARUB — это токен, цена которого в USD равна курсу USD/RUB. Пример: если USD/RUB = 82 (82 рубля за 1 доллар), то 1 ARUB = 82 USD. Оракул (отдельный кошелёк с ролью PRICE_SETTER_ROLE) обновляет currentRate = USD/RUB × 1e6 (например, 82_000_000). Это не хедж против инфляции RUB, а символический инструмент для противников Путина: рост ARUB подчёркивает ослабление российской экономики, как форма финансового протеста. Текущий курс USD/RUB на 07 декабря 2025 ≈76.50 RUB за USD, так что 1 ARUB ≈76.50 USD.
+
+Компоненты:
+ARUBToken: ERC20-upgradeable токен с UUPS-прокси.
+StakingPool: Три инстанса для стейкинга ARUB, USDT, USDC.
+ARUBPresale: Долгосрочный контракт для покупки (mint) и продажи (redeem) ARUB за USDT/USDC, с обработкой долгов при недостатке ликвидности и умным арбитражем с DEX для пополнения казны.
+
+Технологии: Solidity 0.8.24, OpenZeppelin (Upgradeable, AccessControl, Pausable, ReentrancyGuard, SafeERC20).
+
+2. Токен ARUB (ARUBToken)
+
+Свойства: Название "AntiRUB" (символ "ARUB"), 18 decimals, нет фиксированного supply — эмиссия через награды/пресейл.
+Привязка к рублю: currentRate жёстко следует USD/RUB, отражая анти-путинский нарратив. Оракул обновляет вручную/автоматически (следить за timely апдейтами). Ограничения: 50_000_000–500_000_000 (50–500 USD).
+Функции:
+mint(to, usdtAmount): Минт по USDT-эквиваленту (формула: arubAmount = usdtAmount * 1e18 / currentRate). Только MINTER_ROLE.
+burn(from, amount): Сжигание (опционально, для owner buyback).
+calculateUsdtAmount(arubAmount) / calculateArubAmount(usdtAmount): Конвертация.
+setRate(_rate): Обновление курса оракулом.
+
+Роли: MINTER_ROLE (пулы/пресейл), PRICE_SETTER_ROLE (оракул), owner (апгрейд/rescue).
+Эмиссия: Только через пулы (награды) и пресейл. После настройки — renounce админ-ролей.
+
+
+4. Покупка/Продажа ARUB через Presale (ARUBPresale)
+
+Долгосрочный механизм: Presale оставлен как постоянный интерфейс для минта/продажи на сайте (не только начальная фаза). MINTER_ROLE не revoke'ится после пресейла — остаётся для поддержания ликвидности.
+Покупка (mint за USDT/USDC): Через сайт: пользователь переводит USDT/USDC, контракт минтит ARUB по курсу (эквивалент = usdtAmount), с tiered скидкой (20% для первых 50 кошельков, 15% для 51-100, 10% для 101-200)  бонусом  ARUB с локом на минимум 90 дней (unlockBonus после). Фронтенд должен показать условия проекта (анти-путинский нарратив, риски) и получить согласие (e.g., checkbox "Я ознакомлен и согласен") перед транзакцией. Эмитит событие TermsAcknowledgmentRequired для фронтенда.
+Продажа (redeem через сайт): Сайт с redeem: пользователь переводит ARUB в казну (без burn), получает USDT/USDC по курсу (usdtAmount = arubAmount * currentRate / 1e18). Накопленный ARUB в казне используется для следующих покупателей (resale через mint), переносится в пулы для наград (transferArubToPool) или на DEX для ликвидности (transferArubToDEX). Если недостаточно ликвидности в казне — выдаёт долг в USDT-эквиваленте (mapping debtUsdtEquivalent — "условные ARUB"). Долг клеймится позже, когда казна пополнена (owner депозитит). Это для начального этапа: прибыль от роста курса выплачивается в условных ARUB, выкупаемых по мере роста проекта.
+Умный арбитраж с DEX для пополнения казны: Добавлена функция в presale для автоматического арбитража: контракт мониторит цену ARUB на DEX (Uniswap oracle или Chainlink) vs. internal rate. Если ARUB дешевле на DEX — presale покупает его (swap USDT → ARUB), минтит новый по rate и продаёт с прибылью, пополняя казну. Это обеспечивает ликвидность для redeem, предотвращая нехватку долларов. Арбитраж запускается owner'ом или автоматизировано (cron-job off-chain). Газ низкий на Arbitrum (~0.01 USD/tx).
+
+5. Деплой и управление
+
+Скрипт: Hardhat для деплоя/прокси.
+Оракул: Отдельный кошелёк — следить за обновлениями USD/RUB (источники: Xe.com, Wise).
+Риски: Оракул-риск практически отсутствует, поскольку используется три независимых источника курса (Xe.com, Wise, и третий); в случае падения — оставляется последний курс, пока оракул не восстановится или не вмешается владелец.
+
+
+
+Общая архитектура проекта AntiRUB: Увязка Presale с ARUBToken, StakingV2 и другими компонентами
+Проект AntiRUB — это интегрированная DeFi-система, построенная вокруг токена ARUB (AntiRUB), который символизирует оппозицию режиму Путина через жёсткую привязку к курсу USD/RUB. Архитектура включает ARUBToken (основной токен), StakingV2 (обновлённые пулы стейкинга для наград) и ARUBPresale (долгосрочный механизм покупки/продажи). Все компоненты связаны через смарт-контракты, роли доступа (AccessControl) и общую логику курса/эмиссии. Ниже я опишу увязку шаг за шагом, с фокусом на интеграцию Presale, чтобы показать, как они работают вместе как единое целое.
+1. Центральный компонент: ARUBToken (токен AntiRUB)
+
+Роль в архитектуре: Это ядро системы — ERC20-upgradeable токен с UUPS-прокси для апгрейдов. Он управляет эмиссией (mint), сжиганием (burn) и расчётом курса (calculateArubAmount / calculateUsdtAmount). Курс currentRate (USD/RUB × 1e6) обновляется оракулом (PRICE_SETTER_ROLE), отражая анти-российский нарратив: рост ARUB при ослаблении RUB.
+Увязка с Presale:
+Presale использует IARUBToken интерфейс для вызова mint (при покупке) и calculateUsdtAmount (при redeem). Presale имеет MINTER_ROLE в ARUBToken, что позволяет ему минтить ARUB по USDT-эквиваленту без прямого доступа пользователей.
+При redeem Presale не вызывает burn — ARUB копится в казне Presale для reuse (продажа следующим покупателям или перенос в StakingV2).
+
+Увязка со StakingV2:
+StakingV2 (обновлённая версия пулов) вызывает mint для наград в ARUB. Пулы имеют MINTER_ROLE, аналогично Presale.
+TVL в ARUB-пуле использует calculateUsdtAmount для актуального эквивалента, связывая staking с курсом токена.
+
+Безопасность: MINTER_ROLE renounce после настройки — эмиссия только через Presale/пулы.
+
+2. StakingV2 (пулы стейкинга)
+
+Роль в архитектуре: Три инстанса (для ARUB, USDT, USDC) для стейкинга с наградами в ARUB. APY-лесенка зависит от totalTVL, награды начисляются по времени/TVL. StakingV2 — это V2 с улучшениями (dust-fix, pausable, rescue), фокусирующаяся на yield'е для холдеров.
+Увязка с Presale:
+Накопленный ARUB в Presale может переноситься в StakingV2 через transferArubToPool (onlyOwner), пополняя награды. Это связывает presale с staking: ARUB от redeem используется для boost'а yield'а.
+В Presale бонус (скидочная часть ARUB) лочится на 90 дней в казне, но может быть интегрирован с StakingV2 для автостейка (если добавим интерфейс). Пользователи из presale мотивированы стейкать, чтобы получить бонус.
+
+Увязка с ARUBToken:
+ClaimRewards вызывает mint ARUB по накопленному usdtEq. getUserTVL использует calculateUsdtAmount для ARUB-пула, синхронизируя staking с курсом токена.
+
+Безопасность: Pausable для всех, rescue только посторонних токенов.
+
+3. ARUBPresale (пресейл/маркетмейкер)
+
+Роль в архитектуре: Долгосрочный интерфейс для покупки/продажи ARUB на сайте. Поддерживает tiered скидку (20/15/10% для первых 50/100/200 кошельков, max 1000 USDT per wallet) и лок бонуса на 90 дней (скидочная часть ARUB). Обеспечивает ликвидность через арбитраж с DEX.
+Увязка с ARUBToken:
+Вызовы mint при buy и calculateUsdtAmount при redeem. Presale — минтер (MINTER_ROLE), но без burn при redeem (ARUB копится).
+Бонус минтится и лочится в Presale, используя calculateArubAmount для расчёта.
+
+Увязка со StakingV2:
+Owner может transfer накопленный ARUB в пулы для наград (transferArubToPool). Это связывает redeem с staking: ARUB от продаж пополняет yield.
+Бонус (lockedBonusArub) — залочен в Presale, но unlockBonus отправляет его пользователю. Можно добавить автостейк в StakingV2, если интегрировать интерфейс.
+
+Безопасность: NonReentrant, debt coverage при withdraw, TermsAcknowledgmentRequired для compliance.
+
+4. Общая увязка и поток данных
+
+Поток покупки/продажи: Пользователь → Presale (USDT → mint ARUB от ARUBToken) → ARUB к пользователю/лок бонуса. При redeem: ARUB → Presale казна, USDT обратно (или долг). Казна ARUB → StakingV2 (награды) или DEX (ликвидность).
+Поток наград: StakingV2 начисляет usdtEq → claimRewards вызывает mint от ARUBToken → ARUB к пользователю.
+Курс и оракул: ARUBToken's currentRate используется во всех (staking TVL, presale convert). Оракул — внешний, но с 3 источниками для resilience.
+Децентрализация: После launch — renounce ролей, эмиссия только через пулы/presale. Presale вечный для ликвидности, с арбитражем для баланса казны.
+
+Архитектура — модульная, с разделением ролей для безопасности. Presale — "шлюз" для входа/выхода, ARUBToken — ядро, StakingV2 — engine yield'а.
+
+
+
+Да, вот теперь самое интересное — как всё это живёт вместе 😊
+Давай соберу архитектуру из твоих кирпичей:
+
+ArubToken (из token.sol)
+
+ArubOracle (из oracl.sol)
+
+основной протокол AntiRUB (у тебя отдельный контракт, мы к нему привяжем потоки)
+
+ARUBStakingV2 (из staking.sol)
+
+ARUBPresale (последняя версия, которую ты прислал)
+
+1. Роли и смыслы контрактов
+ArubOracle
+
+Хранит on-chain курс (currentRate).
+
+В твоих версиях было 2 варианта:
+
+IUsdRubOracle — курс USD/RUB (для расчёта «дорогого» ARUB)
+
+ArubOracle — курс ARUB/USDT с 6 знаками.
+
+Как лучше:
+
+Договориться, что один оракул — источник правды по цене для всех:
+
+либо ARUB/USDT (для пресейла + AntiRUB + Staking UI),
+
+либо USD/RUB, а конвертацию ARUB↔USDT ты делаешь в ARUBToken / AntiRUB.
+
+Главное — чтобы те же формулы использовались и в пресейле, и в протоколе.
+
+ArubToken (дорогой токен ARUB)
+
+Из token.sol видно:
+
+стандартный ERC20 с 6 decimals,
+
+есть mintTo / burnFrom,
+
+завязан на IUsdRubOracle (в текущем файле, хотя тело обрезано).
+
+Для пресейла мы уже используем интерфейс:
+
+interface IARUBToken {
+    function mint(address to, uint256 amount) external;
+    function burn(address from, uint256 amount) external;
+    function calculateArubAmount(uint256 usdtAmount) external view returns (uint256);
+    function calculateUsdtAmount(uint256 arubAmount) external view returns (uint256);
+}
+
+
+👉 Значит тебе нужно:
+
+либо дописать эти методы в ArubToken,
+
+либо вынести их в отдельный контракт/библиотеку (или в AntiRUB) и дергать уже его из пресейла.
+
+Самый прямой путь: в ArubToken добавить чистые view-функции, использующие oracle.currentRate():
+
+calculateArubAmount(usdtAmount)
+
+calculateUsdtAmount(arubAmount)
+
+И тогда:
+
+Presale использует эти функции для конвертации.
+
+AntiRUB тоже может их переиспользовать, чтобы везде была одна формула.
+
+AntiRUB (основной протокол)
+
+Ты его в этом файле не присылал, но по прошлым обсуждениям:
+
+хранит USDT-резервы, выпускает и сжигает «обратный» токен AntiRUB / ARUB (в разных версиях);
+
+держит collateral ratio, CR-порог;
+
+собирает комиссию (fee в USDT/ARUB);
+
+часть комиссии копит в stakingReserve;
+
+реализует sendStakingRewards(uint256 amount):
+
+уменьшает stakingReserve,
+
+делает arubToken.transfer(stakingContract, amount),
+
+на стороне стейкинга это учитывается как пополнение наград.
+
+В архитектуре:
+
+AntiRUB — «мозг протокола», который:
+
+работает с тем же оракулом, что и ARUBToken/Presale;
+
+держит основной treasury USDT;
+
+отвечает за mint/burn/fee;
+
+периодически высылает награды в ARUBStakingV2.
+
+ARUBStakingV2
+
+Из staking.sol:
+
+принимает:
+
+usdtToken — стейкинг в USDT,
+
+arubToken — стейкинг в ARUB,
+
+награды всегда в ARUB (arubToken),
+
+владелец (owner) может:
+
+function fundRewards(uint256 amount) external onlyOwner {
+    require(arubToken.transferFrom(msg.sender, address(this), amount), "Funding failed");
+}
+
+
+пользователи:
+
+stakeUsdt(amount),
+
+stakeArub(amount),
+
+claimRewards(),
+
+unstakeUsdt/unstakeArub.
+
+Архитектурно:
+
+owner стейкинга = AntiRUB (или governance-контракт, через который ходят все протокольные решения).
+
+AntiRUB (или мультисиг) периодически делает:
+
+arubToken.approve(stakingContract, amount);
+ARUBStakingV2(stakingContract).fundRewards(amount);
+
+
+либо внутри AntiRUB:
+
+function sendStakingRewards(uint256 amount) external onlyOwner {
+    stakingReserve -= amount;
+    arubToken.transfer(stakingContract, amount); // если fundRewards упростить
+}
+
+ARUBPresale
+
+Наш свежий пресейл:
+
+принимает USDT/USDC,
+
+считает effectiveAmount с учётом скидки (tier + per-wallet max),
+
+через calculateArubAmount вычисляет arubTotal,
+
+минтит 100% ARUB на себя, часть (bonusArub) лочит на 90 дней, остальное отдаёт пользователю,
+
+запрещает redeem, пока бонус залочен,
+
+при redeem:
+
+забирает ARUB у юзера,
+
+считает USDT-эквивалент через calculateUsdtAmount,
+
+платит чем может (USDT/USDC), остальное пишет в долг.
+
+Ключевой момент:
+
+Чтобы arubToken.mint(address(this), arubTotal) работал, presale должен иметь право минтить:
+
+Либо ArubToken сейчас Ownable с mintTo — тогда:
+
+на период пресейла владелец токена = ARUBPresale,
+
+или ты добавляешь в ArubToken роль MINTER_ROLE, и даёшь её пресейлу.
+
+Либо делаешь в ArubToken:
+
+address public presale;
+
+function setPresale(address _presale) external onlyOwner {
+    presale = _presale;
+}
+
+function mintFromPresale(address to, uint256 amount) external {
+    require(msg.sender == presale, "Not presale");
+    _mint(to, amount);
+}
+
+
+и тогда в пресейле вызываешь mintFromPresale вместо mint.
+
+Суть: minter должен быть строго ограничен (только presale / AntiRUB / governance), никаких «общих» mintTo с owner-EOA.
+
+2. Потоки денег и токенов (high-level)
+2.1. Этап пресейла
+
+Покупка:
+
+Юзер → Presale:
+
+отправляет amount USDT/USDC.
+
+Presale:
+
+по оракулу через arubToken.calculateArubAmount(effectiveAmount) считает ARUB,
+
+минтит arubTotal на себя,
+
+часть (bonusArub) кладёт в лок (90 дней),
+
+остаток отдает юзеру.
+
+USDT/USDC внутри пресейла:
+
+либо сразу перегоняешь в AntiRUB (через depositTreasuryUSDT или просто transfer на адрес AntiRUB),
+
+либо часть идёт в казну проекта/мультисиг, часть — в будущую ликвидность на DEX.
+
+Тут у тебя свобода: главное — понимать, что эти стейблы — твой стартовый капитал для:
+
+выкупа ARUB по redeem,
+
+обеспечения CR в AntiRUB,
+
+LP на DEX.
+
+Redeem на пресейле:
+
+Юзер отдаёт ARUB → Presale (без burn),
+
+Presale платит USDT/USDC (либо пишет долг),
+
+ARUB копится на пресейле (после окончания пресейла ты можешь часть сжечь, часть отдать в стейкинг/Lp/treasury).
+
+2.2. Этап протокола (AntiRUB + Staking)
+
+Дальше основная жизнь уходит в AntiRUB:
+
+Пользователи работают с AntiRUB-контрактом:
+
+там mint/burn ARUB или синтетического токена,
+
+комиссии,
+
+CR-порог.
+
+AntiRUB:
+
+берёт курс из того же оракула,
+
+ведёт свою казну USDT (включая то, что ты завёл с пресейла),
+
+часть комиссии накапливает в stakingReserve (в ARUB),
+
+периодически делает sendStakingRewards → ARUBStakingV2.fundRewards.
+
+Staking:
+
+Юзеры стейкают:
+
+USDT (чтобы получать ARUB за доход протокола),
+
+ARUB (как классический staking).
+
+ARUBStakingV2 по времени + APY-tiers раздаёт ARUB из своего reward-баланса, который пополняет AntiRUB.
+
+3. Как это связать деплоем (чек-лист)
+
+Предлагаю такой порядок:
+
+Деплой ArubOracle
+
+ArubOracle(initialRate) — курс ARUB/USDT (6 decimals).
+
+Деплой ArubToken
+
+передаёшь в конструктор адрес оракула (или позже сеттером).
+
+владелец токена = мультисиг/DAO.
+
+добавляешь в него calculateArubAmount / calculateUsdtAmount.
+
+Развёрнутый USDT/USDC — реальные адреса на сети.
+
+Деплой AntiRUB
+
+параметры: usdt, arubToken, oracle, и т.д.
+
+owner = мультисиг/DAO.
+
+Деплой ARUBStakingV2
+
+в конструкторе: usdtToken, arubToken.
+
+owner = AntiRUB или governance-контракт.
+
+Деплой ARUBPresale
+
+в конструкторе: arubToken, usdt, usdc.
+
+owner = мультисиг/DAO.
+
+на ArubToken:
+
+даёшь пресейлу право минтить (через роль / setPresale / transferOwnership на время).
+
+Настройка потоков:
+
+часть стейблов с Presale → AntiRUB treasury,
+
+на AntiRUB — указать адрес stakingContract,
+
+реализовать sendStakingRewards и перекидывание ARUB в ARUBStakingV2.
+
+4. Что обязательно проверить, прежде чем ехать в mainnet
+
+Совместимость интерфейсов:
+
+ArubToken действительно реализует calculateArubAmount / calculateUsdtAmount.
+
+в Presale адрес ARUB = адрес настоящего ArubToken.
+
+Роли mint/burn:
+
+только нужные контракты могут минтить ARUB:
+
+Presale,
+
+AntiRUB (если он когда-то минтит ARUB напрямую),
+
+или governance-мультисиг.
+
+Миграционный сценарий:
+
+что происходит с пресейлом после окончания?
+
+блокируешь buy*,
+
+оставляешь только unlockBonus/redeem/claimDebt,
+
+USDT/USDC из пресейла переводишь в AntiRUB / treasury.
+
+Инварианты:
+
+withdrawTreasury* в пресейле никогда не ломает покрытие totalDebtUsdtEquivalent,
+
+transferArubToPool/DEX никогда не трогают totalLockedBonusArub.
