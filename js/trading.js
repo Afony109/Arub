@@ -553,7 +553,7 @@ host.innerHTML = `
       </div>
 
       <div id="sellLockHint" style="display:none; margin-top:6px; font-size:13px; opacity:0.85;">
-        Активний лок бонусної покупки. Продаж вільних ARUB: <span id="sellFreeAllowed">—</span> дозволено. Залишилось: <span id="sellLockLeft">—</span>
+        Активний лок бонусної покупки: <span id="sellBonusLocked">—</span> ARUB. Продаж вільних ARUB: <span id="sellFreeAllowed">—</span> дозволено. Залишилось: <span id="sellLockLeft">—</span>
       </div>
 
       <!-- Progress bar for wallet stats scan (uses existing setPresaleScanVisible/Progress) -->
@@ -566,9 +566,6 @@ host.innerHTML = `
 
       <div style="margin-top:10px; font-size:14px; opacity:0.9;">
         Баланс ARUB: <span id="arubBalance">—</span>
-      </div>
-      <div style="margin-top:6px; font-size:13px; opacity:0.85;">
-        Вільні ARUB (тільки з пресейлу): <span id="presaleRedeemable">—</span>
       </div>
     </div>
   </div>
@@ -745,7 +742,6 @@ async function refreshBalances() {
     ]);
 
     setText('arubBalance', formatTokenAmount(arubBal, DECIMALS_ARUB, 6));
-    setText('presaleRedeemable', formatTokenAmount(redeemable, DECIMALS_ARUB, 6));
     ensurePresaleUI();
     setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 2));
 
@@ -1074,10 +1070,15 @@ async function refreshLockPanel() {
     const now = Math.floor(Date.now() / 1000);
     const unlockTime = Number(info.unlockTime || 0);
     const freeEl = el('sellFreeAllowed');
+    const bonusEl = el('sellBonusLocked');
 
     if (unlockTime > now) {
       hint.style.display = 'block';
       left.textContent = formatRemaining(info.remaining || unlockTime - now);
+
+      if (bonusEl) {
+        bonusEl.textContent = formatTokenAmount(bonus, DECIMALS_ARUB, 6);
+      }
 
       if (freeEl) {
         try {
@@ -1093,6 +1094,7 @@ async function refreshLockPanel() {
     } else {
       hint.style.display = 'none';
       left.textContent = '—';
+      if (bonusEl) bonusEl.textContent = '—';
       if (freeEl) freeEl.textContent = '—';
     }
   }
@@ -1245,7 +1247,7 @@ async function applyWalletState(reason = 'unknown') {
   setDisabled('maxSellBtn', true);
   const sellInp = el('sellAmount');
   if (sellInp) sellInp.disabled = true;
-  setText('presaleRedeemable', '—');
+  setText('sellBonusLocked', '—');
 
   try { await refreshBuyBonusBox(); } catch (_) {}
 
