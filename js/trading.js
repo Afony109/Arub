@@ -553,7 +553,7 @@ host.innerHTML = `
       </div>
 
       <div id="sellLockHint" style="display:none; margin-top:6px; font-size:13px; opacity:0.85;">
-        Активний лок бонусної покупки. Продаж вільних ARUB дозволено. Залишилось: <span id="sellLockLeft">—</span>
+        Активний лок бонусної покупки. Продаж вільних ARUB: <span id="sellFreeAllowed">—</span> дозволено. Залишилось: <span id="sellLockLeft">—</span>
       </div>
 
       <!-- Progress bar for wallet stats scan (uses existing setPresaleScanVisible/Progress) -->
@@ -566,6 +566,9 @@ host.innerHTML = `
 
       <div style="margin-top:10px; font-size:14px; opacity:0.9;">
         Баланс ARUB: <span id="arubBalance">—</span>
+      </div>
+      <div style="margin-top:6px; font-size:13px; opacity:0.85;">
+        Вільні ARUB (тільки з пресейлу): <span id="presaleRedeemable">—</span>
       </div>
     </div>
   </div>
@@ -732,20 +735,26 @@ async function refreshBalances() {
   try {
     if (!user.address || !tokenRO || !usdtRO) return;
 
-    const [arubBal, usdtBal] = await Promise.all([
+    const presaleRO = await getReadOnlyPresale();
+    if (!presaleRO) return;
+
+    const [arubBal, usdtBal, redeemable] = await Promise.all([
       tokenRO.balanceOf(user.address),
       usdtRO.balanceOf(user.address),
+      presaleRO.redeemableBalance(user.address),
     ]);
 
     setText('arubBalance', formatTokenAmount(arubBal, DECIMALS_ARUB, 6));
+    setText('presaleRedeemable', formatTokenAmount(redeemable, DECIMALS_ARUB, 6));
     ensurePresaleUI();
     setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 2));
 
-    setDisabled('sellBtn', arubBal.lte(0));
-    setDisabled('maxSellBtn', arubBal.lte(0));
+    const canSell = !redeemable.isZero?.() && !redeemable.lte?.(0);
+    setDisabled('sellBtn', !canSell);
+    setDisabled('maxSellBtn', !canSell);
 
     const sellInp = el('sellAmount');
-    if (sellInp) sellInp.disabled = arubBal.lte(0);
+    if (sellInp) sellInp.disabled = !canSell;
   } catch (e) {
     console.warn('[TRADING] refreshBalances error:', e);
   }
@@ -1064,13 +1073,27 @@ async function refreshLockPanel() {
   if (hint && left) {
     const now = Math.floor(Date.now() / 1000);
     const unlockTime = Number(info.unlockTime || 0);
+    const freeEl = el('sellFreeAllowed');
 
     if (unlockTime > now) {
       hint.style.display = 'block';
       left.textContent = formatRemaining(info.remaining || unlockTime - now);
+
+      if (freeEl) {
+        try {
+          const presaleRO = await getReadOnlyPresale();
+          if (!presaleRO) throw new Error('Read-only presale not ready');
+
+          const redeemable = await presaleRO.redeemableBalance(user.address);
+          freeEl.textContent = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
+        } catch (_) {
+          freeEl.textContent = '—';
+        }
+      }
     } else {
       hint.style.display = 'none';
       left.textContent = '—';
+      if (freeEl) freeEl.textContent = '—';
     }
   }
 }
@@ -1213,9 +1236,16 @@ async function applyWalletState(reason = 'unknown') {
   user.chainId = ws.chainId ?? null;
 
   if (!__tradingUiRendered) {
-  renderTradingUI();
-  __tradingUiRendered = true;
+    renderTradingUI();
+    __tradingUiRendered = true;
   }
+
+  // Block sell controls until redeemableBalance is loaded for this address
+  setDisabled('sellBtn', true);
+  setDisabled('maxSellBtn', true);
+  const sellInp = el('sellAmount');
+  if (sellInp) sellInp.disabled = true;
+  setText('presaleRedeemable', '—');
 
   try { await refreshBuyBonusBox(); } catch (_) {}
 
