@@ -711,6 +711,10 @@ async function refreshPresaleUI(address) {
     presale = await loadPresaleStatsFromEvents(address, provider);
   }
 
+  if (!presale) {
+    presale = { paidUSDT: 0, totalARUB: 0, principalARUB: 0, bonusARUB: 0, avgPrice: null };
+  }
+
   const currentPrice = await loadCurrentArubPrice(provider);
   const discount = calcDiscount(presale.avgPrice, currentPrice);
   const bonusPct = presale.totalARUB > 0 ? (presale.bonusARUB / presale.totalARUB) * 100 : null;
