@@ -572,7 +572,7 @@ host.innerHTML = `
       </div>
 
       <div id="sellLockHint" style="display:none; margin-top:6px; font-size:13px; opacity:0.85;">
-        Активний лок бонусної покупки: <span id="sellBonusLocked">—</span> ARUB. Продаж вільних ARUB: <span id="sellFreeAllowed">—</span> дозволено. Залишилось: <span id="sellLockLeft">—</span>
+        Активний лок бонусної покупки: <span id="sellBonusLocked">—</span> ARUB. Продаж вільних ARUB: <span id="sellFreeAllowed">—</span>
       </div>
 
       <!-- Progress bar for wallet stats scan (uses existing setPresaleScanVisible/Progress) -->
@@ -1103,9 +1103,8 @@ async function refreshLockPanel() {
 
   // Sell lock hint (informational only)
   const hint = el('sellLockHint');
-  const left = el('sellLockLeft');
 
-  if (hint && left) {
+  if (hint) {
     const now = Math.floor(Date.now() / 1000);
     const unlockTime = Number(info.unlockTime || 0);
     const freeEl = el('sellFreeAllowed');
@@ -1113,7 +1112,6 @@ async function refreshLockPanel() {
 
     if (unlockTime > now) {
       hint.style.display = 'block';
-      left.textContent = formatRemaining(info.remaining || unlockTime - now);
 
       if (bonusEl) {
         bonusEl.textContent = formatTokenAmount(bonus, DECIMALS_ARUB, 6);
@@ -1151,7 +1149,6 @@ async function refreshLockPanel() {
       }
     } else {
       hint.style.display = 'none';
-      left.textContent = '—';
       if (bonusEl) bonusEl.textContent = '—';
       if (freeEl) {
         freeEl.textContent = '—';
