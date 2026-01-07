@@ -1404,25 +1404,30 @@ export async function setMaxSell() {
 
     const presaleRO = await getReadOnlyPresale();
 
-    // Always fetch fresh redeemableBalance - this is the only value that should be used for max sell
-    const redeemable = await presaleRO.redeemableBalance(user.address);
+    // Fetch both redeemableBalance and total balance in parallel for efficiency
+    const [redeemable, bal] = await Promise.all([
+      presaleRO.redeemableBalance(user.address),
+      tokenRO.balanceOf(user.address)
+    ]);
+    
+    // Update cached values
     redeemableCached = redeemable;
     redeemableFor = user.address;
-
-    // Update the cached value and UI element for consistency
     sellFreeAllowedCached = redeemable;
     sellFreeAllowedFor = user.address;
     
+    // Update UI element for consistency
     const freeEl = el('sellFreeAllowed');
     if (freeEl) {
-      freeEl.textContent = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
-      freeEl.dataset.allowed = freeEl.textContent;
+      const formatted = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
+      freeEl.textContent = formatted;
+      // Store formatted value for consistency with what user sees
+      freeEl.dataset.allowed = formatted;
     }
     
     try { await refreshLockPanel(); } catch (_) {}
 
     // Check if user has ARUB but none is redeemable (informational only)
-    const bal = await tokenRO.balanceOf(user.address);
     if (redeemable.isZero() && !bal.isZero()) {
       showNotification?.(
         'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
