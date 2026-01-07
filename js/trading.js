@@ -1215,23 +1215,6 @@ function bindUiOncePerRender() {
 
   const maxSellBtn = el('maxSellBtn');
   if (maxSellBtn) {
-    // Hard override: if "free ARUB" is shown, force max to that value.
-    maxSellBtn.addEventListener(
-      'click',
-      (e) => {
-        const freeEl = el('sellFreeAllowed');
-        const freeText = freeEl?.dataset?.allowed || freeEl?.textContent?.trim() || '';
-        const freeNum = Number(freeText.replace(',', '.'));
-        if (Number.isFinite(freeNum) && freeNum >= 0) {
-          const inp = el('sellAmount');
-          if (inp) inp.value = freeText.replace(',', '.');
-          e.preventDefault();
-          e.stopImmediatePropagation();
-        }
-      },
-      true
-    );
-
     maxSellBtn.onclick = async () => {
       try {
         await setMaxSell();
@@ -1419,31 +1402,27 @@ export async function setMaxSell() {
   try {
     if (!user.address || !tokenRO) throw new Error('Wallet not connected');
 
-    const freeEl = el('sellFreeAllowed');
-    const freeText = freeEl?.dataset?.allowed || freeEl?.textContent?.trim() || '';
-    const freeNum = Number(freeText.replace(',', '.'));
-    if (Number.isFinite(freeNum) && freeNum >= 0) {
-      const inp = el('sellAmount');
-      if (inp) inp.value = freeText.replace(',', '.');
-      return;
-    }
-
     const presaleRO = await getReadOnlyPresale();
 
-    const bal = await tokenRO.balanceOf(user.address);
+    // Always fetch fresh redeemableBalance - this is the only value that should be used for max sell
     const redeemable = await presaleRO.redeemableBalance(user.address);
     redeemableCached = redeemable;
     redeemableFor = user.address;
 
-    const allowed = redeemable;
-    sellFreeAllowedCached = allowed;
+    // Update the cached value and UI element for consistency
+    sellFreeAllowedCached = redeemable;
     sellFreeAllowedFor = user.address;
+    
+    const freeEl = el('sellFreeAllowed');
     if (freeEl) {
-      freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
+      freeEl.textContent = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
       freeEl.dataset.allowed = freeEl.textContent;
     }
+    
     try { await refreshLockPanel(); } catch (_) {}
 
+    // Check if user has ARUB but none is redeemable (informational only)
+    const bal = await tokenRO.balanceOf(user.address);
     if (redeemable.isZero() && !bal.isZero()) {
       showNotification?.(
         'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
@@ -1451,9 +1430,8 @@ export async function setMaxSell() {
       );
     }
 
-    const maxSell = allowed;
-
-    const v = formatTokenAmount(maxSell, DECIMALS_ARUB, 6);
+    // Set input value to redeemableBalance (the only correct value for max sell)
+    const v = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
     const inp = el('sellAmount');
     if (inp) inp.value = v;
   } catch (e) {
