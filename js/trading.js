@@ -1411,8 +1411,6 @@ export async function setMaxSell() {
     console.log('[TRADING] setMaxSell clicked', { address: user.address });
     if (!user.address || !tokenRO) throw new Error('Wallet not connected');
 
-    const presaleRO = await getReadOnlyPresale();
-
     const freeEl = el('sellFreeAllowed');
     const freeText = freeEl?.textContent?.trim() || '';
     const freeNum = Number(freeText.replace(',', '.'));
@@ -1421,6 +1419,8 @@ export async function setMaxSell() {
       if (inp) inp.value = freeText.replace(',', '.');
       return;
     }
+
+    const presaleRO = await getReadOnlyPresale();
 
     const bal = await tokenRO.balanceOf(user.address);
     const redeemable = await presaleRO.redeemableBalance(user.address);
