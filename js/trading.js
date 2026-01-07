@@ -1442,14 +1442,6 @@ export async function setMaxSell() {
     }
     try { await refreshLockPanel(); } catch (_) {}
 
-    // Inform user if redeemable is zero
-    if (redeemable.isZero()) {
-      showNotification?.(
-        'Немає доступних токенів для продажу. Можливо, ви не купували ARUB через цей Presale, або всі токени заблоковані.',
-        'info'
-      );
-    }
-
     const maxSell = allowed;
 
     const v = formatTokenAmount(maxSell, DECIMALS_ARUB, 6);
