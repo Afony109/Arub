@@ -770,6 +770,12 @@ async function refreshBalances() {
     const allowed = redeemable.lt(arubBal) ? redeemable : arubBal;
     sellFreeAllowedCached = allowed;
     sellFreeAllowedFor = user.address;
+    console.log('[TRADING] sell allowed (balances)', {
+      address: user.address,
+      redeemable: formatTokenAmount(redeemable, DECIMALS_ARUB, 6),
+      balance: formatTokenAmount(arubBal, DECIMALS_ARUB, 6),
+      allowed: formatTokenAmount(allowed, DECIMALS_ARUB, 6),
+    });
 
     const freeEl = el('sellFreeAllowed');
     if (freeEl) {
@@ -1144,6 +1150,12 @@ async function refreshLockPanel() {
 
             sellFreeAllowedCached = allowed;
             sellFreeAllowedFor = user.address;
+            console.log('[TRADING] sell allowed (lock panel)', {
+              address: user.address,
+              redeemable: formatTokenAmount(redeemable, DECIMALS_ARUB, 6),
+              balance: bal ? formatTokenAmount(bal, DECIMALS_ARUB, 6) : '—',
+              allowed: formatTokenAmount(allowed, DECIMALS_ARUB, 6),
+            });
           }
 
           freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
@@ -1411,6 +1423,12 @@ export async function setMaxSell() {
     const allowed = redeemable.lt(bal) ? redeemable : bal;
     sellFreeAllowedCached = allowed;
     sellFreeAllowedFor = user.address;
+    console.log('[TRADING] sell allowed (max)', {
+      address: user.address,
+      redeemable: formatTokenAmount(redeemable, DECIMALS_ARUB, 6),
+      balance: formatTokenAmount(bal, DECIMALS_ARUB, 6),
+      allowed: formatTokenAmount(allowed, DECIMALS_ARUB, 6),
+    });
 
     const freeEl = el('sellFreeAllowed');
     if (freeEl) {
