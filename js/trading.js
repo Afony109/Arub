@@ -750,7 +750,6 @@ function ensurePresaleUI() {
 // -----------------------------
 async function refreshBalances() {
   try {
-    console.log('[TRADING] refreshBalances start', { address: user.address });
     if (!user.address || !tokenRO || !usdtRO) return;
 
     const presaleRO = await getReadOnlyPresale();
@@ -771,15 +770,10 @@ async function refreshBalances() {
     const allowed = redeemable;
     sellFreeAllowedCached = allowed;
     sellFreeAllowedFor = user.address;
-    console.log('[TRADING] sell allowed (balances)', {
-      address: user.address,
-      redeemable: formatTokenAmount(redeemable, DECIMALS_ARUB, 6),
-      balance: formatTokenAmount(arubBal, DECIMALS_ARUB, 6),
-      allowed: formatTokenAmount(allowed, DECIMALS_ARUB, 6),
-    });
-
+    const freeEl = el('sellFreeAllowed');
     if (freeEl) {
       freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
+      freeEl.dataset.allowed = freeEl.textContent;
     }
 
     const canSell = !redeemable.isZero?.() && !redeemable.lte?.(0);
@@ -1112,7 +1106,6 @@ async function refreshLockPanel() {
   const left = el('sellLockLeft');
 
   if (hint && left) {
-    console.log('[TRADING] refreshLockPanel hint update', { address: user.address });
     const now = Math.floor(Date.now() / 1000);
     const unlockTime = Number(info.unlockTime || 0);
     const freeEl = el('sellFreeAllowed');
@@ -1147,24 +1140,23 @@ async function refreshLockPanel() {
 
             sellFreeAllowedCached = allowed;
             sellFreeAllowedFor = user.address;
-            console.log('[TRADING] sell allowed (lock panel)', {
-              address: user.address,
-              redeemable: formatTokenAmount(redeemable, DECIMALS_ARUB, 6),
-              balance: bal ? formatTokenAmount(bal, DECIMALS_ARUB, 6) : '—',
-              allowed: formatTokenAmount(allowed, DECIMALS_ARUB, 6),
-            });
           }
 
           freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
+          freeEl.dataset.allowed = freeEl.textContent;
         } catch (_) {
           freeEl.textContent = '—';
+          freeEl.dataset.allowed = '';
         }
       }
     } else {
       hint.style.display = 'none';
       left.textContent = '—';
       if (bonusEl) bonusEl.textContent = '—';
-      if (freeEl) freeEl.textContent = '—';
+      if (freeEl) {
+        freeEl.textContent = '—';
+        freeEl.dataset.allowed = '';
+      }
     }
   }
 }
@@ -1227,7 +1219,8 @@ function bindUiOncePerRender() {
     maxSellBtn.addEventListener(
       'click',
       (e) => {
-        const freeText = el('sellFreeAllowed')?.textContent?.trim() || '';
+        const freeEl = el('sellFreeAllowed');
+        const freeText = freeEl?.dataset?.allowed || freeEl?.textContent?.trim() || '';
         const freeNum = Number(freeText.replace(',', '.'));
         if (Number.isFinite(freeNum) && freeNum >= 0) {
           const inp = el('sellAmount');
@@ -1424,11 +1417,10 @@ export async function setMaxBuy() {
 
 export async function setMaxSell() {
   try {
-    console.log('[TRADING] setMaxSell clicked', { address: user.address });
     if (!user.address || !tokenRO) throw new Error('Wallet not connected');
 
     const freeEl = el('sellFreeAllowed');
-    const freeText = freeEl?.textContent?.trim() || '';
+    const freeText = freeEl?.dataset?.allowed || freeEl?.textContent?.trim() || '';
     const freeNum = Number(freeText.replace(',', '.'));
     if (Number.isFinite(freeNum) && freeNum >= 0) {
       const inp = el('sellAmount');
@@ -1446,15 +1438,9 @@ export async function setMaxSell() {
     const allowed = redeemable;
     sellFreeAllowedCached = allowed;
     sellFreeAllowedFor = user.address;
-    console.log('[TRADING] sell allowed (max)', {
-      address: user.address,
-      redeemable: formatTokenAmount(redeemable, DECIMALS_ARUB, 6),
-      balance: formatTokenAmount(bal, DECIMALS_ARUB, 6),
-      allowed: formatTokenAmount(allowed, DECIMALS_ARUB, 6),
-    });
-
     if (freeEl) {
       freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
+      freeEl.dataset.allowed = freeEl.textContent;
     }
     try { await refreshLockPanel(); } catch (_) {}
 
