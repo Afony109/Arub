@@ -704,6 +704,7 @@ function ensurePresaleUI() {
   box.style.fontFamily = 'inherit';
   box.style.opacity = '0.9';
   box.innerHTML = `
+  <div style="font-size:13px; opacity:0.75; margin-bottom:6px;">Очікується завантаження даних:</div>
   <div>Куплено на пресейлі: <span id="presalePurchased">—</span> ARUB</div>
   <div>У тому числі бонусом: <span id="presaleBonusAmount">—</span> ARUB</div>
   <div>Сплачено: <span id="presalePaid">—</span> USDT</div>
