@@ -690,9 +690,10 @@ async function loadPresaleStatsFromEvents(user, provider) {
 async function refreshPresaleUI(address) {
   const provider = await getReadOnlyProviderAsync();
 
-  let presale = await loadPresaleStatsFromEvents(address, provider);
-  if (!presale || !presale.totalARUB || presale.totalARUB <= 0) {
-    presale = await loadPresaleStats(address, provider);
+  // Fast path: use direct contract reads first, fall back to event scan only if needed.
+  let presale = await loadPresaleStats(address, provider);
+  if (!presale || (!presale.totalARUB && !presale.paidUSDT)) {
+    presale = await loadPresaleStatsFromEvents(address, provider);
   }
 
   const currentPrice = await loadCurrentArubPrice(provider);
