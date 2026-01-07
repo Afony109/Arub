@@ -217,6 +217,15 @@ function renderTrading() {
 
   // 1) not connected
   if (!connected) {
+    const lpHost = getLiquidityHost();
+    if (lpHost) {
+      lpHost.innerHTML = `
+        <div style="text-align:center; padding:40px;">
+          <div style="font-size:2.2em; margin-bottom:10px;">💧</div>
+          <p>Підключіть гаманець, щоб додати ліквідність.</p>
+        </div>
+      `;
+    }
     host.innerHTML = `
       <div style="text-align:center; padding:50px;">
         <div style="font-size:3em; margin-bottom:10px;">🔒</div>
@@ -228,6 +237,15 @@ function renderTrading() {
 
   // 2) wrong network
   if (!onArbitrum) {
+    const lpHost = getLiquidityHost();
+    if (lpHost) {
+      lpHost.innerHTML = `
+        <div style="text-align:center; padding:40px;">
+          <div style="font-size:2.2em; margin-bottom:10px;">⚠️</div>
+          <p>Перемкніть мережу на <b>Arbitrum One</b>, щоб додати ліквідність.</p>
+        </div>
+      `;
+    }
     host.innerHTML = `
       <div style="text-align:center; padding:50px;">
         <div style="font-size:3em; margin-bottom:10px;">🌐</div>
@@ -375,6 +393,10 @@ function getTradingHost() {
   return el('tradingInterface');
 }
 
+function getLiquidityHost() {
+  return el('liquidityInterface');
+}
+
 function setControlsEnabled(enabled) {
   [
     'buyBtn',
@@ -470,6 +492,15 @@ function stopSellFeeTimer() {
 // -----------------------------
 function renderLocked() {
   const host = getTradingHost();
+  const lpHost = getLiquidityHost();
+  if (lpHost) {
+    lpHost.innerHTML = `
+      <div style="text-align:center; padding:40px;">
+        <div style="font-size:2.2em; margin-bottom:10px;">💧</div>
+        <p>Підключіть гаманець, щоб додати ліквідність.</p>
+      </div>
+    `;
+  }
   if (!host) return;
 
   host.innerHTML = `
@@ -485,15 +516,15 @@ function renderTradingUI() {
   if (!host) return;
 
 host.innerHTML = `
-  <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04); margin-bottom:16px;">
+  <div id="lpCard" class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-      <h3 style="margin:0;">Add liquidity (Uniswap V2)</h3>
+      <h3 style="margin:0;">Додати ліквідність (Uniswap V2)</h3>
       <div style="font-size:12px; opacity:0.7;">ARUB / USDT</div>
     </div>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
       <div>
-        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">ARUB amount</div>
+        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сума ARUB</div>
         <div style="display:flex; gap:8px; align-items:center;">
           <input id="lpArubAmount" type="number" inputmode="decimal" placeholder="0.0"
                  style="flex:1; padding:12px; border-radius:12px;
@@ -502,13 +533,13 @@ host.innerHTML = `
           <button id="lpMaxArubBtn" type="button"
                   style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
                          background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-            MAX
+            МАКС
           </button>
         </div>
       </div>
 
       <div>
-        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">USDT amount</div>
+        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сума USDT</div>
         <div style="display:flex; gap:8px; align-items:center;">
           <input id="lpUsdtAmount" type="number" inputmode="decimal" placeholder="0.0"
                  style="flex:1; padding:12px; border-radius:12px;
@@ -517,7 +548,7 @@ host.innerHTML = `
           <button id="lpMaxUsdtBtn" type="button"
                   style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
                          background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-            MAX
+            МАКС
           </button>
         </div>
       </div>
@@ -525,13 +556,13 @@ host.innerHTML = `
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
       <div>
-        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Slippage %</div>
+        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сліппедж %</div>
         <input id="lpSlippage" type="number" inputmode="decimal" value="0.5" min="0" step="0.1"
                style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
                       background: rgba(0,0,0,0.25); color:#fff;">
       </div>
       <div>
-        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Deadline (min)</div>
+        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Дедлайн (хв)</div>
         <input id="lpDeadline" type="number" inputmode="numeric" value="20" min="1" step="1"
                style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
                       background: rgba(0,0,0,0.25); color:#fff;">
@@ -540,11 +571,11 @@ host.innerHTML = `
 
     <button id="lpAddBtn" type="button"
             style="margin-top:12px; width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
-      Add liquidity
+      Додати ліквідність
     </button>
 
     <div style="margin-top:8px; font-size:12px; opacity:0.75;">
-      If the pool does not exist, the first LP sets the initial price.
+      Якщо пул ще не створений, перший LP задає стартову ціну.
     </div>
   </div>
 
@@ -666,6 +697,13 @@ host.innerHTML = `
     </div>
   </div>
 `;
+
+  const lpHost = getLiquidityHost();
+  const lpCard = host.querySelector('#lpCard');
+  if (lpHost && lpCard) {
+    lpHost.innerHTML = '';
+    lpHost.appendChild(lpCard);
+  }
 
 setTimeout(() => { try { refreshBuyBonusBox?.(); } catch (_) {} }, 0);
 
@@ -904,19 +942,19 @@ function getLpDeadlineSeconds() {
 async function addLiquidity() {
   const ws = window.walletState;
   if (!ws?.signer || !ws?.address) {
-    showNotification?.('Connect wallet first', 'error');
+    showNotification?.('Підключіть гаманець', 'error');
     return;
   }
 
   try {
     requireArbitrumOrThrow(ws);
   } catch (e) {
-    showNotification?.(e?.message || 'Wrong network. Please switch to Arbitrum', 'error');
+    showNotification?.(e?.message || 'Неправильна мережа. Перемкніть на Arbitrum', 'error');
     return;
   }
 
   if (!UNISWAP_V2_ROUTER_ADDRESS) {
-    showNotification?.('Uniswap V2 router is not configured', 'error');
+    showNotification?.('Не налаштовано Uniswap V2 router', 'error');
     return;
   }
 
@@ -926,12 +964,12 @@ async function addLiquidity() {
     arubAmountBN = parseTokenAmount(el('lpArubAmount')?.value ?? '', DECIMALS_ARUB);
     usdtAmountBN = parseTokenAmount(el('lpUsdtAmount')?.value ?? '', DECIMALS_USDT);
   } catch (e) {
-    showNotification?.(e?.message || 'Invalid amount', 'error');
+    showNotification?.(e?.message || 'Невірна сума', 'error');
     return;
   }
 
   if (arubAmountBN.isZero?.() === true || usdtAmountBN.isZero?.() === true) {
-    showNotification?.('Enter amounts greater than 0', 'error');
+    showNotification?.('Вкажіть суми більше 0', 'error');
     return;
   }
 
@@ -951,18 +989,18 @@ async function addLiquidity() {
     ]);
 
     if (allowArub.lt(arubAmountBN)) {
-      showNotification?.('Approving ARUB...', 'success');
+      showNotification?.('Підтвердження ARUB...', 'success');
       const txA = await arub.approve(UNISWAP_V2_ROUTER_ADDRESS, arubAmountBN);
       await txA.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
     }
 
     if (allowUsdt.lt(usdtAmountBN)) {
-      showNotification?.('Approving USDT...', 'success');
+      showNotification?.('Підтвердження USDT...', 'success');
       const txU = await usdt.approve(UNISWAP_V2_ROUTER_ADDRESS, usdtAmountBN);
       await txU.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
     }
 
-    showNotification?.('Adding liquidity...', 'success');
+    showNotification?.('Додаємо ліквідність...', 'success');
     const tx = await router.addLiquidity(
       ARUB_TOKEN_ADDRESS,
       USDT_ADDRESS,
@@ -975,14 +1013,14 @@ async function addLiquidity() {
     );
 
     await tx.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
-    showNotification?.('Liquidity added', 'success');
+    showNotification?.('Ліквідність додано', 'success');
 
     try { await refreshBalances?.(); } catch (_) {}
     return tx;
   } catch (e) {
     console.error('[LP] addLiquidity error:', e);
     if (isUserRejectedTx(e)) {
-      showNotification?.('Transaction rejected in wallet', 'error');
+      showNotification?.('Транзакцію відхилено в гаманці', 'error');
       return;
     }
     showNotification?.(pickEthersMessage(e), 'error');
