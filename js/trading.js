@@ -405,7 +405,8 @@ function setControlsEnabled(enabled) {
     'maxSellBtn',
     'buyAmount',
     'sellAmount',
-    'lpAddBtn',
+    'lpAddArubBtn',
+    'lpAddUsdtBtn',
     'lpArubAmount',
     'lpUsdtAmount',
     'lpMaxArubBtn',
@@ -518,8 +519,8 @@ function renderTradingUI() {
 host.innerHTML = `
   <div id="lpCard" class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-      <h3 style="margin:0;">Додати ліквідність (Uniswap V2)</h3>
-      <div style="font-size:12px; opacity:0.7;">ARUB / USDT</div>
+      <h3 style="margin:0;">Пул ліквідності</h3>
+      <div style="font-size:12px; opacity:0.7;">Uniswap V2 · ARUB / USDT</div>
     </div>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
@@ -554,6 +555,17 @@ host.innerHTML = `
       </div>
     </div>
 
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+      <button id="lpAddArubBtn" type="button"
+              style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+        Додати ліквідність (ARUB)
+      </button>
+      <button id="lpAddUsdtBtn" type="button"
+              style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+        Додати ліквідність (USDT)
+      </button>
+    </div>
+
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
       <div>
         <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сліппедж %</div>
@@ -568,11 +580,6 @@ host.innerHTML = `
                       background: rgba(0,0,0,0.25); color:#fff;">
       </div>
     </div>
-
-    <button id="lpAddBtn" type="button"
-            style="margin-top:12px; width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
-      Додати ліквідність
-    </button>
 
     <div style="margin-top:8px; font-size:12px; opacity:0.75;">
       Якщо пул ще не створений, перший LP задає стартову ціну.
@@ -698,11 +705,24 @@ host.innerHTML = `
   </div>
 `;
 
-  const lpHost = getLiquidityHost();
+  let lpHost = getLiquidityHost();
+  if (!lpHost && host.parentElement) {
+    lpHost = document.createElement('div');
+    lpHost.id = 'liquidityInterface';
+    lpHost.className = host.className || 'page-card';
+    host.parentElement.insertBefore(lpHost, host);
+  }
+
+  if (lpHost && host.parentElement) {
+    if (lpHost.parentElement !== host.parentElement || lpHost.nextElementSibling !== host) {
+      host.parentElement.insertBefore(lpHost, host);
+    }
+  }
+
   const lpCard = host.querySelector('#lpCard');
   if (lpHost && lpCard) {
-    lpHost.innerHTML = '';
-    lpHost.appendChild(lpCard);
+    lpHost.innerHTML = lpCard.innerHTML;
+    lpCard.remove();
   }
 
 setTimeout(() => { try { refreshBuyBonusBox?.(); } catch (_) {} }, 0);
@@ -1470,17 +1490,18 @@ function bindUiOncePerRender() {
     };
   }
 
-  const lpAddBtn = el('lpAddBtn');
-  if (lpAddBtn) {
-    lpAddBtn.onclick = async () => {
+  ['lpAddArubBtn', 'lpAddUsdtBtn'].forEach((id) => {
+    const btn = el(id);
+    if (!btn) return;
+    btn.onclick = async () => {
       try {
         await addLiquidity();
       } catch (e) {
         console.error('[UI] add liquidity error:', e);
-        showNotification?.(e?.message || 'Add liquidity failed', 'error');
+        showNotification?.(e?.message || 'Не вдалося додати ліквідність', 'error');
       }
     };
-  }
+  });
 
   const lpMaxArubBtn = el('lpMaxArubBtn');
   if (lpMaxArubBtn) {
