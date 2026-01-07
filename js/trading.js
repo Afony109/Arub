@@ -1428,7 +1428,7 @@ export async function setMaxSell() {
     
     try { await refreshLockPanel(); } catch (_) {}
 
-    // Notify user if they have ARUB tokens but none are redeemable (likely purchased elsewhere)
+    // Notify user if they have ARUB tokens but none are redeemable via this presale contract
     if (redeemable.isZero() && !bal.isZero()) {
       showNotification?.(
         'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
