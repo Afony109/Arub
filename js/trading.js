@@ -97,6 +97,8 @@ const user = {
 // Cached redeemable balance (for consistent UI/max sell)
 let redeemableCached = null;
 let redeemableFor = null;
+let sellFreeAllowedCached = null;
+let sellFreeAllowedFor = null;
 
 const PRESALE_ABI_MIN = [
   'function buyWithUSDT(uint256 amount, bool withBonus) external',
@@ -765,6 +767,14 @@ async function refreshBalances() {
 
     redeemableCached = redeemable;
     redeemableFor = user.address;
+    const allowed = redeemable.lt(arubBal) ? redeemable : arubBal;
+    sellFreeAllowedCached = allowed;
+    sellFreeAllowedFor = user.address;
+
+    const freeEl = el('sellFreeAllowed');
+    if (freeEl) {
+      freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
+    }
 
     const canSell = !redeemable.isZero?.() && !redeemable.lte?.(0);
     setDisabled('sellBtn', !canSell);
@@ -1111,18 +1121,32 @@ async function refreshLockPanel() {
 
       if (freeEl) {
         try {
-          let redeemable = null;
-          if (redeemableCached && redeemableFor === user.address) {
-            redeemable = redeemableCached;
+          let allowed = null;
+
+          if (sellFreeAllowedCached && sellFreeAllowedFor === user.address) {
+            allowed = sellFreeAllowedCached;
           } else {
             const presaleRO = await getReadOnlyPresale();
             if (!presaleRO) throw new Error('Read-only presale not ready');
-            redeemable = await presaleRO.redeemableBalance(user.address);
+
+            const [redeemable, bal] = await Promise.all([
+              presaleRO.redeemableBalance(user.address),
+              tokenRO?.balanceOf?.(user.address),
+            ]);
+
             redeemableCached = redeemable;
             redeemableFor = user.address;
+            if (bal && redeemable?.lt) {
+              allowed = redeemable.lt(bal) ? redeemable : bal;
+            } else {
+              allowed = redeemable;
+            }
+
+            sellFreeAllowedCached = allowed;
+            sellFreeAllowedFor = user.address;
           }
 
-          freeEl.textContent = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
+          freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
         } catch (_) {
           freeEl.textContent = '—';
         }
@@ -1260,6 +1284,10 @@ async function applyWalletState(reason = 'unknown') {
 
     tokenRW = null;
     usdtRW = null;
+    redeemableCached = null;
+    redeemableFor = null;
+    sellFreeAllowedCached = null;
+    sellFreeAllowedFor = null;
 
     __tradingUiRendered = false;
 
@@ -1268,10 +1296,18 @@ async function applyWalletState(reason = 'unknown') {
     return;
   }
 
+  const prevAddress = user.address;
   user.address = ws.address;
   user.provider = ws.provider || null;
   user.signer = ws.signer || null;
   user.chainId = ws.chainId ?? null;
+
+  if (prevAddress && prevAddress !== user.address) {
+    redeemableCached = null;
+    redeemableFor = null;
+    sellFreeAllowedCached = null;
+    sellFreeAllowedFor = null;
+  }
 
   if (!__tradingUiRendered) {
     renderTradingUI();
@@ -1372,9 +1408,13 @@ export async function setMaxSell() {
     redeemableCached = redeemable;
     redeemableFor = user.address;
 
+    const allowed = redeemable.lt(bal) ? redeemable : bal;
+    sellFreeAllowedCached = allowed;
+    sellFreeAllowedFor = user.address;
+
     const freeEl = el('sellFreeAllowed');
     if (freeEl) {
-      freeEl.textContent = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
+      freeEl.textContent = formatTokenAmount(allowed, DECIMALS_ARUB, 6);
     }
     try { await refreshLockPanel(); } catch (_) {}
 
@@ -1385,9 +1425,9 @@ export async function setMaxSell() {
       );
     }
 
-    const maxSell = redeemable.lt(bal) ? redeemable : bal;
+    const maxSell = allowed;
 
-    const v = ethers.utils.formatUnits(maxSell, DECIMALS_ARUB);
+    const v = formatTokenAmount(maxSell, DECIMALS_ARUB, 6);
     const inp = el('sellAmount');
     if (inp) inp.value = v;
   } catch (e) {
