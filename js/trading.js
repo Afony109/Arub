@@ -557,11 +557,11 @@ host.innerHTML = `
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
       <button id="lpAddArubBtn" type="button"
-              style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+              style="width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer; font-size:14px;">
         Додати ліквідність (ARUB)
       </button>
       <button id="lpAddUsdtBtn" type="button"
-              style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+              style="width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer; font-size:14px;">
         Додати ліквідність (USDT)
       </button>
     </div>
@@ -723,6 +723,9 @@ host.innerHTML = `
   if (lpHost && lpCard) {
     lpHost.innerHTML = lpCard.innerHTML;
     lpCard.remove();
+  }
+  if (lpHost) {
+    lpHost.style.marginBottom = '16px';
   }
 
 setTimeout(() => { try { refreshBuyBonusBox?.(); } catch (_) {} }, 0);
