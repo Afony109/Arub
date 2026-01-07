@@ -1405,6 +1405,7 @@ export async function setMaxSell() {
     const presaleRO = await getReadOnlyPresale();
 
     // Fetch both redeemableBalance and total balance in parallel for efficiency
+    // Note: bal (total balance) is needed for the informational notification below
     const [redeemable, bal] = await Promise.all([
       presaleRO.redeemableBalance(user.address),
       tokenRO.balanceOf(user.address)
@@ -1427,8 +1428,7 @@ export async function setMaxSell() {
     
     try { await refreshLockPanel(); } catch (_) {}
 
-    // Informational check: notify if user has ARUB but none is redeemable through this presale
-    // This shows a notification to inform the user why they can't sell
+    // Notify user if they have ARUB tokens but none are redeemable (likely purchased elsewhere)
     if (redeemable.isZero() && !bal.isZero()) {
       showNotification?.(
         'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
