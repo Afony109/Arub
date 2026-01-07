@@ -1129,10 +1129,8 @@ async function refreshLockPanel() {
             const presaleRO = await getReadOnlyPresale();
             if (!presaleRO) throw new Error('Read-only presale not ready');
 
-            const [redeemable, bal] = await Promise.all([
-              presaleRO.redeemableBalance(user.address),
-              tokenRO?.balanceOf?.(user.address),
-            ]);
+            // Only fetch redeemableBalance (tokens bought through presale)
+            const redeemable = await presaleRO.redeemableBalance(user.address);
 
             redeemableCached = redeemable;
             redeemableFor = user.address;
@@ -1430,7 +1428,7 @@ export async function setMaxSell() {
 
     const presaleRO = await getReadOnlyPresale();
 
-    const bal = await tokenRO.balanceOf(user.address);
+    // Only fetch redeemableBalance (tokens bought through presale), not wallet balance
     const redeemable = await presaleRO.redeemableBalance(user.address);
     redeemableCached = redeemable;
     redeemableFor = user.address;
@@ -1443,13 +1441,6 @@ export async function setMaxSell() {
       freeEl.dataset.allowed = freeEl.textContent;
     }
     try { await refreshLockPanel(); } catch (_) {}
-
-    if (redeemable.isZero() && !bal.isZero()) {
-      showNotification?.(
-        'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
-        'info'
-      );
-    }
 
     const maxSell = allowed;
 
