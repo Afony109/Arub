@@ -1418,6 +1418,15 @@ export async function setMaxSell() {
 
     const presaleRO = await getReadOnlyPresale();
 
+    const freeEl = el('sellFreeAllowed');
+    const freeText = freeEl?.textContent?.trim() || '';
+    const freeNum = Number(freeText.replace(',', '.'));
+    if (Number.isFinite(freeNum) && freeNum >= 0) {
+      const inp = el('sellAmount');
+      if (inp) inp.value = freeText.replace(',', '.');
+      return;
+    }
+
     const bal = await tokenRO.balanceOf(user.address);
     const redeemable = await presaleRO.redeemableBalance(user.address);
     redeemableCached = redeemable;
