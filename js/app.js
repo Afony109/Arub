@@ -540,6 +540,17 @@ const ARUB_DECIMALS = 6;
 
 // 2025-12-15 16:30:03 UTC (ваш деплой)
 const PRESALE_DEPLOY_UTC_MS = Date.parse('2025-12-15T16:30:03Z');
+const PRESALE_STATS_CACHE = new Map();
+const PRESALE_STATS_CACHE_EPS = 1e-6;
+
+function presaleCacheKey(address) {
+  return String(address || '').toLowerCase();
+}
+
+function samePaidUsdt(a, b) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  return Math.abs(a - b) <= PRESALE_STATS_CACHE_EPS;
+}
 
 async function loadPresaleStats(user, provider) {
   const c = new ethers.Contract(CONFIG.PRESALE_ADDRESS, PRESALE_ABI_MIN, provider);
@@ -690,29 +701,57 @@ async function loadPresaleStatsFromEvents(user, provider) {
 async function refreshPresaleUI(address) {
   const provider = await getReadOnlyProviderAsync();
 
-  // Fast path: use direct contract reads first; fall back only if fast reads fail.
   let presale = null;
-  let usedScan = false;
+  let usedEvents = false;
   const loadingNote = document.getElementById('presaleLoadingNote');
   if (loadingNote) loadingNote.style.display = 'none';
+
+  let fast = null;
   try {
-    presale = await loadPresaleStats(address, provider);
+    fast = await loadPresaleStats(address, provider);
   } catch (_) {}
 
-  const hasFast =
-    presale &&
-    Number.isFinite(presale.totalARUB) &&
-    Number.isFinite(presale.paidUSDT) &&
-    Number.isFinite(presale.bonusARUB);
+  const fastPaid = fast?.paidUSDT;
+  const fastPaidOk = Number.isFinite(fastPaid);
+  const hasPaid = fastPaidOk && fastPaid > 0;
 
-  if (!hasFast) {
-    usedScan = true;
-    if (loadingNote) loadingNote.style.display = '';
-    presale = await loadPresaleStatsFromEvents(address, provider);
+  const key = presaleCacheKey(address);
+  const cached = PRESALE_STATS_CACHE.get(key);
+  const canUseCache =
+    cached &&
+    Number.isFinite(cached.paidUSDT) &&
+    (!fastPaidOk || samePaidUsdt(cached.paidUSDT, fastPaid));
+
+  if (hasPaid || !fastPaidOk) {
+    if (canUseCache) {
+      presale = cached;
+      usedEvents = true;
+    } else {
+      if (loadingNote) loadingNote.style.display = '';
+      try {
+        presale = await loadPresaleStatsFromEvents(address, provider);
+        if (presale) {
+          PRESALE_STATS_CACHE.set(key, presale);
+          usedEvents = true;
+        }
+      } catch (_) {
+        if (cached) {
+          presale = cached;
+          usedEvents = true;
+        }
+      }
+    }
+  }
+
+  if (!presale) {
+    presale = fast;
   }
 
   if (!presale) {
     presale = { paidUSDT: 0, totalARUB: 0, principalARUB: 0, bonusARUB: 0, avgPrice: null };
+  }
+  if (!usedEvents) {
+    presale.avgPrice = null;
   }
 
   const currentPrice = await loadCurrentArubPrice(provider);
