@@ -750,6 +750,7 @@ function ensurePresaleUI() {
 // -----------------------------
 async function refreshBalances() {
   try {
+    console.log('[TRADING] refreshBalances start', { address: user.address });
     if (!user.address || !tokenRO || !usdtRO) return;
 
     const presaleRO = await getReadOnlyPresale();
@@ -1112,6 +1113,7 @@ async function refreshLockPanel() {
   const left = el('sellLockLeft');
 
   if (hint && left) {
+    console.log('[TRADING] refreshLockPanel hint update', { address: user.address });
     const now = Math.floor(Date.now() / 1000);
     const unlockTime = Number(info.unlockTime || 0);
     const freeEl = el('sellFreeAllowed');
@@ -1411,6 +1413,7 @@ export async function setMaxBuy() {
 
 export async function setMaxSell() {
   try {
+    console.log('[TRADING] setMaxSell clicked', { address: user.address });
     if (!user.address || !tokenRO) throw new Error('Wallet not connected');
 
     const presaleRO = await getReadOnlyPresale();
