@@ -1223,6 +1223,22 @@ function bindUiOncePerRender() {
 
   const maxSellBtn = el('maxSellBtn');
   if (maxSellBtn) {
+    // Hard override: if "free ARUB" is shown, force max to that value.
+    maxSellBtn.addEventListener(
+      'click',
+      (e) => {
+        const freeText = el('sellFreeAllowed')?.textContent?.trim() || '';
+        const freeNum = Number(freeText.replace(',', '.'));
+        if (Number.isFinite(freeNum) && freeNum >= 0) {
+          const inp = el('sellAmount');
+          if (inp) inp.value = freeText.replace(',', '.');
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      },
+      true
+    );
+
     maxSellBtn.onclick = async () => {
       try {
         await setMaxSell();
