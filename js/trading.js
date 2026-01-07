@@ -768,7 +768,7 @@ async function refreshBalances() {
 
     redeemableCached = redeemable;
     redeemableFor = user.address;
-    const allowed = redeemable.lt(arubBal) ? redeemable : arubBal;
+    const allowed = redeemable;
     sellFreeAllowedCached = allowed;
     sellFreeAllowedFor = user.address;
     console.log('[TRADING] sell allowed (balances)', {
@@ -1143,11 +1143,7 @@ async function refreshLockPanel() {
 
             redeemableCached = redeemable;
             redeemableFor = user.address;
-            if (bal && redeemable?.lt) {
-              allowed = redeemable.lt(bal) ? redeemable : bal;
-            } else {
-              allowed = redeemable;
-            }
+            allowed = redeemable;
 
             sellFreeAllowedCached = allowed;
             sellFreeAllowedFor = user.address;
@@ -1431,7 +1427,7 @@ export async function setMaxSell() {
     redeemableCached = redeemable;
     redeemableFor = user.address;
 
-    const allowed = redeemable.lt(bal) ? redeemable : bal;
+    const allowed = redeemable;
     sellFreeAllowedCached = allowed;
     sellFreeAllowedFor = user.address;
     console.log('[TRADING] sell allowed (max)', {
