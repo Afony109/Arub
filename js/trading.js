@@ -1427,7 +1427,8 @@ export async function setMaxSell() {
     
     try { await refreshLockPanel(); } catch (_) {}
 
-    // Check if user has ARUB but none is redeemable (informational only)
+    // Informational check: notify if user has ARUB but none is redeemable through this presale
+    // This shows a notification to inform the user why they can't sell
     if (redeemable.isZero() && !bal.isZero()) {
       showNotification?.(
         'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
@@ -1440,6 +1441,7 @@ export async function setMaxSell() {
     const inp = el('sellAmount');
     if (inp) inp.value = v;
   } catch (e) {
+    // Refresh UI state if any error occurs (network, contract call, etc.)
     try { await refreshBalances?.(); } catch (_) {}
     try { await refreshLockPanel?.(); } catch (_) {}
     try { await refreshSellFee?.(); } catch (_) {}
