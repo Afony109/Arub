@@ -94,6 +94,10 @@ const user = {
   chainId: null,
 };
 
+// Cached redeemable balance (for consistent UI/max sell)
+let redeemableCached = null;
+let redeemableFor = null;
+
 const PRESALE_ABI_MIN = [
   'function buyWithUSDT(uint256 amount, bool withBonus) external',
   'function unlockDeposit() external',
@@ -377,6 +381,19 @@ function setControlsEnabled(enabled) {
       node.style.opacity = enabled ? '' : '0.75';
     }
   );
+}
+
+async function refreshUiAfterRpcError({
+  includeSellFee = true,
+  includeLockPanel = true,
+} = {}) {
+  try { await refreshBalances?.(); } catch (_) {}
+  if (includeLockPanel) {
+    try { await refreshLockPanel?.(); } catch (_) {}
+  }
+  if (includeSellFee) {
+    try { await refreshSellFee?.(); } catch (_) {}
+  }
 }
 
 // -----------------------------
@@ -746,6 +763,9 @@ async function refreshBalances() {
     ensurePresaleUI();
     setText('usdtBalance', formatTokenAmount(usdtBal, DECIMALS_USDT, 2));
 
+    redeemableCached = redeemable;
+    redeemableFor = user.address;
+
     const canSell = !redeemable.isZero?.() && !redeemable.lte?.(0);
     setDisabled('sellBtn', !canSell);
     setDisabled('maxSellBtn', !canSell);
@@ -799,6 +819,7 @@ async function refreshBuyBonusBox() {
     pctEl.textContent = '—';
     slotsEl.textContent = '—';
     if (noteEl) noteEl.style.display = 'none';
+    await refreshUiAfterRpcError();
     return;
   }
 
@@ -925,10 +946,15 @@ async function refreshSellFeeSchedule(currentFeeBps) {
     return null;
   };
 
-  let info = await tryGetNext(getPresaleAsSigner());
-  if (!info) {
-    const ro = await getReadOnlyPresale();
-    info = await tryGetNext(ro);
+  let info = null;
+  try {
+    info = await tryGetNext(getPresaleAsSigner());
+    if (!info) {
+      const ro = await getReadOnlyPresale();
+      info = await tryGetNext(ro);
+    }
+  } catch (_) {
+    await refreshUiAfterRpcError({ includeSellFee: false });
   }
 
   let secondsToNext = null;
@@ -1011,7 +1037,9 @@ async function refreshSellFee() {
     try {
       await refreshSellFeeSchedule(feeBps);
     } catch (_) {}
-  } catch (_) {}
+  } catch (_) {
+    await refreshUiAfterRpcError({ includeSellFee: false });
+  }
 }
 
 // -----------------------------
@@ -1083,10 +1111,17 @@ async function refreshLockPanel() {
 
       if (freeEl) {
         try {
-          const presaleRO = await getReadOnlyPresale();
-          if (!presaleRO) throw new Error('Read-only presale not ready');
+          let redeemable = null;
+          if (redeemableCached && redeemableFor === user.address) {
+            redeemable = redeemableCached;
+          } else {
+            const presaleRO = await getReadOnlyPresale();
+            if (!presaleRO) throw new Error('Read-only presale not ready');
+            redeemable = await presaleRO.redeemableBalance(user.address);
+            redeemableCached = redeemable;
+            redeemableFor = user.address;
+          }
 
-          const redeemable = await presaleRO.redeemableBalance(user.address);
           freeEl.textContent = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
         } catch (_) {
           freeEl.textContent = '—';
@@ -1312,33 +1347,55 @@ async function applyWalletState(reason = 'unknown') {
 // Actions
 // -----------------------------
 export async function setMaxBuy() {
-  if (!user.address || !usdtRO) throw new Error('Wallet not connected');
-  const bal = await usdtRO.balanceOf(user.address);
-  const v = ethers.utils.formatUnits(bal, DECIMALS_USDT);
-  const inp = el('buyAmount');
-  if (inp) inp.value = v;
+  try {
+    if (!user.address || !usdtRO) throw new Error('Wallet not connected');
+    const bal = await usdtRO.balanceOf(user.address);
+    const v = ethers.utils.formatUnits(bal, DECIMALS_USDT);
+    const inp = el('buyAmount');
+    if (inp) inp.value = v;
+  } catch (e) {
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await refreshLockPanel?.(); } catch (_) {}
+    try { await refreshSellFee?.(); } catch (_) {}
+    throw e;
+  }
 }
 
 export async function setMaxSell() {
-  if (!user.address || !tokenRO) throw new Error('Wallet not connected');
+  try {
+    if (!user.address || !tokenRO) throw new Error('Wallet not connected');
 
-  const presaleRO = await getReadOnlyPresale();
+    const presaleRO = await getReadOnlyPresale();
 
-  const bal = await tokenRO.balanceOf(user.address);
-  const redeemable = await presaleRO.redeemableBalance(user.address);
+    const bal = await tokenRO.balanceOf(user.address);
+    const redeemable = await presaleRO.redeemableBalance(user.address);
+    redeemableCached = redeemable;
+    redeemableFor = user.address;
 
-  if (redeemable.isZero() && !bal.isZero()) {
-    showNotification?.(
-      'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
-      'info'
-    );
+    const freeEl = el('sellFreeAllowed');
+    if (freeEl) {
+      freeEl.textContent = formatTokenAmount(redeemable, DECIMALS_ARUB, 6);
+    }
+    try { await refreshLockPanel(); } catch (_) {}
+
+    if (redeemable.isZero() && !bal.isZero()) {
+      showNotification?.(
+        'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
+        'info'
+      );
+    }
+
+    const maxSell = redeemable.lt(bal) ? redeemable : bal;
+
+    const v = ethers.utils.formatUnits(maxSell, DECIMALS_ARUB);
+    const inp = el('sellAmount');
+    if (inp) inp.value = v;
+  } catch (e) {
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await refreshLockPanel?.(); } catch (_) {}
+    try { await refreshSellFee?.(); } catch (_) {}
+    throw e;
   }
-
-  const maxSell = redeemable.lt(bal) ? redeemable : bal;
-
-  const v = ethers.utils.formatUnits(maxSell, DECIMALS_ARUB);
-  const inp = el('sellAmount');
-  if (inp) inp.value = v;
 }
 
 function parseRpcErrorBody(body) {
@@ -1476,6 +1533,7 @@ export async function buyTokens(usdtAmount, withBonus = false) {
 
     try { await refreshBalances?.(); } catch (_) {}
     try { await loadMyLockInfo?.(); } catch (_) {}
+    try { await refreshLockPanel?.(); } catch (_) {}
     try { await refreshBuyBonusBox?.(); } catch (_) {}
     try { await refreshSellFee?.(); } catch (_) {}
 
@@ -1487,10 +1545,16 @@ export async function buyTokens(usdtAmount, withBonus = false) {
 
     if (isUserRejectedTx(e)) {
       showNotification?.('Transaction rejected in wallet', 'error');
+      try { await refreshBalances?.(); } catch (_) {}
+      try { await refreshLockPanel?.(); } catch (_) {}
+      try { await refreshSellFee?.(); } catch (_) {}
       return;
     }
 
     showNotification?.(pickEthersMessage(e), 'error');
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await refreshLockPanel?.(); } catch (_) {}
+    try { await refreshSellFee?.(); } catch (_) {}
     return;
   }
 }
@@ -1585,6 +1649,7 @@ export async function sellTokens(arubAmount) {
 
     try { await refreshBalances?.(); } catch (_) {}
     try { await loadMyLockInfo?.(); } catch (_) {}
+    try { await refreshLockPanel?.(); } catch (_) {}
     try { await refreshSellFee?.(); } catch (_) {}
 
     console.log('[TRADING] redeem tx:', tx.hash);
@@ -1593,9 +1658,15 @@ export async function sellTokens(arubAmount) {
     console.error('[TRADING] sellTokens error:', e);
     if (isUserRejectedTx(e)) {
       showNotification?.('Transaction rejected in wallet', 'error');
+      try { await refreshBalances?.(); } catch (_) {}
+      try { await refreshLockPanel?.(); } catch (_) {}
+      try { await refreshSellFee?.(); } catch (_) {}
       return;
     }
     showNotification?.(pickEthersMessage(e), 'error');
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await refreshLockPanel?.(); } catch (_) {}
+    try { await refreshSellFee?.(); } catch (_) {}
     return;
   }
 }
@@ -1622,6 +1693,9 @@ export async function unlockDeposit() {
       await loadMyLockInfo?.();
     } catch (_) {}
     try {
+      await refreshLockPanel?.();
+    } catch (_) {}
+    try {
       await refreshSellFee?.();
     } catch (_) {}
 
@@ -1630,9 +1704,15 @@ export async function unlockDeposit() {
     console.error('[TRADING] unlockDeposit error:', e);
     if (isUserRejectedTx(e)) {
       showNotification?.('Transaction rejected in wallet', 'error');
+      try { await refreshBalances?.(); } catch (_) {}
+      try { await refreshLockPanel?.(); } catch (_) {}
+      try { await refreshSellFee?.(); } catch (_) {}
       return;
     }
     showNotification?.(pickEthersMessage(e), 'error');
+    try { await refreshBalances?.(); } catch (_) {}
+    try { await refreshLockPanel?.(); } catch (_) {}
+    try { await refreshSellFee?.(); } catch (_) {}
     return;
   }
 }
@@ -1668,6 +1748,7 @@ export async function loadMyLockInfo() {
       errorMessage: e?.error?.message,
       body: e?.error?.body,
     });
+    await refreshUiAfterRpcError({ includeLockPanel: false, includeSellFee: false });
     return null;
   }
 }
