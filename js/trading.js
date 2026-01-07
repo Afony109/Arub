@@ -1430,7 +1430,7 @@ export async function setMaxSell() {
 
     const presaleRO = await getReadOnlyPresale();
 
-    const bal = await tokenRO.balanceOf(user.address);
+    // Only fetch redeemableBalance (tokens bought through presale), not wallet balance
     const redeemable = await presaleRO.redeemableBalance(user.address);
     redeemableCached = redeemable;
     redeemableFor = user.address;
@@ -1444,9 +1444,10 @@ export async function setMaxSell() {
     }
     try { await refreshLockPanel(); } catch (_) {}
 
-    if (redeemable.isZero() && !bal.isZero()) {
+    // Inform user if redeemable is zero
+    if (redeemable.isZero()) {
       showNotification?.(
-        'На вашому гаманці є ARUB, але Presale зараз не дозволяє його викуп (redeemable = 0). Ймовірно, ці токени не були куплені через цей Presale.',
+        'Немає доступних токенів для продажу. Можливо, ви не купували ARUB через цей Presale, або всі токени заблоковані.',
         'info'
       );
     }
