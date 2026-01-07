@@ -535,6 +535,18 @@ function calcDiscount(avgPrice, currentPrice) {
   return (1 - avgPrice / currentPrice) * 100;
 }
 
+function normalizeAvgPrice(avgPrice, currentPrice) {
+  if (!Number.isFinite(avgPrice) || avgPrice <= 0) return null;
+  if (!Number.isFinite(currentPrice) || currentPrice <= 0) return avgPrice;
+
+  const inv = 1 / avgPrice;
+  const rel = Math.abs(avgPrice - currentPrice) / currentPrice;
+  const relInv = Math.abs(inv - currentPrice) / currentPrice;
+
+  if (Number.isFinite(relInv) && relInv < rel) return inv;
+  return avgPrice;
+}
+
 const USDT_DECIMALS = 6;
 const ARUB_DECIMALS = 6;
 
@@ -755,13 +767,14 @@ async function refreshPresaleUI(address) {
   }
 
   const currentPrice = await loadCurrentArubPrice(provider);
-  const discount = calcDiscount(presale.avgPrice, currentPrice);
+  const avgPrice = normalizeAvgPrice(presale.avgPrice, currentPrice);
+  const discount = calcDiscount(avgPrice, currentPrice);
   const bonusPct = presale.totalARUB > 0 ? (presale.bonusARUB / presale.totalARUB) * 100 : null;
 
   setText('presalePurchased', presale.totalARUB.toFixed(6));
   setText('presaleBonusAmount', presale.bonusARUB != null ? presale.bonusARUB.toFixed(6) : '—');
   setText('presalePaid', presale.paidUSDT.toFixed(2));
-  setText('presaleAvgPrice', presale.avgPrice ? presale.avgPrice.toFixed(6) : '—');
+  setText('presaleAvgPrice', avgPrice ? avgPrice.toFixed(6) : '—');
   setText('presaleBonusPct', bonusPct !== null ? bonusPct.toFixed(2) + '%' : '—');
   setText('presaleDiscount', discount !== null ? discount.toFixed(2) + '%' : '—');
 

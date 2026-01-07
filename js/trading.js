@@ -727,7 +727,7 @@ function ensurePresaleUI() {
   <div>Куплено на пресейлі: <span id="presalePurchased">—</span> ARUB</div>
   <div>У тому числі бонусом: <span id="presaleBonusAmount">—</span> ARUB</div>
   <div>Сплачено: <span id="presalePaid">—</span> USDT</div>
-  <div>Середня ціна купівлі: <span id="presaleAvgPrice">—</span> ARUB/USDT</div>
+  <div>Середня ціна купівлі: <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
   <div>Середній бонус: <span id="presaleBonusPct">—</span></div>
 
   <div id="presaleScanWrap" style="display:none; margin-top:10px;">
