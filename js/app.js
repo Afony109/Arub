@@ -554,6 +554,7 @@ const ARUB_DECIMALS = 6;
 const PRESALE_DEPLOY_UTC_MS = Date.parse('2025-12-15T16:30:03Z');
 const PRESALE_STATS_CACHE = new Map();
 const PRESALE_STATS_CACHE_EPS = 1e-6;
+const PRESALE_STATS_STORAGE_PREFIX = 'arub:presaleStats:v1';
 
 function presaleCacheKey(address) {
   return String(address || '').toLowerCase();
@@ -562,6 +563,48 @@ function presaleCacheKey(address) {
 function samePaidUsdt(a, b) {
   if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
   return Math.abs(a - b) <= PRESALE_STATS_CACHE_EPS;
+}
+
+function presaleStorageKey(address) {
+  const addr = presaleCacheKey(address);
+  const presale = presaleCacheKey(CONFIG?.PRESALE_ADDRESS);
+  return `${PRESALE_STATS_STORAGE_PREFIX}:${presale}:${addr}`;
+}
+
+function loadPresaleStatsFromStorage(address) {
+  try {
+    if (!address || !window?.localStorage) return null;
+    const raw = localStorage.getItem(presaleStorageKey(address));
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data) return null;
+
+    const paidUSDT = Number(data.paidUSDT);
+    const totalARUB = Number(data.totalARUB);
+    const principalARUB = Number(data.principalARUB);
+    const bonusARUB = Number(data.bonusARUB);
+    const avgPrice = Number(data.avgPrice);
+
+    if (!Number.isFinite(paidUSDT) || !Number.isFinite(totalARUB)) return null;
+    return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice };
+  } catch (_) {
+    return null;
+  }
+}
+
+function savePresaleStatsToStorage(address, stats) {
+  try {
+    if (!address || !window?.localStorage) return;
+    const payload = {
+      paidUSDT: stats?.paidUSDT ?? null,
+      totalARUB: stats?.totalARUB ?? null,
+      principalARUB: stats?.principalARUB ?? null,
+      bonusARUB: stats?.bonusARUB ?? null,
+      avgPrice: stats?.avgPrice ?? null,
+      cachedAt: Date.now(),
+    };
+    localStorage.setItem(presaleStorageKey(address), JSON.stringify(payload));
+  } catch (_) {}
 }
 
 async function loadPresaleStats(user, provider) {
@@ -578,7 +621,7 @@ async function loadPresaleStats(user, provider) {
   const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
   const totalARUB = principalARUB + bonusARUB;
 
-  const avgPrice = paidUSDT > 0 ? (principalARUB / paidUSDT) : null;
+  const avgPrice = totalARUB > 0 ? (paidUSDT / totalARUB) : null;
 
   return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice };
 }
@@ -702,7 +745,7 @@ async function loadPresaleStatsFromEvents(user, provider) {
     const totalARUB = Number(ethers.utils.formatUnits(arubTotalRaw, ARUB_DECIMALS));
     const bonusARUB = Number(ethers.utils.formatUnits(bonusRaw, ARUB_DECIMALS));
     const principalARUB = Math.max(0, totalARUB - bonusARUB);
-    const avgPrice = paidUSDT > 0 ? principalARUB / paidUSDT : null;
+    const avgPrice = totalARUB > 0 ? paidUSDT / totalARUB : null;
 
     return { paidUSDT, totalARUB, principalARUB, bonusARUB, avgPrice };
   } finally {
@@ -728,6 +771,10 @@ async function refreshPresaleUI(address) {
   const hasPaid = fastPaidOk && fastPaid > 0;
 
   const key = presaleCacheKey(address);
+  if (!PRESALE_STATS_CACHE.has(key)) {
+    const stored = loadPresaleStatsFromStorage(address);
+    if (stored) PRESALE_STATS_CACHE.set(key, stored);
+  }
   const cached = PRESALE_STATS_CACHE.get(key);
   const canUseCache =
     cached &&
@@ -744,6 +791,7 @@ async function refreshPresaleUI(address) {
         presale = await loadPresaleStatsFromEvents(address, provider);
         if (presale) {
           PRESALE_STATS_CACHE.set(key, presale);
+          savePresaleStatsToStorage(address, presale);
           usedEvents = true;
         }
       } catch (_) {
