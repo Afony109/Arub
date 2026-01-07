@@ -1129,10 +1129,8 @@ async function refreshLockPanel() {
             const presaleRO = await getReadOnlyPresale();
             if (!presaleRO) throw new Error('Read-only presale not ready');
 
-            const [redeemable, bal] = await Promise.all([
-              presaleRO.redeemableBalance(user.address),
-              tokenRO?.balanceOf?.(user.address),
-            ]);
+            // Only fetch redeemableBalance (tokens bought through presale)
+            const redeemable = await presaleRO.redeemableBalance(user.address);
 
             redeemableCached = redeemable;
             redeemableFor = user.address;
