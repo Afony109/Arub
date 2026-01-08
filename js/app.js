@@ -495,8 +495,11 @@ async function updateGlobalStats() {
       getTotalSupplyArub()
     ]);
 
-    const priceInfo =
-      (poolPriceInfo && Number.isFinite(poolPriceInfo.price)) ? poolPriceInfo : oraclePriceInfo;
+    const oracleOk = oraclePriceInfo && Number.isFinite(oraclePriceInfo.price);
+    const poolOk = poolPriceInfo && Number.isFinite(poolPriceInfo.price);
+    const priceInfo = oracleOk
+      ? oraclePriceInfo
+      : (poolOk ? { ...poolPriceInfo, isFallback: true } : null);
 
     const arubPrice = priceInfo?.price;
     const priceSource = getPriceSourceLabel(priceInfo);
@@ -513,6 +516,15 @@ async function updateGlobalStats() {
     const priceShort = priceOk ? arubPrice.toFixed(2) : '—';
     setTextLocal('arubPriceDisplay', priceOk ? `${priceShort} USDT` : '—');
     setTextLocal('usdRubRate', priceShort);
+
+    const dexPrice = poolOk ? poolPriceInfo.price : null;
+    const dexText = Number.isFinite(dexPrice)
+      ? `DEX (Uniswap V2): ${dexPrice.toFixed(6)}`
+      : 'DEX (Uniswap V2): ƒ?"';
+    setTextLocal('arubDexPrice', dexText);
+    if (!Number.isFinite(dexPrice)) {
+      setTextLocal('arubDexPrice', 'DEX (Uniswap V2): -');
+    }
 
     const supplyHuman = formatTokenAmount(totalSupply) + ' ARUB';
     const supplyUsd = priceOk ? `$${(Number(ethers.utils.formatUnits(totalSupply, 6)) * arubPrice).toFixed(2)}` : '—';
@@ -531,10 +543,13 @@ async function updateGlobalStats() {
     } catch (e) {
       console.warn('[APP] updateVaultStats failed:', e?.message || e);
     }
-    if (priceOk) {
+    const chartInfo = oracleOk
+      ? oraclePriceInfo
+      : (poolOk ? { ...poolPriceInfo, isFallback: true } : null);
+    if (chartInfo && Number.isFinite(chartInfo.price)) {
       try {
         window.dispatchEvent(new CustomEvent('oraclePriceUpdated', {
-          detail: { price: arubPrice, sourceLabel: priceSource }
+          detail: { price: chartInfo.price, sourceLabel: getPriceSourceLabel(chartInfo) }
         }));
       } catch (_) {}
     }
