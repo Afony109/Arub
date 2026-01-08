@@ -3,6 +3,7 @@
  *
  * Exports required by app.js:
  *   - initReadOnlyContracts()
+ *   - getArubPoolPrice()
  *   - getArubPrice()
  *   - getTotalSupplyArub()
  *
@@ -12,7 +13,13 @@
  *   - getReadOnlyProviderSync()
 */
 
-import { ERC20_ABI, ORACLE_ABI, PRESALE_READ_ABI } from './abis.js';
+import {
+  ERC20_ABI,
+  ORACLE_ABI,
+  PRESALE_READ_ABI,
+  UNISWAP_V2_FACTORY_ABI,
+  UNISWAP_V2_PAIR_ABI,
+} from './abis.js';
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
 
@@ -32,6 +39,11 @@ var roInitPromise = null;
 
 // cached oracle value (fallback)
 var lastGoodArubPriceInfo = null;
+var lastGoodPoolPriceInfo = null;
+
+// cached pair metadata (optional)
+var cachedPoolPairAddress = null;
+var cachedPoolPairTokens = null;
 
 // -----------------------------
 // Helpers
@@ -126,6 +138,48 @@ function uniq(arr) {
     out.push(s);
   }
   return out;
+}
+
+function isZeroAddress(addr) {
+  const s = String(addr || '').trim();
+  if (!s) return true;
+  return /^0x0{40}$/i.test(s);
+}
+
+async function resolvePoolPairAddress(provider) {
+  if (cachedPoolPairAddress) return cachedPoolPairAddress;
+
+  const direct = CONFIG?.UNISWAP_V2_PAIR_ADDRESS;
+  if (direct && !isZeroAddress(direct)) {
+    cachedPoolPairAddress = direct;
+    return direct;
+  }
+
+  const factoryAddr = CONFIG?.UNISWAP_V2_FACTORY_ADDRESS;
+  if (!factoryAddr || isZeroAddress(factoryAddr)) return null;
+
+  const factory = new ethers.Contract(factoryAddr, UNISWAP_V2_FACTORY_ABI, provider);
+  const pair = await callWithRetry(
+    () => factory.getPair(CONFIG.TOKEN_ADDRESS, CONFIG.USDT_ADDRESS),
+    2,
+    300
+  );
+
+  if (isZeroAddress(pair)) return null;
+  cachedPoolPairAddress = pair;
+  return pair;
+}
+
+async function resolvePoolPairTokens(pair) {
+  if (cachedPoolPairTokens) return cachedPoolPairTokens;
+
+  const [token0, token1] = await Promise.all([
+    pair.token0(),
+    pair.token1(),
+  ]);
+
+  cachedPoolPairTokens = { token0, token1 };
+  return cachedPoolPairTokens;
 }
 
 
@@ -461,6 +515,78 @@ export async function getReadOnlyPresale() {
 }
 
 // -----------------------------
+// Pool price (Uniswap V2)
+// Returns ARUB price in USDT
+// -----------------------------
+export async function getArubPoolPrice() {
+  try {
+    const provider = await getReadOnlyProviderAsync();
+    if (!provider) throw new Error('No read-only provider');
+
+    const pairAddress = await resolvePoolPairAddress(provider);
+    if (!pairAddress) throw new Error('Pool pair not found');
+
+    const pair = new ethers.Contract(pairAddress, UNISWAP_V2_PAIR_ABI, provider);
+    const [{ token0, token1 }, reserves] = await Promise.all([
+      resolvePoolPairTokens(pair),
+      callWithRetry(() => pair.getReserves(), 2, 300),
+    ]);
+
+    const t0 = String(token0 || '').toLowerCase();
+    const t1 = String(token1 || '').toLowerCase();
+    const arubAddr = String(CONFIG.TOKEN_ADDRESS || '').toLowerCase();
+    const usdtAddr = String(CONFIG.USDT_ADDRESS || '').toLowerCase();
+
+    if (!arubAddr || !usdtAddr) throw new Error('Token addresses missing');
+
+    const reserve0 = reserves?.[0];
+    const reserve1 = reserves?.[1];
+
+    let arubReserve;
+    let usdtReserve;
+    if (t0 === arubAddr && t1 === usdtAddr) {
+      arubReserve = reserve0;
+      usdtReserve = reserve1;
+    } else if (t0 === usdtAddr && t1 === arubAddr) {
+      arubReserve = reserve1;
+      usdtReserve = reserve0;
+    } else {
+      throw new Error('Pool tokens mismatch');
+    }
+
+    const arubDec = Number(CONFIG?.TOKEN_DECIMALS ?? 6);
+    const usdtDec = 6;
+
+    const arubRes = Number(ethers.utils.formatUnits(arubReserve, arubDec));
+    const usdtRes = Number(ethers.utils.formatUnits(usdtReserve, usdtDec));
+
+    if (!Number.isFinite(arubRes) || !Number.isFinite(usdtRes) || arubRes <= 0 || usdtRes <= 0) {
+      throw new Error('Pool reserves empty');
+    }
+
+    const price = usdtRes / arubRes;
+    const info = {
+      price,
+      source: 'pool',
+      pairAddress,
+      isFallback: false,
+      isStale: false,
+    };
+
+    if (Number.isFinite(price) && price > 0) {
+      lastGoodPoolPriceInfo = info;
+    }
+
+    return info;
+  } catch (e) {
+    if (lastGoodPoolPriceInfo) {
+      return { ...lastGoodPoolPriceInfo, isFallback: true };
+    }
+    throw e;
+  }
+}
+
+// -----------------------------
 // Required by app.js: getArubPrice()
 // Oracle: getRate() returns (rate, updatedAt)
 // We return rate as number (scaled by ORACLE_DECIMALS; default 6)
@@ -480,6 +606,7 @@ export async function getArubPrice() {
     const info = {
       price,
       updatedAt,
+      source: 'oracle',
       isFallback: false,
       isStale: false,
     };
@@ -491,7 +618,7 @@ export async function getArubPrice() {
     return info;
   } catch (e) {
     if (lastGoodArubPriceInfo) {
-      return { ...lastGoodArubPriceInfo, isFallback: true };
+      return { ...lastGoodArubPriceInfo, isFallback: true, source: 'oracle' };
     }
     throw e;
   }

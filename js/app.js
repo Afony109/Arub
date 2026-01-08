@@ -10,7 +10,13 @@ import { initWalletModule, getEthersProvider, getAvailableWallets, connectWallet
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { ERC20_ABI_MIN, VAULT_ABI } from './abis.js';
-import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
+import {
+  initReadOnlyContracts,
+  getReadOnlyProviderAsync,
+  getArubPrice,
+  getArubPoolPrice,
+  getTotalSupplyArub,
+} from './contracts.js';
 
 initWalletModule(); // важно: до любых renderWallets()
 
@@ -471,18 +477,29 @@ function setupWalletMenu() {
     try { updateWalletUI?.('disconnected'); } catch (_) {}
   });
 }
+
+function getPriceSourceLabel(info) {
+  if (info?.source === 'pool') return 'Пул ліквідності (Uniswap V2)';
+  if (info?.source === 'oracle') return info?.isFallback ? 'Резервний оракул' : 'Ончейн оракул';
+  if (info?.isFallback) return 'Резервні дані';
+  return '—';
+}
 // -----------------------------
 // Global stats
 // -----------------------------
 async function updateGlobalStats() {
   try {
-    const [arubPriceInfo, totalSupply] = await Promise.all([
-      getArubPrice(),
+    const [poolPriceInfo, oraclePriceInfo, totalSupply] = await Promise.all([
+      getArubPoolPrice().catch(() => null),
+      getArubPrice().catch(() => null),
       getTotalSupplyArub()
     ]);
 
-    const arubPrice = arubPriceInfo?.price;
-    const priceSource = arubPriceInfo?.isFallback ? 'Резервний оракул' : 'Ончейн оракул';
+    const priceInfo =
+      (poolPriceInfo && Number.isFinite(poolPriceInfo.price)) ? poolPriceInfo : oraclePriceInfo;
+
+    const arubPrice = priceInfo?.price;
+    const priceSource = getPriceSourceLabel(priceInfo);
 
     const setTextLocal = (id, val) => {
       const el = document.getElementById(id);
@@ -492,6 +509,10 @@ async function updateGlobalStats() {
     const priceOk = Number.isFinite(arubPrice);
     setTextLocal('arubPriceValue', priceOk ? arubPrice.toFixed(6) : '—');
     setTextLocal('arubPriceSource', priceOk ? `Джерело курсу: ${priceSource}` : 'Джерело курсу: —');
+
+    const priceShort = priceOk ? arubPrice.toFixed(2) : '—';
+    setTextLocal('arubPriceDisplay', priceOk ? `${priceShort} USDT` : '—');
+    setTextLocal('usdRubRate', priceShort);
 
     const supplyHuman = formatTokenAmount(totalSupply) + ' ARUB';
     const supplyUsd = priceOk ? `$${(Number(ethers.utils.formatUnits(totalSupply, 6)) * arubPrice).toFixed(2)}` : '—';
@@ -506,9 +527,16 @@ async function updateGlobalStats() {
 
     const loading = document.getElementById('dashLoadingText');
     try {
-      await updateVaultStats(arubPriceInfo, setTextLocal);
+      await updateVaultStats(priceInfo, setTextLocal);
     } catch (e) {
       console.warn('[APP] updateVaultStats failed:', e?.message || e);
+    }
+    if (priceOk) {
+      try {
+        window.dispatchEvent(new CustomEvent('oraclePriceUpdated', {
+          detail: { price: arubPrice, sourceLabel: priceSource }
+        }));
+      } catch (_) {}
     }
     if (loading && priceOk) {
       loading.textContent = 'Дані оновлено';
