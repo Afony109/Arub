@@ -19,7 +19,7 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { showNotification, formatTokenAmount } from './ui.js';
-import { ERC20_ABI, ERC20_ABI_MIN, UNISWAP_V2_ROUTER_ABI } from './abis.js';
+import { ERC20_ABI, ERC20_ABI_MIN } from './abis.js';
 import {
   initReadOnlyContracts,
   getReadOnlyProviderAsync,
@@ -42,8 +42,8 @@ const ARUB_TOKEN_ADDRESS =
   '0x161296CD7F742220f727e1B4Ccc02cAEc71Ed2C6';
 const USDT_ADDRESS =
   CONFIG?.USDT_ADDRESS || '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
-const UNISWAP_V2_ROUTER_ADDRESS =
-  CONFIG?.UNISWAP_V2_ROUTER_ADDRESS || '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24';
+const VAULT_ADDRESS = CONFIG?.VAULT_ADDRESS || '';
+const LP_TARGET_USDT = Number(CONFIG?.LP_TARGET_USDT ?? 50000);
 const MIN_LP_ARUB = '0.01';
 const MIN_LP_USDT = '10';
 
@@ -77,6 +77,8 @@ if (btn) {
 // -----------------------------
 let inited = false;
 let listenersBound = false;
+let lastVaultTotalsTs = 0;
+const VAULT_REFRESH_MIN_MS = 8000;
 
 // Read-only contracts
 let tokenRO = null;
@@ -382,6 +384,12 @@ function setText(id, v) {
   if (e) e.textContent = v;
 }
 
+function formatIntWithSpaces(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return Math.trunc(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
 function setDisabled(id, disabled) {
   const e = el(id);
   if (e) e.disabled = !!disabled;
@@ -500,7 +508,7 @@ function renderLocked() {
     lpHost.innerHTML = `
       <div style="text-align:center; padding:40px;">
         <div style="font-size:2.2em; margin-bottom:10px;">💧</div>
-        <p>Підключіть гаманець, щоб додати ліквідність.</p>
+        <p>Підключіть гаманець, щоб надіслати токени у Vault.</p>
       </div>
     `;
   }
@@ -521,13 +529,17 @@ function renderTradingUI() {
   const liquidityHtml = `
     <div id="lpCard" class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <h3 style="margin:0;">Пул ліквідності</h3>
-        <div style="font-size:12px; opacity:0.7;">Uniswap V2 · ARUB / USDT</div>
+        <h3 style="margin:0;">??? ??????????? (Vault)</h3>
+        <div style="font-size:12px; opacity:0.7;">Vault ? ARUB / USDT</div>
+      </div>
+
+      <div style="margin-top:6px; font-size:12px; opacity:0.75;">
+        ???? ?????? ?? ??????? DEX.
       </div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
         <div>
-          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сума ARUB</div>
+          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">???? ARUB</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="lpArubAmount" type="number" inputmode="decimal" placeholder="0.0"
                    style="flex:1; padding:12px; border-radius:12px;
@@ -536,13 +548,13 @@ function renderTradingUI() {
             <button id="lpMaxArubBtn" type="button"
                     style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
                            background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-              МАКС
+              ????
             </button>
           </div>
         </div>
 
         <div>
-          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сума USDT</div>
+          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">???? USDT</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="lpUsdtAmount" type="number" inputmode="decimal" placeholder="0.0"
                    style="flex:1; padding:12px; border-radius:12px;
@@ -551,43 +563,45 @@ function renderTradingUI() {
             <button id="lpMaxUsdtBtn" type="button"
                     style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
                            background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-              МАКС
+              ????
             </button>
           </div>
         </div>
       </div>
 
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
+        <div style="font-size:13px; opacity:0.85;">
+          ?????????? ARUB: <span id="lpVaultArubTotal">?</span>
+        </div>
+        <div style="font-size:13px; opacity:0.85;">
+          ?????????? USDT: <span id="lpVaultUsdtTotal">?</span>
+        </div>
+      </div>
+
+      <div style="margin-top:6px; font-size:12px; opacity:0.75;">
+        ????? ??????? DEX: <span id="lpVaultTargetUsdt">50 000 USDT</span>
+        (<span id="lpVaultUsdtProgress">0%</span>)
+      </div>
+      <div style="margin-top:6px; height:6px; background: rgba(255,255,255,0.12); border-radius:999px; overflow:hidden;">
+        <div id="lpVaultProgressBar" style="height:100%; width:0%; background: rgba(96,165,250,0.85);"></div>
+      </div>
+
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
         <button id="lpAddArubBtn" type="button"
                 style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
-          Додати ліквідність (ARUB)
+          ????????? ? Vault (ARUB)
         </button>
         <button id="lpAddUsdtBtn" type="button"
                 style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
-          Додати ліквідність (USDT)
+          ????????? ? Vault (USDT)
         </button>
       </div>
 
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
-        <div>
-          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сліппедж %</div>
-          <input id="lpSlippage" type="number" inputmode="decimal" value="0.5" min="0" step="0.1"
-                 style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
-                        background: rgba(0,0,0,0.25); color:#fff;">
-        </div>
-        <div>
-          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Дедлайн (хв)</div>
-          <input id="lpDeadline" type="number" inputmode="numeric" value="20" min="1" step="1"
-                 style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
-                        background: rgba(0,0,0,0.25); color:#fff;">
-        </div>
-      </div>
-
       <div style="margin-top:8px; font-size:12px; opacity:0.75;">
-        Мін. внесок: 0.01 ARUB і 10 USDT.
+        ???. ??????: ${MIN_LP_ARUB} ARUB / ${MIN_LP_USDT} USDT.
       </div>
       <div style="margin-top:6px; font-size:12px; opacity:0.75;">
-        Якщо пул ще не створений, перший LP задає стартову ціну.
+        ARUB ???? ?????? ??? ??????? DEX ?? ?????? ???????.
       </div>
     </div>
   `;
@@ -723,7 +737,9 @@ function renderTradingUI() {
     lpHost.innerHTML = liquidityHtml;
   }
 
-setTimeout(() => { try { refreshBuyBonusBox?.(); } catch (_) {} }, 0);
+  try { refreshVaultTotals?.(true); } catch (_) {}
+
+  setTimeout(() => { try { refreshBuyBonusBox?.(); } catch (_) {} }, 0);
 
 document.addEventListener('change', (e) => {
   if (e.target?.name === 'buyMode') {
@@ -810,6 +826,9 @@ async function initReadOnly() {
     try {
       await refreshBalances();
     } catch (_) {}
+    try {
+      await refreshVaultTotals(true);
+    } catch (_) {}
   })();
 }
 
@@ -881,8 +900,43 @@ function ensurePresaleUI() {
 // -----------------------------
 // Data refresh
 // -----------------------------
+async function refreshVaultTotals(force = false) {
+  try {
+    if (!VAULT_ADDRESS || !tokenRO || !usdtRO) return;
+    const now = Date.now();
+    if (!force && now - lastVaultTotalsTs < VAULT_REFRESH_MIN_MS) return;
+    lastVaultTotalsTs = now;
+
+    const [arubBal, usdtBal] = await Promise.all([
+      tokenRO.balanceOf(VAULT_ADDRESS),
+      usdtRO.balanceOf(VAULT_ADDRESS),
+    ]);
+
+    const arubText = formatTokenAmount(arubBal, DECIMALS_ARUB, 6);
+    const usdtText = formatTokenAmount(usdtBal, DECIMALS_USDT, 2);
+
+    setText('lpVaultArubTotal', `${arubText} ARUB`);
+    setText('lpVaultUsdtTotal', `${usdtText} USDT`);
+
+    const target = Number.isFinite(LP_TARGET_USDT) && LP_TARGET_USDT > 0 ? LP_TARGET_USDT : 0;
+    const usdtVal = Number(ethers.utils.formatUnits(usdtBal, DECIMALS_USDT));
+    const pct =
+      target > 0 && Number.isFinite(usdtVal) && usdtVal >= 0
+        ? Math.min(100, Math.floor((usdtVal / target) * 100))
+        : 0;
+
+    setText('lpVaultTargetUsdt', target > 0 ? `${formatIntWithSpaces(target)} USDT` : '—');
+    setText('lpVaultUsdtProgress', target > 0 ? `${pct}%` : '—');
+    const bar = el('lpVaultProgressBar');
+    if (bar) bar.style.width = target > 0 ? `${pct}%` : '0%';
+  } catch (e) {
+    console.warn('[TRADING] refreshVaultTotals error:', e);
+  }
+}
+
 async function refreshBalances() {
   try {
+    try { await refreshVaultTotals(); } catch (_) {}
     if (!user.address || !tokenRO || !usdtRO) return;
 
     const presaleRO = await getReadOnlyPresale();
@@ -957,95 +1011,67 @@ function getLpDeadlineSeconds() {
   return Math.floor(Date.now() / 1000) + Math.round(minutes * 60);
 }
 
-async function addLiquidity() {
+async function sendToVault(kind) {
   const ws = window.walletState;
   if (!ws?.signer || !ws?.address) {
-    showNotification?.('Підключіть гаманець', 'error');
+    showNotification?.('?????????? ????????', 'error');
     return;
   }
 
   try {
     requireArbitrumOrThrow(ws);
   } catch (e) {
-    showNotification?.(e?.message || 'Неправильна мережа. Перемкніть на Arbitrum', 'error');
+    showNotification?.(e?.message || '??????????? ??????. ?????????? ?? Arbitrum', 'error');
     return;
   }
 
-  if (!UNISWAP_V2_ROUTER_ADDRESS) {
-    showNotification?.('Не налаштовано Uniswap V2 router', 'error');
+  if (!VAULT_ADDRESS) {
+    showNotification?.('?? ??????????? ?????? Vault', 'error');
     return;
   }
 
-  let arubAmountBN;
-  let usdtAmountBN;
+  const isArub = kind === 'arub';
+  const inputId = isArub ? 'lpArubAmount' : 'lpUsdtAmount';
+  const symbol = isArub ? 'ARUB' : 'USDT';
+  const decimals = isArub ? DECIMALS_ARUB : DECIMALS_USDT;
+  const minValue = isArub ? MIN_LP_ARUB : MIN_LP_USDT;
+
+  let amountBN;
   try {
-    arubAmountBN = parseTokenAmount(el('lpArubAmount')?.value ?? '', DECIMALS_ARUB);
-    usdtAmountBN = parseTokenAmount(el('lpUsdtAmount')?.value ?? '', DECIMALS_USDT);
+    amountBN = parseTokenAmount(el(inputId)?.value ?? '', decimals);
   } catch (e) {
-    showNotification?.(e?.message || 'Невірна сума', 'error');
+    showNotification?.(e?.message || '??????? ????', 'error');
     return;
   }
 
-  if (arubAmountBN.isZero?.() === true || usdtAmountBN.isZero?.() === true) {
-    showNotification?.('Вкажіть суми більше 0', 'error');
+  if (amountBN.isZero?.() === true) {
+    showNotification?.('??????? ????, ?????? ?? 0', 'error');
     return;
   }
 
-  const minArubBN = parseTokenAmount(MIN_LP_ARUB, DECIMALS_ARUB);
-  const minUsdtBN = parseTokenAmount(MIN_LP_USDT, DECIMALS_USDT);
-  if (arubAmountBN.lt(minArubBN) || usdtAmountBN.lt(minUsdtBN)) {
-    showNotification?.(`Мін. внесок: ${MIN_LP_ARUB} ARUB і ${MIN_LP_USDT} USDT`, 'error');
+  const minBN = parseTokenAmount(minValue, decimals);
+  if (amountBN.lt(minBN)) {
+    showNotification?.(`???. ??????: ${minValue} ${symbol}`, 'error');
     return;
   }
 
-  const bps = getLpSlippageBps();
-  const amountAMin = arubAmountBN.mul(10000 - bps).div(10000);
-  const amountBMin = usdtAmountBN.mul(10000 - bps).div(10000);
-  const deadline = getLpDeadlineSeconds();
-
-  const arub = new ethers.Contract(ARUB_TOKEN_ADDRESS, ERC20_ABI_MIN, ws.signer);
-  const usdt = new ethers.Contract(USDT_ADDRESS, ERC20_ABI_MIN, ws.signer);
-  const router = new ethers.Contract(UNISWAP_V2_ROUTER_ADDRESS, UNISWAP_V2_ROUTER_ABI, ws.signer);
+  const tokenAddr = isArub ? ARUB_TOKEN_ADDRESS : USDT_ADDRESS;
+  const token = new ethers.Contract(tokenAddr, ERC20_ABI_MIN, ws.signer);
 
   try {
-    const [allowArub, allowUsdt] = await Promise.all([
-      arub.allowance(ws.address, UNISWAP_V2_ROUTER_ADDRESS),
-      usdt.allowance(ws.address, UNISWAP_V2_ROUTER_ADDRESS),
-    ]);
-
-    if (allowArub.lt(arubAmountBN)) {
-      showNotification?.('Підтвердження ARUB...', 'success');
-      const txA = await arub.approve(UNISWAP_V2_ROUTER_ADDRESS, arubAmountBN);
-      await txA.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
-    }
-
-    if (allowUsdt.lt(usdtAmountBN)) {
-      showNotification?.('Підтвердження USDT...', 'success');
-      const txU = await usdt.approve(UNISWAP_V2_ROUTER_ADDRESS, usdtAmountBN);
-      await txU.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
-    }
-
-    showNotification?.('Додаємо ліквідність...', 'success');
-    const tx = await router.addLiquidity(
-      ARUB_TOKEN_ADDRESS,
-      USDT_ADDRESS,
-      arubAmountBN,
-      usdtAmountBN,
-      amountAMin,
-      amountBMin,
-      ws.address,
-      deadline
-    );
-
+    showNotification?.(`?????????? ???????? ${symbol}...`, 'success');
+    const tx = await token.transfer(VAULT_ADDRESS, amountBN);
+    showNotification?.('?????????? ???????????', 'success');
     await tx.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
-    showNotification?.('Ліквідність додано', 'success');
+    showNotification?.(`????????? ? Vault (${symbol})`, 'success');
 
     try { await refreshBalances?.(); } catch (_) {}
+    try { await refreshVaultTotals?.(true); } catch (_) {}
     return tx;
   } catch (e) {
-    console.error('[LP] addLiquidity error:', e);
+    console.error('[VAULT] transfer error:', e);
     if (isUserRejectedTx(e)) {
-      showNotification?.('Транзакцію відхилено в гаманці', 'error');
+      showNotification?.('?????????? ?????????. ????????? ?? ???.', 'error');
       return;
     }
     showNotification?.(pickEthersMessage(e), 'error');
@@ -1495,18 +1521,29 @@ function bindUiOncePerRender() {
     };
   }
 
-  ['lpAddArubBtn', 'lpAddUsdtBtn'].forEach((id) => {
-    const btn = el(id);
-    if (!btn) return;
-    btn.onclick = async () => {
+  const lpAddArubBtn = el('lpAddArubBtn');
+  if (lpAddArubBtn) {
+    lpAddArubBtn.onclick = async () => {
       try {
-        await addLiquidity();
+        await sendToVault('arub');
       } catch (e) {
-        console.error('[UI] add liquidity error:', e);
-        showNotification?.(e?.message || 'Не вдалося додати ліквідність', 'error');
+        console.error('[UI] sendToVault ARUB error:', e);
+        showNotification?.(e?.message || 'Не вдалося надіслати ARUB у Vault', 'error');
       }
     };
-  });
+  }
+
+  const lpAddUsdtBtn = el('lpAddUsdtBtn');
+  if (lpAddUsdtBtn) {
+    lpAddUsdtBtn.onclick = async () => {
+      try {
+        await sendToVault('usdt');
+      } catch (e) {
+        console.error('[UI] sendToVault USDT error:', e);
+        showNotification?.(e?.message || 'Не вдалося надіслати USDT у Vault', 'error');
+      }
+    };
+  }
 
   const lpMaxArubBtn = el('lpMaxArubBtn');
   if (lpMaxArubBtn) {
