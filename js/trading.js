@@ -516,76 +516,78 @@ function renderTradingUI() {
   const host = getTradingHost();
   if (!host) return;
 
-host.innerHTML = `
-  <div id="lpCard" class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-      <h3 style="margin:0;">Пул ліквідності</h3>
-      <div style="font-size:12px; opacity:0.7;">Uniswap V2 · ARUB / USDT</div>
-    </div>
+  const liquidityHtml = `
+    <div id="lpCard" class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <h3 style="margin:0;">Пул ліквідності</h3>
+        <div style="font-size:12px; opacity:0.7;">Uniswap V2 · ARUB / USDT</div>
+      </div>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
-      <div>
-        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сума ARUB</div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input id="lpArubAmount" type="number" inputmode="decimal" placeholder="0.0"
-                 style="flex:1; padding:12px; border-radius:12px;
-                        border:1px solid rgba(255,255,255,0.12);
-                        background: rgba(0,0,0,0.25); color:#fff;">
-          <button id="lpMaxArubBtn" type="button"
-                  style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
-                         background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-            МАКС
-          </button>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+        <div>
+          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сума ARUB</div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="lpArubAmount" type="number" inputmode="decimal" placeholder="0.0"
+                   style="flex:1; padding:12px; border-radius:12px;
+                          border:1px solid rgba(255,255,255,0.12);
+                          background: rgba(0,0,0,0.25); color:#fff;">
+            <button id="lpMaxArubBtn" type="button"
+                    style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
+                           background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
+              МАКС
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сума USDT</div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="lpUsdtAmount" type="number" inputmode="decimal" placeholder="0.0"
+                   style="flex:1; padding:12px; border-radius:12px;
+                          border:1px solid rgba(255,255,255,0.12);
+                          background: rgba(0,0,0,0.25); color:#fff;">
+            <button id="lpMaxUsdtBtn" type="button"
+                    style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
+                           background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
+              МАКС
+            </button>
+          </div>
         </div>
       </div>
 
-      <div>
-        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сума USDT</div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input id="lpUsdtAmount" type="number" inputmode="decimal" placeholder="0.0"
-                 style="flex:1; padding:12px; border-radius:12px;
-                        border:1px solid rgba(255,255,255,0.12);
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+        <button id="lpAddArubBtn" type="button"
+                style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+          Додати ліквідність (ARUB)
+        </button>
+        <button id="lpAddUsdtBtn" type="button"
+                style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+          Додати ліквідність (USDT)
+        </button>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
+        <div>
+          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сліппедж %</div>
+          <input id="lpSlippage" type="number" inputmode="decimal" value="0.5" min="0" step="0.1"
+                 style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
                         background: rgba(0,0,0,0.25); color:#fff;">
-          <button id="lpMaxUsdtBtn" type="button"
-                  style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
-                         background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-            МАКС
-          </button>
+        </div>
+        <div>
+          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Дедлайн (хв)</div>
+          <input id="lpDeadline" type="number" inputmode="numeric" value="20" min="1" step="1"
+                 style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
+                        background: rgba(0,0,0,0.25); color:#fff;">
         </div>
       </div>
-    </div>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
-      <button id="lpAddArubBtn" type="button"
-              style="width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer; font-size:14px;">
-        Додати ліквідність (ARUB)
-      </button>
-      <button id="lpAddUsdtBtn" type="button"
-              style="width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer; font-size:14px;">
-        Додати ліквідність (USDT)
-      </button>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
-      <div>
-        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Сліппедж %</div>
-        <input id="lpSlippage" type="number" inputmode="decimal" value="0.5" min="0" step="0.1"
-               style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
-                      background: rgba(0,0,0,0.25); color:#fff;">
-      </div>
-      <div>
-        <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">Дедлайн (хв)</div>
-        <input id="lpDeadline" type="number" inputmode="numeric" value="20" min="1" step="1"
-               style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
-                      background: rgba(0,0,0,0.25); color:#fff;">
+      <div style="margin-top:8px; font-size:12px; opacity:0.75;">
+        Якщо пул ще не створений, перший LP задає стартову ціну.
       </div>
     </div>
+  `;
 
-    <div style="margin-top:8px; font-size:12px; opacity:0.75;">
-      Якщо пул ще не створений, перший LP задає стартову ціну.
-    </div>
-  </div>
-
+  host.innerHTML = `
   <div class="trade-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
     <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
       <h3 style="margin:0 0 10px 0;">Купівля</h3>
@@ -712,20 +714,8 @@ host.innerHTML = `
     lpHost.className = host.className || 'page-card';
     host.parentElement.insertBefore(lpHost, host);
   }
-
-  if (lpHost && host.parentElement) {
-    if (lpHost.parentElement !== host.parentElement || lpHost.nextElementSibling !== host) {
-      host.parentElement.insertBefore(lpHost, host);
-    }
-  }
-
-  const lpCard = host.querySelector('#lpCard');
-  if (lpHost && lpCard) {
-    lpHost.innerHTML = lpCard.innerHTML;
-    lpCard.remove();
-  }
   if (lpHost) {
-    lpHost.style.marginBottom = '16px';
+    lpHost.innerHTML = liquidityHtml;
   }
 
 setTimeout(() => { try { refreshBuyBonusBox?.(); } catch (_) {} }, 0);
