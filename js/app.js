@@ -1011,7 +1011,12 @@ async function refreshTradingBalancesSafe(reason = 'unknown') {
       return;
     }
 
-    const provider = signer.provider;
+    let roProvider = null;
+    try {
+      roProvider = await getReadOnlyProviderAsync();
+    } catch (_) {}
+
+    let provider = roProvider || signer.provider;
     if (!provider) return;
 
     // минимальный ERC20 ABI
@@ -1020,19 +1025,32 @@ async function refreshTradingBalancesSafe(reason = 'unknown') {
       'function decimals() view returns (uint8)'
     ];
 
-    // USDT
-    if (usdtEl && CONFIG.USDT_ADDRESS) {
-      const usdt = new ethers.Contract(CONFIG.USDT_ADDRESS, ERC20, provider);
-      const [bal, dec] = await Promise.all([usdt.balanceOf(addr), usdt.decimals()]);
-     const usdtVal = Number(ethers.utils.formatUnits(bal, dec));
-     usdtEl.textContent = usdtVal.toFixed(2);
-    }
+    const fetchBalances = async (prov) => {
+      // USDT
+      if (usdtEl && CONFIG.USDT_ADDRESS) {
+        const usdt = new ethers.Contract(CONFIG.USDT_ADDRESS, ERC20, prov);
+        const [bal, dec] = await Promise.all([usdt.balanceOf(addr), usdt.decimals()]);
+        const usdtVal = Number(ethers.utils.formatUnits(bal, dec));
+        usdtEl.textContent = usdtVal.toFixed(2);
+      }
 
-    // ARUB (token)
-    if (arubEl && CONFIG.TOKEN_ADDRESS) {
-      const arub = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20, provider);
-      const [bal, dec] = await Promise.all([arub.balanceOf(addr), arub.decimals()]);
-      arubEl.textContent = ethers.utils.formatUnits(bal, dec);
+      // ARUB (token)
+      if (arubEl && CONFIG.TOKEN_ADDRESS) {
+        const arub = new ethers.Contract(CONFIG.TOKEN_ADDRESS, ERC20, prov);
+        const [bal, dec] = await Promise.all([arub.balanceOf(addr), arub.decimals()]);
+        arubEl.textContent = ethers.utils.formatUnits(bal, dec);
+      }
+    };
+
+    try {
+      await fetchBalances(provider);
+    } catch (e) {
+      const fallback = provider === signer.provider ? roProvider : signer.provider;
+      if (fallback && fallback !== provider) {
+        await fetchBalances(fallback);
+      } else {
+        throw e;
+      }
     }
 
     console.log('[UI] balances updated', { reason });

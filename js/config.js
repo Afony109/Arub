@@ -16,11 +16,12 @@ export const CONFIG = {
   // -----------------------------
  NETWORK: {
   // Switched primary read-only RPC to a more stable public endpoint
-  readOnlyRpcUrl: 'https://arbitrum.llamarpc.com',
+  readOnlyRpcUrl: 'https://rpc.ankr.com/arbitrum',
   walletRpcUrls: [
     'https://arb1.arbitrum.io/rpc',
+    'https://rpc.ankr.com/arbitrum',
     'https://arbitrum-one-rpc.publicnode.com',
-    'https://1rpc.io/arb',
+    'https://arbitrum.llamarpc.com',
     // Add your Alchemy key if available:
     // 'https://arb-mainnet.g.alchemy.com/v2/<key>',
   ],
