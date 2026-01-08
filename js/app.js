@@ -9,6 +9,7 @@ import { CONFIG } from './config.js';
 import { initWalletModule, getEthersProvider, getAvailableWallets, connectWallet, disconnectWallet } from './wallet.js';
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
+import { ERC20_ABI_MIN, VAULT_ABI } from './abis.js';
 import { initReadOnlyContracts, getReadOnlyProviderAsync, getArubPrice, getTotalSupplyArub } from './contracts.js';
 
 initWalletModule(); // важно: до любых renderWallets()
@@ -499,16 +500,110 @@ async function updateGlobalStats() {
     setTextLocal('arub-supply', supplyHuman);
     setTextLocal('arub-supply-usd', supplyUsd);
 
-    setTextLocal('dashHeroTvl', supplyUsd);
+    setTextLocal('dashHeroStakers', '—');
+    setTextLocal('dashHeroTvl', '—');
     setTextLocal('dashHeroTier', 'Arbitrum One');
 
     const loading = document.getElementById('dashLoadingText');
+    try {
+      await updateVaultStats(arubPriceInfo, setTextLocal);
+    } catch (e) {
+      console.warn('[APP] updateVaultStats failed:', e?.message || e);
+    }
     if (loading && priceOk) {
       loading.textContent = 'Дані оновлено';
     }
   } catch (e) {
     console.warn('[APP] updateGlobalStats failed:', e?.message || e);
   }
+}
+
+async function updateVaultStats(arubPriceInfo, setTextLocal) {
+  const vaultAddr = CONFIG?.VAULT_ADDRESS;
+  const arubAddr = CONFIG?.TOKEN_ADDRESS;
+  const usdtAddr = CONFIG?.USDT_ADDRESS;
+  if (!vaultAddr || !arubAddr || !usdtAddr) return;
+
+  const setTextSafe =
+    typeof setTextLocal === 'function'
+      ? setTextLocal
+      : (id, val) => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = val;
+        };
+
+  let provider = null;
+  try {
+    provider = await getReadOnlyProviderAsync();
+  } catch (_) {
+    return;
+  }
+  if (!provider) return;
+
+  const vault = new ethers.Contract(vaultAddr, VAULT_ABI, provider);
+  const arub = new ethers.Contract(arubAddr, ERC20_ABI_MIN, provider);
+  const usdt = new ethers.Contract(usdtAddr, ERC20_ABI_MIN, provider);
+
+  let sharesSupply;
+  let sharesDecimals;
+  let arubBal;
+  let arubDecimals;
+  let usdtBal;
+  let usdtDecimals;
+
+  try {
+    [
+      sharesSupply,
+      sharesDecimals,
+      arubBal,
+      arubDecimals,
+      usdtBal,
+      usdtDecimals,
+    ] = await Promise.all([
+      vault.totalSupply(),
+      vault.decimals().catch(() => CONFIG?.TOKEN_DECIMALS ?? 6),
+      arub.balanceOf(vaultAddr),
+      arub.decimals().catch(() => CONFIG?.TOKEN_DECIMALS ?? 6),
+      usdt.balanceOf(vaultAddr),
+      usdt.decimals().catch(() => 6),
+    ]);
+  } catch (_) {
+    return;
+  }
+
+  const sharesDec = Number(sharesDecimals);
+  const arubDec = Number(arubDecimals);
+  const usdtDec = Number(usdtDecimals);
+
+  const safeSharesDec = Number.isFinite(sharesDec) ? sharesDec : 6;
+  const safeArubDec = Number.isFinite(arubDec) ? arubDec : 6;
+  const safeUsdtDec = Number.isFinite(usdtDec) ? usdtDec : 6;
+
+  const sharesHuman = formatTokenAmount(sharesSupply, safeSharesDec, 6);
+  setTextSafe('dashHeroStakers', sharesHuman);
+
+  const arubHuman = formatTokenAmount(arubBal, safeArubDec, 6);
+  const usdtHuman = formatTokenAmount(usdtBal, safeUsdtDec, 2);
+
+  setTextSafe('arub-staked', `${arubHuman} ARUB`);
+  setTextSafe('usdt-staked', `${usdtHuman} USDT`);
+
+  const arubVal = Number(ethers.utils.formatUnits(arubBal, safeArubDec));
+  const usdtVal = Number(ethers.utils.formatUnits(usdtBal, safeUsdtDec));
+
+  const price = Number(arubPriceInfo?.price);
+  const priceOk = Number.isFinite(price) && price > 0;
+
+  if (priceOk) {
+    const arubUsd = arubVal * price;
+    const tvlUsd = arubUsd + usdtVal;
+    setTextSafe('arub-staked-usd', formatUSD(arubUsd));
+    setTextSafe('dashHeroTvl', formatUSD(tvlUsd));
+  } else {
+    setTextSafe('arub-staked-usd', '—');
+  }
+
+  setTextSafe('usdt-staked-usd', formatUSD(usdtVal));
 }
 
 // =======================
