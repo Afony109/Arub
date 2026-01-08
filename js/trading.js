@@ -44,6 +44,8 @@ const USDT_ADDRESS =
   CONFIG?.USDT_ADDRESS || '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
 const UNISWAP_V2_ROUTER_ADDRESS =
   CONFIG?.UNISWAP_V2_ROUTER_ADDRESS || '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24';
+const MIN_LP_ARUB = '0.01';
+const MIN_LP_USDT = '10';
 
 const TERMS_NOTICE = {
   ua: 'Натискаючи кнопку, ви підтверджуєте, що ознайомилися та погоджуєтеся з умовами і правилами смарт-контракту.',
@@ -557,11 +559,11 @@ function renderTradingUI() {
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
         <button id="lpAddArubBtn" type="button"
-                style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+                style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
           Додати ліквідність (ARUB)
         </button>
         <button id="lpAddUsdtBtn" type="button"
-                style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+                style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
           Додати ліквідність (USDT)
         </button>
       </div>
@@ -582,6 +584,9 @@ function renderTradingUI() {
       </div>
 
       <div style="margin-top:8px; font-size:12px; opacity:0.75;">
+        Мін. внесок: 0.01 ARUB і 10 USDT.
+      </div>
+      <div style="margin-top:6px; font-size:12px; opacity:0.75;">
         Якщо пул ще не створений, перший LP задає стартову ціну.
       </div>
     </div>
@@ -641,7 +646,7 @@ function renderTradingUI() {
       </div>
 
       <button id="buyBtn" type="button"
-              style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+              style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
         Купити ARUB
       </button>
 
@@ -676,7 +681,7 @@ function renderTradingUI() {
       </div>
 
       <button id="sellBtn" type="button"
-              style="width:100%; padding:12px; border-radius:12px; border:0; cursor:pointer;">
+              style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
         Продати ARUB
       </button>
 
@@ -983,6 +988,13 @@ async function addLiquidity() {
 
   if (arubAmountBN.isZero?.() === true || usdtAmountBN.isZero?.() === true) {
     showNotification?.('Вкажіть суми більше 0', 'error');
+    return;
+  }
+
+  const minArubBN = parseTokenAmount(MIN_LP_ARUB, DECIMALS_ARUB);
+  const minUsdtBN = parseTokenAmount(MIN_LP_USDT, DECIMALS_USDT);
+  if (arubAmountBN.lt(minArubBN) || usdtAmountBN.lt(minUsdtBN)) {
+    showNotification?.(`Мін. внесок: ${MIN_LP_ARUB} ARUB і ${MIN_LP_USDT} USDT`, 'error');
     return;
   }
 
