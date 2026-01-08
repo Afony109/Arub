@@ -526,20 +526,20 @@ function renderTradingUI() {
   const host = getTradingHost();
   if (!host) return;
 
-  const liquidityHtml = `
+      const liquidityHtml = `
     <div id="lpCard" class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <h3 style="margin:0;">??? ??????????? (Vault)</h3>
-        <div style="font-size:12px; opacity:0.7;">Vault ? ARUB / USDT</div>
+        <h3 style=\"margin:0;\">\u041f\u0443\u043b \u043b\u0456\u043a\u0432\u0456\u0434\u043d\u043e\u0441\u0442\u0456 (Vault)</h3>
+        <div style="font-size:12px; opacity:0.7;">Vault - ARUB / USDT</div>
       </div>
 
       <div style="margin-top:6px; font-size:12px; opacity:0.75;">
-        ???? ?????? ?? ??????? DEX.
+        \u0417\u0431\u0456\u0440 \u043a\u043e\u0448\u0442\u0456\u0432 \u0434\u043e \u0437\u0430\u043f\u0443\u0441\u043a\u0443 DEX.
       </div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
         <div>
-          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">???? ARUB</div>
+          <div style=\"font-size:13px; opacity:0.8; margin-bottom:6px;\">\u0421\u0443\u043c\u0430 ARUB</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="lpArubAmount" type="number" inputmode="decimal" placeholder="0.0"
                    style="flex:1; padding:12px; border-radius:12px;
@@ -548,13 +548,13 @@ function renderTradingUI() {
             <button id="lpMaxArubBtn" type="button"
                     style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
                            background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-              ????
+              \u041c\u0410\u041a\u0421
             </button>
           </div>
         </div>
 
         <div>
-          <div style="font-size:13px; opacity:0.8; margin-bottom:6px;">???? USDT</div>
+          <div style=\"font-size:13px; opacity:0.8; margin-bottom:6px;\">\u0421\u0443\u043c\u0430 USDT</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="lpUsdtAmount" type="number" inputmode="decimal" placeholder="0.0"
                    style="flex:1; padding:12px; border-radius:12px;
@@ -563,23 +563,19 @@ function renderTradingUI() {
             <button id="lpMaxUsdtBtn" type="button"
                     style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
                            background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-              ????
+              \u041c\u0410\u041a\u0421
             </button>
           </div>
         </div>
       </div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
-        <div style="font-size:13px; opacity:0.85;">
-          ?????????? ARUB: <span id="lpVaultArubTotal">?</span>
-        </div>
-        <div style="font-size:13px; opacity:0.85;">
-          ?????????? USDT: <span id="lpVaultUsdtTotal">?</span>
-        </div>
+        <div style=\"font-size:13px; opacity:0.85;\">\u041d\u0430\u043a\u043e\u043f\u0438\u0447\u0435\u043d\u043e ARUB: <span id=\"lpVaultArubTotal\">-</span></div>
+        <div style=\"font-size:13px; opacity:0.85;\">\u041d\u0430\u043a\u043e\u043f\u0438\u0447\u0435\u043d\u043e USDT: <span id=\"lpVaultUsdtTotal\">-</span></div>
       </div>
 
       <div style="margin-top:6px; font-size:12px; opacity:0.75;">
-        ????? ??????? DEX: <span id="lpVaultTargetUsdt">50 000 USDT</span>
+        \u041f\u043e\u0440\u0456\u0433 \u0437\u0430\u043f\u0443\u0441\u043a\u0443 DEX: <span id=\"lpVaultTargetUsdt\">50 000 USDT</span>
         (<span id="lpVaultUsdtProgress">0%</span>)
       </div>
       <div style="margin-top:6px; height:6px; background: rgba(255,255,255,0.12); border-radius:999px; overflow:hidden;">
@@ -589,19 +585,19 @@ function renderTradingUI() {
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
         <button id="lpAddArubBtn" type="button"
                 style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
-          ????????? ? Vault (ARUB)
+          \u041d\u0430\u0434\u0456\u0441\u043b\u0430\u0442\u0438 \u0443 Vault (ARUB)
         </button>
         <button id="lpAddUsdtBtn" type="button"
                 style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
-          ????????? ? Vault (USDT)
+          \u041d\u0430\u0434\u0456\u0441\u043b\u0430\u0442\u0438 \u0443 Vault (USDT)
         </button>
       </div>
 
       <div style="margin-top:8px; font-size:12px; opacity:0.75;">
-        ???. ??????: ${MIN_LP_ARUB} ARUB / ${MIN_LP_USDT} USDT.
+        \u041c\u0456\u043d. \u0432\u043d\u0435\u0441\u043e\u043a: ${{MIN_LP_ARUB}} ARUB / ${{MIN_LP_USDT}} USDT.
       </div>
       <div style="margin-top:6px; font-size:12px; opacity:0.75;">
-        ARUB ???? ?????? ??? ??????? DEX ?? ?????? ???????.
+        ARUB \u0431\u0443\u0434\u0435 \u0434\u043e\u0434\u0430\u043d\u043e \u043f\u0440\u0438 \u0437\u0430\u043f\u0443\u0441\u043a\u0443 DEX \u0437\u0430 \u043a\u0443\u0440\u0441\u043e\u043c \u043e\u0440\u0430\u043a\u0443\u043b\u0430.
       </div>
     </div>
   `;
@@ -1014,19 +1010,19 @@ function getLpDeadlineSeconds() {
 async function sendToVault(kind) {
   const ws = window.walletState;
   if (!ws?.signer || !ws?.address) {
-    showNotification?.('?????????? ????????', 'error');
+    showNotification?.('\\u041f\\u0456\\u0434\\u043a\\u043b\\u044e\\u0447\\u0456\\u0442\\u044c \\u0433\\u0430\\u043c\\u0430\\u043d\\u0435\\u0446\\u044c', 'error');
     return;
   }
 
   try {
     requireArbitrumOrThrow(ws);
   } catch (e) {
-    showNotification?.(e?.message || '??????????? ??????. ?????????? ?? Arbitrum', 'error');
+    showNotification?.(e?.message || '\\u041d\\u0435\\u043f\\u0440\\u0430\\u0432\\u0438\\u043b\\u044c\\u043d\\u0430 \\u043c\\u0435\\u0440\\u0435\\u0436\\u0430. \\u041f\\u0435\\u0440\\u0435\\u043c\\u043a\\u043d\\u0456\\u0442\\u044c \\u043d\\u0430 Arbitrum', 'error');
     return;
   }
 
   if (!VAULT_ADDRESS) {
-    showNotification?.('?? ??????????? ?????? Vault', 'error');
+    showNotification?.('\\u041d\\u0435 \\u043d\\u0430\\u043b\\u0430\\u0448\\u0442\\u043e\\u0432\\u0430\\u043d\\u043e \\u0430\\u0434\\u0440\\u0435\\u0441\\u0443 Vault', 'error');
     return;
   }
 
@@ -1040,18 +1036,18 @@ async function sendToVault(kind) {
   try {
     amountBN = parseTokenAmount(el(inputId)?.value ?? '', decimals);
   } catch (e) {
-    showNotification?.(e?.message || '??????? ????', 'error');
+    showNotification?.(e?.message || '\\u0412\\u043a\\u0430\\u0436\\u0456\\u0442\\u044c \\u0441\\u0443\\u043c\\u0443', 'error');
     return;
   }
 
   if (amountBN.isZero?.() === true) {
-    showNotification?.('??????? ????, ?????? ?? 0', 'error');
+    showNotification?.('\\u0412\\u043a\\u0430\\u0436\\u0456\\u0442\\u044c \\u0441\\u0443\\u043c\\u0443, \\u0431\\u0456\\u043b\\u044c\\u0448\\u0443 \\u0437\\u0430 0', 'error');
     return;
   }
 
   const minBN = parseTokenAmount(minValue, decimals);
   if (amountBN.lt(minBN)) {
-    showNotification?.(`???. ??????: ${minValue} ${symbol}`, 'error');
+    showNotification?.('\\u041c\\u0456\\u043d. \\u0432\\u043d\\u0435\\u0441\\u043e\\u043a: ' + minValue + ' ' + symbol, 'error');
     return;
   }
 
@@ -1059,11 +1055,11 @@ async function sendToVault(kind) {
   const token = new ethers.Contract(tokenAddr, ERC20_ABI_MIN, ws.signer);
 
   try {
-    showNotification?.(`?????????? ???????? ${symbol}...`, 'success');
+    showNotification?.('\\u041f\\u0456\\u0434\\u043f\\u0438\\u0441\\u0430\\u043d\\u043d\\u044f \\u043f\\u0435\\u0440\\u0435\\u043a\\u0430\\u0437\\u0443 ' + symbol + '...', 'success');
     const tx = await token.transfer(VAULT_ADDRESS, amountBN);
-    showNotification?.('?????????? ???????????', 'success');
+    showNotification?.('\\u0422\\u0440\\u0430\\u043d\\u0437\\u0430\\u043a\\u0446\\u0456\\u044e \\u0432\\u0456\\u0434\\u043f\\u0440\\u0430\\u0432\\u043b\\u0435\\u043d\\u043e', 'success');
     await tx.wait(CONFIG?.TX_CONFIRMATIONS ?? 1);
-    showNotification?.(`????????? ? Vault (${symbol})`, 'success');
+    showNotification?.('\\u041d\\u0430\\u0434\\u0456\\u0441\\u043b\\u0430\\u043d\\u043e \\u0443 Vault (' + symbol + ')', 'success');
 
     try { await refreshBalances?.(); } catch (_) {}
     try { await refreshVaultTotals?.(true); } catch (_) {}
@@ -1071,7 +1067,7 @@ async function sendToVault(kind) {
   } catch (e) {
     console.error('[VAULT] transfer error:', e);
     if (isUserRejectedTx(e)) {
-      showNotification?.('?????????? ?????????. ????????? ?? ???.', 'error');
+      showNotification?.('\\u0422\\u0440\\u0430\\u043d\\u0437\\u0430\\u043a\\u0446\\u0456\\u044e \\u0441\\u043a\\u0430\\u0441\\u043e\\u0432\\u0430\\u043d\\u043e. \\u0421\\u043f\\u0440\\u043e\\u0431\\u0443\\u0439\\u0442\\u0435 \\u0449\\u0435 \\u0440\\u0430\\u0437.', 'error');
       return;
     }
     showNotification?.(pickEthersMessage(e), 'error');
@@ -1521,14 +1517,14 @@ function bindUiOncePerRender() {
     };
   }
 
-  const lpAddArubBtn = el('lpAddArubBtn');
+      const lpAddArubBtn = el('lpAddArubBtn');
   if (lpAddArubBtn) {
     lpAddArubBtn.onclick = async () => {
       try {
         await sendToVault('arub');
       } catch (e) {
         console.error('[UI] sendToVault ARUB error:', e);
-        showNotification?.(e?.message || 'Не вдалося надіслати ARUB у Vault', 'error');
+        showNotification?.(e?.message || '\\u041d\\u0435 \\u0432\\u0434\\u0430\\u043b\\u043e\\u0441\\u044f \\u043d\\u0430\\u0434\\u0456\\u0441\\u043b\\u0430\\u0442\\u0438 ARUB \\u0443 Vault', 'error');
       }
     };
   }
@@ -1540,10 +1536,12 @@ function bindUiOncePerRender() {
         await sendToVault('usdt');
       } catch (e) {
         console.error('[UI] sendToVault USDT error:', e);
-        showNotification?.(e?.message || 'Не вдалося надіслати USDT у Vault', 'error');
+        showNotification?.(e?.message || '\\u041d\\u0435 \\u0432\\u0434\\u0430\\u043b\\u043e\\u0441\\u044f \\u043d\\u0430\\u0434\\u0456\\u0441\\u043b\\u0430\\u0442\\u0438 USDT \\u0443 Vault', 'error');
       }
     };
   }
+
+
 
   const lpMaxArubBtn = el('lpMaxArubBtn');
   if (lpMaxArubBtn) {
