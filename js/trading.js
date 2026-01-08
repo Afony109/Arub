@@ -44,8 +44,9 @@ const USDT_ADDRESS =
   CONFIG?.USDT_ADDRESS || '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
 const VAULT_ADDRESS = CONFIG?.VAULT_ADDRESS || '';
 const LP_TARGET_USDT = Number(CONFIG?.LP_TARGET_USDT ?? 50000);
-const MIN_LP_ARUB = '0.01';
+const MIN_LP_ARUB = '0.15';
 const MIN_LP_USDT = '10';
+const MIN_SELL_ARUB = '0.15';
 
 const TERMS_NOTICE = {
   ua: 'Натискаючи кнопку, ви підтверджуєте, що ознайомилися та погоджуєтеся з умовами і правилами смарт-контракту.',
@@ -594,7 +595,7 @@ function renderTradingUI() {
       </div>
 
       <div style="margin-top:8px; font-size:12px; opacity:0.75;">
-        \u041c\u0456\u043d. \u0432\u043d\u0435\u0441\u043e\u043a: ${{MIN_LP_ARUB}} ARUB / ${{MIN_LP_USDT}} USDT.
+        \u041c\u0456\u043d. \u0432\u043d\u0435\u0441\u043e\u043a: 0.15 ARUB / 10 USDT.
       </div>
       <div style="margin-top:6px; font-size:12px; opacity:0.75;">
         ARUB \u0431\u0443\u0434\u0435 \u0434\u043e\u0434\u0430\u043d\u043e \u043f\u0440\u0438 \u0437\u0430\u043f\u0443\u0441\u043a\u0443 DEX \u0437\u0430 \u043a\u0443\u0440\u0441\u043e\u043c \u043e\u0440\u0430\u043a\u0443\u043b\u0430.
@@ -682,7 +683,7 @@ function renderTradingUI() {
       <h3 style="margin:0 0 10px 0;">Продаж</h3>
 
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-        <input id="sellAmount" type="number" inputmode="decimal" placeholder="Сума ARUB"
+        <input id="sellAmount" type="number" inputmode="decimal" placeholder="Сума ARUB" min="${MIN_SELL_ARUB}" step="0.000001"
                style="flex:1; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
         <button id="maxSellBtn" type="button"
                 style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
@@ -1971,6 +1972,11 @@ export async function sellTokens(arubAmount) {
 
   if (amountBN.isZero?.() === true) {
     showNotification?.('Enter amount greater than 0', 'error');
+    return;
+  }
+  const minSellBN = parseTokenAmount(MIN_SELL_ARUB, DECIMALS_ARUB);
+  if (amountBN.lt(minSellBN)) {
+    showNotification?.(`Minimum sell is ${MIN_SELL_ARUB} ARUB`, 'error');
     return;
   }
 
