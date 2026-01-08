@@ -1470,11 +1470,29 @@ function bindUiOncePerRender() {
   if (sellBtn) {
     sellBtn.onclick = async () => {
       try {
-        const amount = el('sellAmount')?.value ?? '';
-        await sellTokens(amount);
+        const amountRaw = String(el('sellAmount')?.value ?? '').trim();
+        const normalized = amountRaw.replace(',', '.');
+        if (!normalized) {
+          showNotification?.('\u0412\u043a\u0430\u0436\u0456\u0442\u044c \u0441\u0443\u043c\u0443 \u0434\u043b\u044f \u043f\u0440\u043e\u0434\u0430\u0436\u0443', 'error');
+          return;
+        }
+        const num = Number(normalized);
+        if (!Number.isFinite(num)) {
+          showNotification?.('\u041d\u0435\u043a\u043e\u0440\u0435\u043a\u0442\u043d\u0430 \u0441\u0443\u043c\u0430', 'error');
+          return;
+        }
+        if (num <= 0) {
+          showNotification?.('\u0421\u0443\u043c\u0430 \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0431\u0456\u043b\u044c\u0448\u043e\u044e \u0437\u0430 0', 'error');
+          return;
+        }
+        if (num < Number(MIN_SELL_ARUB)) {
+          showNotification?.(`\u041c\u0456\u043d. \u043f\u0440\u043e\u0434\u0430\u0436: ${MIN_SELL_ARUB} ARUB`, 'error');
+          return;
+        }
+        await sellTokens(normalized);
       } catch (e) {
         console.error('[UI] sell click error:', e);
-        showNotification?.(e?.message || 'Sell failed', 'error');
+        showNotification?.(e?.message || '\u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u043f\u0440\u043e\u0434\u0430\u0442\u0438', 'error');
       }
     };
   }
@@ -1830,7 +1848,7 @@ export async function buyTokens(usdtAmount, withBonus = false) {
   });
 
   if (!ws?.signer || !ws?.address) {
-    showNotification?.('Connect wallet first', 'error');
+    showNotification?.('\u041f\u0456\u0434\u043a\u043b\u044e\u0447\u0456\u0442\u044c \u0433\u0430\u043c\u0430\u043d\u0435\u0446\u044c', 'error');
     return;
   }
 
@@ -1838,7 +1856,7 @@ export async function buyTokens(usdtAmount, withBonus = false) {
   try {
     requireArbitrumOrThrow(ws);
   } catch (e) {
-    showNotification?.(e?.message || 'Wrong network. Please switch to Arbitrum', 'error');
+    showNotification?.(e?.message || '\u041d\u0435\u043f\u0440\u0430\u0432\u0438\u043b\u044c\u043d\u0430 \u043c\u0435\u0440\u0435\u0436\u0430. \u041f\u0435\u0440\u0435\u043c\u043a\u043d\u0456\u0442\u044c \u043d\u0430 Arbitrum', 'error');
     return;
   }
 
@@ -1966,17 +1984,17 @@ export async function sellTokens(arubAmount) {
   try {
     amountBN = parseTokenAmount(arubAmount, DECIMALS_ARUB);
   } catch (e) {
-    showNotification?.(e?.message || 'Invalid amount', 'error');
+    showNotification?.(e?.message || '\u041d\u0435\u043a\u043e\u0440\u0435\u043a\u0442\u043d\u0430 \u0441\u0443\u043c\u0430', 'error');
     return;
   }
 
   if (amountBN.isZero?.() === true) {
-    showNotification?.('Enter amount greater than 0', 'error');
+    showNotification?.('\u0421\u0443\u043c\u0430 \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u0431\u0456\u043b\u044c\u0448\u043e\u044e \u0437\u0430 0', 'error');
     return;
   }
   const minSellBN = parseTokenAmount(MIN_SELL_ARUB, DECIMALS_ARUB);
   if (amountBN.lt(minSellBN)) {
-    showNotification?.(`Minimum sell is ${MIN_SELL_ARUB} ARUB`, 'error');
+    showNotification?.(`\u041c\u0456\u043d. \u043f\u0440\u043e\u0434\u0430\u0436: ${MIN_SELL_ARUB} ARUB`, 'error');
     return;
   }
 
