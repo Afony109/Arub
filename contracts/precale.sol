@@ -49,6 +49,9 @@ contract ARUBPresale is
 {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
+    uint256 public constant EMERGENCY_PAUSE_MAX_DURATION = 3 days;
+    bytes32 public constant EMERGENCY_REASON_HACK = keccak256("HACK");
+
     // -------------------------
     // Токены
     // -------------------------
@@ -148,6 +151,13 @@ contract ARUBPresale is
     uint256 public constant MIN_REDEEM_USDT_EQ = 1e6; // 1 USDT
 
     // -------------------------
+    // Emergency pause (hack-only)
+    // -------------------------
+    uint256 public emergencyPauseUntil;
+    bytes32 public emergencyReasonCode;
+    bytes32 public emergencyDetailsHash;
+
+    // -------------------------
     // События
     // -------------------------
     event Purchased(
@@ -176,6 +186,14 @@ contract ARUBPresale is
     event PurchaseLimitsUpdated(uint256 maxPerTx, uint256 maxPerWallet);
     event ArubTransferredToPools(uint256 amount);
     event ArubTransferredToDEX(uint256 amount);
+    event EmergencyPauseSet(
+        address indexed caller,
+        uint256 until,
+        bytes32 reasonCode,
+        bytes32 detailsHash,
+        string details
+    );
+    event EmergencyPauseCleared(address indexed caller);
 
     // -------------------------
     // Конструктор implementation
@@ -229,11 +247,39 @@ contract ARUBPresale is
     // Pause
     // -------------------------
     function pause() external onlyOwner {
+        _pauseEmergency(EMERGENCY_PAUSE_MAX_DURATION, EMERGENCY_REASON_HACK, "HACK");
+    }
+
+    function pauseEmergency(uint256 duration, bytes32 reasonCode, string calldata details)
+        external
+        onlyOwner
+    {
+        _pauseEmergency(duration, reasonCode, details);
+    }
+
+    function _pauseEmergency(uint256 duration, bytes32 reasonCode, string memory details) internal {
+        require(duration > 0 && duration <= EMERGENCY_PAUSE_MAX_DURATION, "duration");
+        require(reasonCode == EMERGENCY_REASON_HACK, "reason");
+        require(bytes(details).length > 0, "details");
+
+        emergencyPauseUntil = block.timestamp + duration;
+        emergencyReasonCode = reasonCode;
+        emergencyDetailsHash = keccak256(bytes(details));
+
         _pause();
+        emit EmergencyPauseSet(msg.sender, emergencyPauseUntil, reasonCode, emergencyDetailsHash, details);
     }
 
     function unpause() external onlyOwner {
         _unpause();
+        emit EmergencyPauseCleared(msg.sender);
+    }
+
+    function unpauseIfExpired() external {
+        require(paused(), "not paused");
+        require(emergencyPauseUntil != 0 && block.timestamp >= emergencyPauseUntil, "not expired");
+        _unpause();
+        emit EmergencyPauseCleared(msg.sender);
     }
 
     // -------------------------

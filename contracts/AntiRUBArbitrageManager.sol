@@ -117,6 +117,9 @@ interface IQuoter {
 contract AntiRUBArbitrageManager is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
+    uint256 public constant EMERGENCY_PAUSE_MAX_DURATION = 3 days;
+    bytes32 public constant EMERGENCY_REASON_HACK = keccak256("HACK");
+
     IAntiRUB public immutable antiRub;
     IERC20 public immutable usdt;
     IERC20 public immutable arubToken;
@@ -138,6 +141,9 @@ contract AntiRUBArbitrageManager is Ownable, ReentrancyGuard, Pausable {
 
     // keeper-адреса, которым разрешено вызывать арбитраж
     mapping(address => bool) public isKeeper;
+    uint256 public emergencyPauseUntil;
+    bytes32 public emergencyReasonCode;
+    bytes32 public emergencyDetailsHash;
 
     // ───────────────────────── Events ─────────────────────────
 
@@ -188,6 +194,14 @@ contract AntiRUBArbitrageManager is Ownable, ReentrancyGuard, Pausable {
     );
 
     event Swept(address indexed token, address indexed to, uint256 amount);
+    event EmergencyPauseSet(
+        address indexed caller,
+        uint256 until,
+        bytes32 reasonCode,
+        bytes32 detailsHash,
+        string details
+    );
+    event EmergencyPauseCleared(address indexed caller);
 
     // ───────────────────────── Modifiers ─────────────────────────
 
@@ -262,11 +276,39 @@ contract AntiRUBArbitrageManager is Ownable, ReentrancyGuard, Pausable {
     }
 
     function pause() external onlyOwner {
-        _pause();
+        _pauseEmergency(EMERGENCY_PAUSE_MAX_DURATION, EMERGENCY_REASON_HACK, "HACK");
+    }
+
+    function pauseEmergency(uint256 duration, bytes32 reasonCode, string calldata details)
+        external
+        onlyOwner
+    {
+        _pauseEmergency(duration, reasonCode, details);
     }
 
     function unpause() external onlyOwner {
         _unpause();
+        emit EmergencyPauseCleared(msg.sender);
+    }
+
+    function unpauseIfExpired() external {
+        require(paused(), "not paused");
+        require(emergencyPauseUntil != 0 && block.timestamp >= emergencyPauseUntil, "not expired");
+        _unpause();
+        emit EmergencyPauseCleared(msg.sender);
+    }
+
+    function _pauseEmergency(uint256 duration, bytes32 reasonCode, string memory details) internal {
+        require(duration > 0 && duration <= EMERGENCY_PAUSE_MAX_DURATION, "duration");
+        require(reasonCode == EMERGENCY_REASON_HACK, "reason");
+        require(bytes(details).length > 0, "details");
+
+        emergencyPauseUntil = block.timestamp + duration;
+        emergencyReasonCode = reasonCode;
+        emergencyDetailsHash = keccak256(bytes(details));
+
+        _pause();
+        emit EmergencyPauseSet(msg.sender, emergencyPauseUntil, reasonCode, emergencyDetailsHash, details);
     }
 
     // ───────────────────────── Internal helpers ─────────────────────────

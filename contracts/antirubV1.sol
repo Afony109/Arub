@@ -51,6 +51,8 @@ contract AntiRUBV2 is
 
     /// @notice Максимальный возраст курса из оракула (сек)
     uint256 public constant ORACLE_MAX_AGE = 1 hours;
+    uint256 public constant EMERGENCY_PAUSE_MAX_DURATION = 3 days;
+    bytes32 public constant EMERGENCY_REASON_HACK = keccak256("HACK");
 
     // ------------------------------------------------------------------------
     //                               STATE
@@ -77,6 +79,10 @@ contract AntiRUBV2 is
 
     /// @notice Сколько ARUB накоплено в резерве под стейкинг (из комиссий)
     uint256 public stakingReserve;
+    address public emergencyGuardian;
+    uint256 public emergencyPauseUntil;
+    bytes32 public emergencyReasonCode;
+    bytes32 public emergencyDetailsHash;
 
     // ------------------------------------------------------------------------
     //                               EVENTS
@@ -102,6 +108,15 @@ contract AntiRUBV2 is
 
     event ArubWithdrawn(address indexed to, uint256 amount);
     event UsdtWithdrawn(address indexed to, uint256 amount);
+    event EmergencyGuardianSet(address indexed oldGuardian, address indexed newGuardian);
+    event EmergencyPauseSet(
+        address indexed caller,
+        uint256 until,
+        bytes32 reasonCode,
+        bytes32 detailsHash,
+        string details
+    );
+    event EmergencyPauseCleared(address indexed caller);
 
     // ------------------------------------------------------------------------
     //                               ERRORS
@@ -112,6 +127,11 @@ contract AntiRUBV2 is
     error OracleRateZero();
     error OracleStale();
     error ZeroAmount();
+    error EmergencyPaused();
+    error EmergencyDurationInvalid();
+    error EmergencyReasonInvalid();
+    error EmergencyDetailsEmpty();
+    error NotGuardianOrOwner();
 
     // ------------------------------------------------------------------------
     //                      INITIALIZER & UUPS AUTH
@@ -154,6 +174,20 @@ contract AntiRUBV2 is
 
     /// @dev UUPS hook
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // ------------------------------------------------------------------------
+    //                               MODIFIERS
+    // ------------------------------------------------------------------------
+
+    modifier onlyGuardianOrOwner() {
+        if (msg.sender != owner() && msg.sender != emergencyGuardian) revert NotGuardianOrOwner();
+        _;
+    }
+
+    modifier whenNotEmergencyPaused() {
+        if (block.timestamp < emergencyPauseUntil) revert EmergencyPaused();
+        _;
+    }
 
     // ------------------------------------------------------------------------
     //                         VIEW: ORACLE / CR
@@ -289,7 +323,7 @@ contract AntiRUBV2 is
     /// @dev КЛЮЧЕВОЕ ОТЛИЧИЕ v2: НЕТ ПРОВЕРКИ CR, ПОКУПКА ВСЕГДА РАЗРЕШЕНА.
     /// @param usdtAmount сумма USDT (6 decimals)
     /// @param minArubOut минимальное количество ARUB для защиты от проскальзывания
-    function mint(uint256 usdtAmount, uint256 minArubOut) external nonReentrant {
+    function mint(uint256 usdtAmount, uint256 minArubOut) external nonReentrant whenNotEmergencyPaused {
         if (usdtAmount == 0) revert ZeroAmount();
 
         uint256 rate = _getOracleRateFresh();
@@ -331,7 +365,7 @@ contract AntiRUBV2 is
     /// @notice Burn ARUB в обмен на USDT.
     /// @param arubAmount количество ARUB (6 decimals)
     /// @param minUsdtOut минимальное количество USDT (slippage protection)
-    function burn(uint256 arubAmount, uint256 minUsdtOut) external nonReentrant {
+    function burn(uint256 arubAmount, uint256 minUsdtOut) external nonReentrant whenNotEmergencyPaused {
         if (arubAmount == 0) revert ZeroAmount();
 
         uint256 rate = _getOracleRateFresh();
@@ -407,6 +441,35 @@ contract AntiRUBV2 is
         address old = stakingContract;
         stakingContract = _staking;
         emit StakingContractUpdated(old, _staking);
+    }
+
+    // ------------------------------------------------------------------------
+    //                         ADMIN: EMERGENCY PAUSE
+    // ------------------------------------------------------------------------
+
+    function setEmergencyGuardian(address guardian_) external onlyOwner {
+        address old = emergencyGuardian;
+        emergencyGuardian = guardian_;
+        emit EmergencyGuardianSet(old, guardian_);
+    }
+
+    function pauseEmergency(uint256 duration, bytes32 reasonCode, string calldata details)
+        external
+        onlyGuardianOrOwner
+    {
+        if (duration == 0 || duration > EMERGENCY_PAUSE_MAX_DURATION) revert EmergencyDurationInvalid();
+        if (reasonCode != EMERGENCY_REASON_HACK) revert EmergencyReasonInvalid();
+        if (bytes(details).length == 0) revert EmergencyDetailsEmpty();
+
+        emergencyPauseUntil = block.timestamp + duration;
+        emergencyReasonCode = reasonCode;
+        emergencyDetailsHash = keccak256(bytes(details));
+        emit EmergencyPauseSet(msg.sender, emergencyPauseUntil, reasonCode, emergencyDetailsHash, details);
+    }
+
+    function clearEmergencyPause() external onlyOwner {
+        emergencyPauseUntil = 0;
+        emit EmergencyPauseCleared(msg.sender);
     }
 
     // ------------------------------------------------------------------------

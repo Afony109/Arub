@@ -72,7 +72,7 @@ interface IArubTokenPricing {
  * - Phase 1: strategyEnabled=false => deposit/withdraw (ARUB only)
  * - Phase 2: strategyEnabled=true  => depositWithStrategy/withdrawToARUB
  * Added in V2:
- * - pause/unpause (guardian can pause, owner can unpause)
+ * - emergency pause/unpause (timeboxed, hack-only; guardian can pause, owner can unpause)
  * - limits for strategy deposits/withdraws
  * - router updatable (onlyOwner, recommended only when paused)
  */
@@ -85,6 +85,9 @@ contract ARUBVaultTwoModeV2 is
     PausableUpgradeable
 {
     using SafeERC20Upgradeable for IERC20Upgradeable;
+
+    uint256 public constant EMERGENCY_PAUSE_MAX_DURATION = 3 days;
+    bytes32 public constant EMERGENCY_REASON_HACK = keccak256("HACK");
 
     // -----------------------
     // V1 STORAGE (do not reorder)
@@ -109,6 +112,9 @@ contract ARUBVaultTwoModeV2 is
     uint256 public maxStrategyDepositArub;     // 0 = no limit
     uint256 public maxStrategyWithdrawShares;  // 0 = no limit
     uint256 public maxOracleDeviationBps;      // 0 = no limit
+    uint256 public emergencyPauseUntil;
+    bytes32 public emergencyReasonCode;
+    bytes32 public emergencyDetailsHash;
 
     // -----------------------
     // Structs to avoid stack-too-deep
@@ -137,6 +143,14 @@ contract ARUBVaultTwoModeV2 is
     event LPReceiverSet(address indexed newReceiver);
     event TreasuryLiquidityAdded(uint256 arubIn, uint256 usdtIn, uint256 lpMinted, address indexed lpReceiver);
     event OracleDeviationSet(uint256 maxDeviationBps);
+    event EmergencyPauseSet(
+        address indexed caller,
+        uint256 until,
+        bytes32 reasonCode,
+        bytes32 detailsHash,
+        string details
+    );
+    event EmergencyPauseCleared(address indexed caller);
 
     event StrategyEnabled(address indexed pair);
     event Deposited(address indexed user, uint256 arubIn, uint256 sharesMinted);
@@ -218,11 +232,39 @@ contract ARUBVaultTwoModeV2 is
     // Admin: pause controls
     // -----------------------
     function pause() external onlyGuardianOrOwner {
+        _pauseEmergency(EMERGENCY_PAUSE_MAX_DURATION, EMERGENCY_REASON_HACK, "HACK");
+    }
+
+    function pauseEmergency(uint256 duration, bytes32 reasonCode, string calldata details)
+        external
+        onlyGuardianOrOwner
+    {
+        _pauseEmergency(duration, reasonCode, details);
+    }
+
+    function _pauseEmergency(uint256 duration, bytes32 reasonCode, string memory details) internal {
+        require(duration > 0 && duration <= EMERGENCY_PAUSE_MAX_DURATION, "duration");
+        require(reasonCode == EMERGENCY_REASON_HACK, "reason");
+        require(bytes(details).length > 0, "details");
+
+        emergencyPauseUntil = block.timestamp + duration;
+        emergencyReasonCode = reasonCode;
+        emergencyDetailsHash = keccak256(bytes(details));
+
         _pause();
+        emit EmergencyPauseSet(msg.sender, emergencyPauseUntil, reasonCode, emergencyDetailsHash, details);
     }
 
     function unpause() external onlyOwner {
         _unpause();
+        emit EmergencyPauseCleared(msg.sender);
+    }
+
+    function unpauseIfExpired() external {
+        require(paused(), "not paused");
+        require(emergencyPauseUntil != 0 && block.timestamp >= emergencyPauseUntil, "not expired");
+        _unpause();
+        emit EmergencyPauseCleared(msg.sender);
     }
 
     // -----------------------
@@ -635,5 +677,5 @@ function addLiquidityFromVault(
     }
 
     // reserve gap for future upgrades
-    uint256[39] private __gap;
+    uint256[36] private __gap;
 }
