@@ -520,11 +520,8 @@ async function updateGlobalStats() {
     const dexPrice = poolOk ? poolPriceInfo.price : null;
     const dexText = Number.isFinite(dexPrice)
       ? `DEX (Uniswap V2): ${dexPrice.toFixed(6)}`
-      : 'DEX (Uniswap V2): ƒ?"';
+      : 'DEX (Uniswap V2): -';
     setTextLocal('arubDexPrice', dexText);
-    if (!Number.isFinite(dexPrice)) {
-      setTextLocal('arubDexPrice', 'DEX (Uniswap V2): -');
-    }
 
     const supplyHuman = formatTokenAmount(totalSupply) + ' ARUB';
     const supplyUsd = priceOk ? `$${(Number(ethers.utils.formatUnits(totalSupply, 6)) * arubPrice).toFixed(2)}` : '—';

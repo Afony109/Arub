@@ -59,6 +59,14 @@ interface IUniswapV2Pair is IERC20Upgradeable {
     function getReserves() external view returns (uint112 r0, uint112 r1, uint32 ts);
 }
 
+interface IArubTokenPricing {
+    /// input: USDT 6 dec, output: ARUB 6 dec
+    function calculateArubAmount(uint256 usdtAmount) external view returns (uint256);
+
+    /// input: ARUB 6 dec, output: USDT 6 dec
+    function calculateUsdtAmount(uint256 arubAmount) external view returns (uint256);
+}
+
 /**
  * ARUBVaultTwoModeV2 (UUPS upgrade)
  * - Phase 1: strategyEnabled=false => deposit/withdraw (ARUB only)
@@ -100,6 +108,7 @@ contract ARUBVaultTwoModeV2 is
     address public guardian;
     uint256 public maxStrategyDepositArub;     // 0 = no limit
     uint256 public maxStrategyWithdrawShares;  // 0 = no limit
+    uint256 public maxOracleDeviationBps;      // 0 = no limit
 
     // -----------------------
     // Structs to avoid stack-too-deep
@@ -127,6 +136,7 @@ contract ARUBVaultTwoModeV2 is
     event RouterSet(address indexed newRouter);
     event LPReceiverSet(address indexed newReceiver);
     event TreasuryLiquidityAdded(uint256 arubIn, uint256 usdtIn, uint256 lpMinted, address indexed lpReceiver);
+    event OracleDeviationSet(uint256 maxDeviationBps);
 
     event StrategyEnabled(address indexed pair);
     event Deposited(address indexed user, uint256 arubIn, uint256 sharesMinted);
@@ -227,6 +237,12 @@ contract ARUBVaultTwoModeV2 is
         maxStrategyDepositArub = maxDepositArub_;
         maxStrategyWithdrawShares = maxWithdrawShares_;
         emit LimitsSet(maxDepositArub_, maxWithdrawShares_);
+    }
+
+    function setOracleDeviationBps(uint256 maxBps) external onlyOwner {
+        require(maxBps <= 5_000, "deviation too high");
+        maxOracleDeviationBps = maxBps;
+        emit OracleDeviationSet(maxBps);
     }
 
     /// @dev Router change is risky; recommended only when paused.
@@ -355,6 +371,7 @@ function addLiquidityFromVault(
             _mint(msg.sender, sharesMinted);
         } else {
             // Phase 2: mint shares against NAV to avoid dilution / accounting breaks.
+            _requireOracleDeviationOk();
             uint256 assetsBefore = totalAssetsArubEq();
             uint256 supplyBefore = totalSupply();
 
@@ -409,10 +426,31 @@ function addLiquidityFromVault(
         require(rArub > 0 && rUsdt > 0, "empty reserves");
     }
 
+    function _oracleUsdtPerArub() internal view returns (uint256) {
+        // 1 ARUB = 1_000_000 (6 decimals)
+        return IArubTokenPricing(address(ARUB)).calculateUsdtAmount(1_000_000);
+    }
+
+    function _poolUsdtPerArub() internal view returns (uint256) {
+        (uint256 rArub, uint256 rUsdt) = _getReservesARUB_USDT();
+        return (rUsdt * 1_000_000) / rArub;
+    }
+
+    function _requireOracleDeviationOk() internal view {
+        if (!strategyEnabled || maxOracleDeviationBps == 0) return;
+
+        uint256 oraclePrice = _oracleUsdtPerArub();
+        require(oraclePrice > 0, "oracle price=0");
+
+        uint256 poolPrice = _poolUsdtPerArub();
+        uint256 diff = poolPrice > oraclePrice ? poolPrice - oraclePrice : oraclePrice - poolPrice;
+        uint256 diffBps = (diff * 10_000) / oraclePrice;
+        require(diffBps <= maxOracleDeviationBps, "oracle deviation");
+    }
+
     function _usdtToArubEq(uint256 usdtAmt) internal view returns (uint256) {
         if (usdtAmt == 0) return 0;
-        (uint256 rArub, uint256 rUsdt) = _getReservesARUB_USDT();
-        return (usdtAmt * rArub) / rUsdt;
+        return IArubTokenPricing(address(ARUB)).calculateArubAmount(usdtAmt);
     }
 
     function totalAssetsArubEq() public view returns (uint256) {
@@ -541,6 +579,7 @@ function addLiquidityFromVault(
         returns (uint256 sharesMinted, uint256 lpMinted)
     {
         require(strategyEnabled, "strategy off");
+        _requireOracleDeviationOk();
         require(d.arubAmount > 0, "amount=0");
         if (maxStrategyDepositArub != 0) require(d.arubAmount <= maxStrategyDepositArub, "deposit limit");
 
@@ -565,6 +604,7 @@ function addLiquidityFromVault(
         returns (uint256 arubOut, uint256 lpRemoved)
     {
         require(strategyEnabled, "strategy off");
+        _requireOracleDeviationOk();
         require(w.shares > 0, "shares=0");
         require(balanceOf(msg.sender) >= w.shares, "no shares");
         if (maxStrategyWithdrawShares != 0) require(w.shares <= maxStrategyWithdrawShares, "withdraw limit");
@@ -595,5 +635,5 @@ function addLiquidityFromVault(
     }
 
     // reserve gap for future upgrades
-    uint256[40] private __gap;
+    uint256[39] private __gap;
 }

@@ -26,6 +26,7 @@ contract ARUBToken is
     UUPSUpgradeable
 {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    uint256 public constant ORACLE_MAX_AGE = 1 hours;
 
     /// @notice Максимальная эмиссия в единицах токена (6 decimals)
     uint256 public maxSupply;
@@ -75,8 +76,10 @@ contract ARUBToken is
             oracle.staticcall(abi.encodeWithSelector(IArubOracleForToken.getRate.selector));
         require(ok && data.length >= 64, "Oracle call failed");
 
-        (uint256 rate, ) = abi.decode(data, (uint256, uint256));
+        (uint256 rate, uint256 updatedAt) = abi.decode(data, (uint256, uint256));
         require(rate > 0, "Rate=0");
+        require(updatedAt <= block.timestamp, "Oracle time");
+        require(block.timestamp - updatedAt <= ORACLE_MAX_AGE, "Oracle stale");
         return rate;
     }
 
