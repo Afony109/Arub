@@ -27,6 +27,7 @@ import {
 } from './contracts.js';
 import { CONFIG } from './config.js';
 import { requireArbitrumOrThrow, trySwitchToArbitrum } from './wallet.js';
+import { getStoredLang } from './i18n.js';
 
 console.log('[TRADING] trading.js loaded, build:', Date.now());
 
@@ -49,7 +50,7 @@ const MIN_LP_USDT = '10';
 const MIN_SELL_ARUB = '0.15';
 
 const TERMS_NOTICE = {
-  ua: 'Натискаючи кнопку, ви підтверджуєте, що ознайомилися та погоджуєтеся з умовами і правилами смарт-контракту.',
+  ru: '??????? ??????, ?? ?????????????, ??? ???????????? ? ???????? ? ????????? ? ????????? ?????-?????????.',
   en: 'By clicking the button, you confirm that you have read and agree to the smart contract terms and rules.',
 };
 
@@ -359,8 +360,11 @@ function bindTradingHandlers() {}
 // Utils
 // -----------------------------
 function getUiLang() {
+  try {
+    return getStoredLang();
+  } catch (_) {}
   const l = String(navigator.language || '').toLowerCase();
-  return l.startsWith('en') ? 'en' : 'ua';
+  return l.startsWith('en') ? 'en' : 'ru';
 }
 
 function pickEthersMessage(e) {
@@ -1447,7 +1451,7 @@ function bindUiOncePerRender() {
     buyBtn.onclick = async () => {
       try {
         const lang = getUiLang();
-        const msg = TERMS_NOTICE[lang] || TERMS_NOTICE.ua;
+        const msg = TERMS_NOTICE[lang] || TERMS_NOTICE.ru;
 
         const ok = confirm(msg);
         if (!ok) return;

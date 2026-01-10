@@ -10,6 +10,7 @@ import { initWalletModule, getEthersProvider, getAvailableWallets, connectWallet
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { ERC20_ABI_MIN, VAULT_ABI } from './abis.js';
+import { initI18n } from './i18n.js';
 import {
   initReadOnlyContracts,
   getReadOnlyProviderAsync,
@@ -19,6 +20,7 @@ import {
 } from './contracts.js';
 
 initWalletModule(); // важно: до любых renderWallets()
+initI18n();
 
 // Публикуем API кошелька ОДИН РАЗ и НЕ ПЕРЕЗАТИРАЕМ ниже
 window.getAvailableWallets = getAvailableWallets;

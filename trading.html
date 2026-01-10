@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html lang="uk">
+<html lang="ru">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
@@ -54,13 +54,13 @@
 </div>
 </div>
 <div class="nav-links">
-<a class="nav-link" href="index.html">🏠 Головна</a>
-<a class="nav-link active" href="trading.html">💰 Торгівля</a>
+<a class="nav-link" href="index.html"><span data-lang="ru">???????</span><span data-lang="en">Home</span></a>
+<a class="nav-link active" href="trading.html"><span data-lang="ru">????????</span><span data-lang="en">Trading</span></a>
 </div>
 <div class="nav-right">
 <div class="lang-switcher">
-<button class="lang-btn active">🇺🇦 UA</button>
-<button class="lang-btn">🇬🇧 EN</button>
+<button class="lang-btn active" data-lang="ru">RU</button>
+<button class="lang-btn" data-lang="en">EN</button>
 </div>
 <div class="wallet-dropdown">
 <button class="connect-btn" id="connectBtn">Підключити гаманець</button>
@@ -139,14 +139,24 @@
 <!-- Risk Disclaimer -->
 <section class="container" style="margin-top: 30px;">
 <div class="warning-banner" style="background: linear-gradient(135deg, rgba(239,68,68,0.16), rgba(0,0,0,0.35)); border-color: #ef4444;">
-<div class="warning-icon">⚠️</div>
+<div class="warning-icon">??</div>
 <div class="warning-content">
-<h3 class="warning-title" style="color: #ef4444;">Ризик та дисклеймер</h3>
+<div data-lang="ru">
+<h3 class="warning-title" style="color: #ef4444;">???? ? ??????????</h3>
 <ul style="margin-top: 15px; padding-left: 20px; line-height: 1.8; color: white;">
-<li>У разі нестачі USDT при викупі ARUB виплата може бути частковою; залишок фіксується як борг (IOU/debt token).</li>
-<li>Купівля або mint ARUB означає згоду з цими ризиками та можливими затримками.</li>
-<li>Аварійний стоп застосовується лише при зламі/компрометації, має обмежений термін і публічно фіксується on-chain.</li>
+<li>??? ???????? USDT ??? ?????? ARUB ??????? ????? ???? ?????????; ??????? ??????????? ??? ???? (IOU/debt token).</li>
+<li>??????? ??? mint ARUB ???????? ???????? ? ????? ??????? ? ?????????? ??????????.</li>
+<li>????????? ???? ??????????? ?????? ??? ??????/?????????????, ????? ???????????? ???? ? ???????? ??????????? on-chain.</li>
 </ul>
+</div>
+<div data-lang="en">
+<h3 class="warning-title" style="color: #ef4444;">Risk and disclaimer</h3>
+<ul style="margin-top: 15px; padding-left: 20px; line-height: 1.8; color: white;">
+<li>If USDT is short during ARUB redemption, payout may be partial; the remainder is recorded as debt (IOU/debt token).</li>
+<li>Buying or minting ARUB means accepting these risks and possible delays.</li>
+<li>Emergency stop is used only for hacks/compromise, is time-limited, and is recorded on-chain.</li>
+</ul>
+</div>
 </div>
 </div>
 </section>
