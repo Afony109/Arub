@@ -62,7 +62,7 @@
       padding-bottom: 20px;
 
       display: flex;
-      justify-content: flex-start;
+      justify-content: space-between;
       align-items: center;
 
       z-index: 1000;
@@ -96,14 +96,16 @@
     .logo-text-top { font-size: 1.25em; font-weight: 700; color: var(--ukraine-blue); letter-spacing: 0.06em; }
     .logo-text-bottom { font-size: 1.1em; font-weight: 700; color: var(--ukraine-yellow); letter-spacing: 0.1em; text-transform: uppercase; }
 
-    .nav-left { display: flex; align-items: center; gap: 12px; }
+    .nav-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 
     .main-nav {
       display: flex;
       align-items: center;
       gap: 10px;
       margin-left: 6px;
-      margin-right: 10px;
+      margin-right: 0;
+      flex: 1;
+      justify-content: space-between;
     }
 
     .main-nav-link {
@@ -140,7 +142,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-left: 2px;
+      margin-left: auto;
       margin-right: 8px;
     }
 
@@ -691,18 +693,18 @@
 </div>
 </a>
 <div class="main-nav">
-<a class="main-nav-link" href="#trading"><span data-lang="ru">Торговля</span><span data-lang="en">Trading</span></a>
-<a class="main-nav-link" href="#trading"><span data-lang="ru">Покупка/продажа</span><span data-lang="en">Buy/Sell</span></a>
+<a class="main-nav-link" href="#trading"><span data-lang="ru">Торгівля</span><span data-lang="en">Trading</span></a>
+<a class="main-nav-link" href="#trading"><span data-lang="ru">Купівля/продаж</span><span data-lang="en">Buy/Sell</span></a>
 <a class="main-nav-link" href="#stats"><span data-lang="ru">Статистика</span><span data-lang="en">Stats</span></a>
-<a class="main-nav-link" href="#docs"><span data-lang="ru">Документация</span><span data-lang="en">Docs</span></a>
+<a class="main-nav-link" href="#docs"><span data-lang="ru">Документація</span><span data-lang="en">Docs</span></a>
 <a class="main-nav-link" href="#faq"><span data-lang="ru">FAQ</span><span data-lang="en">FAQ</span></a>
 </div>
 </div>
 <div class="nav-right">
 <div class="lang-switcher">
 <button class="lang-btn active" data-lang="ru">
-<span class="ua-top">RU</span>
-<span class="ua-bottom">RU</span>
+<span class="ua-top">UA</span>
+<span class="ua-bottom">UA</span>
 </button>
 <button class="lang-btn" data-lang="en">
 <span class="en-top">EN</span>
