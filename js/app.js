@@ -10,7 +10,7 @@ import { initWalletModule, getEthersProvider, getAvailableWallets, connectWallet
 import { initTradingModule, buyTokens, sellTokens, setMaxBuy, setMaxSell } from './trading.js';
 import { showNotification, copyToClipboard, formatUSD, formatTokenAmount } from './ui.js';
 import { ERC20_ABI_MIN, VAULT_ABI } from './abis.js';
-import { initI18n } from './i18n.js';
+import { initI18n, getStoredLang } from './i18n.js';
 import {
   initReadOnlyContracts,
   getReadOnlyProviderAsync,
@@ -21,6 +21,61 @@ import {
 
 initWalletModule(); // важно: до любых renderWallets()
 initI18n();
+
+const I18N = {
+  ru: {
+    wallets_not_found: 'Кошельки не найдены',
+    wallets_hint: 'Включите расширение кошелька (MetaMask / Trust / Phantom / Uniswap).',
+    wallets_bad_format: 'Некорректный формат списка кошельков (walletId/id отсутствует).',
+    choose_wallet: 'Выберите кошелек',
+    connect_wallet: 'Подключить кошелек',
+    price_source_pool: 'Пул ликвидности (Uniswap V2)',
+    price_source_oracle: 'Ончейн оракул',
+    price_source_oracle_fallback: 'Резервный оракул',
+    price_source_fallback: 'Резервные данные',
+    price_source_label: 'Источник курса: {{source}}',
+    price_source_unknown: 'Источник курса: —',
+    data_updated: 'Данные обновлены',
+    wallet_not_found: 'Web3-кошелек не найден. Установите MetaMask/Trust/Phantom/Uniswap или откройте сайт в dApp-браузере.',
+    select_wallet_first: 'Сначала выберите кошелек и подключитесь.',
+    wallet_menu_not_found: 'Меню кошелька не найдено в DOM.',
+    add_token_failed: 'Не удалось добавить токен.',
+    trading_connect_wallet: 'Подключите кошелек для торговли',
+    trading_connected_note: 'Кошелек подключен. UI торговли должен быть отрендерен trading.js.',
+  },
+  en: {
+    wallets_not_found: 'No wallets found',
+    wallets_hint: 'Enable a wallet extension (MetaMask / Trust / Phantom / Uniswap).',
+    wallets_bad_format: 'Invalid wallet list format (walletId/id missing).',
+    choose_wallet: 'Choose a wallet',
+    connect_wallet: 'Connect wallet',
+    price_source_pool: 'Liquidity pool (Uniswap V2)',
+    price_source_oracle: 'On-chain oracle',
+    price_source_oracle_fallback: 'Fallback oracle',
+    price_source_fallback: 'Fallback data',
+    price_source_label: 'Price source: {{source}}',
+    price_source_unknown: 'Price source: —',
+    data_updated: 'Data updated',
+    wallet_not_found: 'Web3 wallet not found. Install MetaMask/Trust/Phantom/Uniswap or open the site in a dApp browser.',
+    select_wallet_first: 'Please choose a wallet and connect first.',
+    wallet_menu_not_found: 'Wallet menu not found in DOM.',
+    add_token_failed: 'Failed to add token.',
+    trading_connect_wallet: 'Connect a wallet to trade',
+    trading_connected_note: 'Wallet connected. Trading UI should be rendered by trading.js.',
+  },
+};
+
+function t(key, vars) {
+  const lang = (getStoredLang?.() || 'ru');
+  const dict = I18N[lang] || I18N.ru;
+  let out = dict[key] || I18N.ru[key] || key;
+  if (vars) {
+    Object.keys(vars).forEach((k) => {
+      out = out.replace(new RegExp(`{{${k}}}`, 'g'), String(vars[k]));
+    });
+  }
+  return out;
+}
 
 // Публикуем API кошелька ОДИН РАЗ и НЕ ПЕРЕЗАТИРАЕМ ниже
 window.getAvailableWallets = getAvailableWallets;
@@ -211,8 +266,8 @@ export async function renderWallets() {
 
 if (!Array.isArray(wallets) || wallets.length === 0) {
   list.innerHTML = `
-    <div class="wallet-list-title">Гаманці не знайдено</div>
-    <div class="wallet-list-hint">Увімкніть розширення гаманця (MetaMask / Trust / Phantom / Uniswap).</div>
+    <div class="wallet-list-title">${t('wallets_not_found')}</div>
+    <div class="wallet-list-hint">${t('wallets_hint')}</div>
   `;
 
   // железобетонно скрываем список, если dropdown закрыт
@@ -248,8 +303,8 @@ if (!Array.isArray(wallets) || wallets.length === 0) {
 
   if (norm.length === 0) {
     list.innerHTML = `
-      <div class="wallet-list-title">Гаманці не знайдено</div>
-      <div class="wallet-list-hint">Невірний формат списку гаманців (walletId/id відсутній).</div>
+      <div class="wallet-list-title">${t('wallets_not_found')}</div>
+      <div class="wallet-list-hint">${t('wallets_bad_format')}</div>
     `;
     list.style.display = dd.classList.contains('open') ? 'block' : 'none';
     console.warn('[UI] wallets list has no usable ids:', wallets);
@@ -268,7 +323,7 @@ if (!Array.isArray(wallets) || wallets.length === 0) {
   // render list (text-only)
   // ------------------------------------------
   list.innerHTML = `
-    <div class="wallet-list-title">Оберіть гаманець</div>
+    <div class="wallet-list-title">${t('choose_wallet')}</div>
     <div class="wallet-items">
       ${norm.map(w => `
         <div class="wallet-item-textonly" data-wallet-id="${escapeHtml(String(w.id))}">
@@ -381,7 +436,7 @@ function updateWalletUI(reason = 'unknown') {
   // Общая кнопка connect
   const connectBtn = document.getElementById('connectBtn');
   if (connectBtn) {
-    connectBtn.textContent = connected ? shortAddr(ws.address) : 'Підключити гаманець';
+    connectBtn.textContent = connected ? shortAddr(ws.address) : t('connect_wallet');
     connectBtn.classList.toggle('connected', connected);
   }
 
@@ -481,9 +536,9 @@ function setupWalletMenu() {
 }
 
 function getPriceSourceLabel(info) {
-  if (info?.source === 'pool') return 'Пул ліквідності (Uniswap V2)';
-  if (info?.source === 'oracle') return info?.isFallback ? 'Резервний оракул' : 'Ончейн оракул';
-  if (info?.isFallback) return 'Резервні дані';
+  if (info?.source === 'pool') return t('price_source_pool');
+  if (info?.source === 'oracle') return info?.isFallback ? t('price_source_oracle_fallback') : t('price_source_oracle');
+  if (info?.isFallback) return t('price_source_fallback');
   return '—';
 }
 // -----------------------------
@@ -513,7 +568,10 @@ async function updateGlobalStats() {
 
     const priceOk = Number.isFinite(arubPrice);
     setTextLocal('arubPriceValue', priceOk ? arubPrice.toFixed(6) : '—');
-    setTextLocal('arubPriceSource', priceOk ? `Джерело курсу: ${priceSource}` : 'Джерело курсу: —');
+    setTextLocal(
+      'arubPriceSource',
+      priceOk ? t('price_source_label', { source: priceSource }) : t('price_source_unknown')
+    );
 
     const priceShort = priceOk ? arubPrice.toFixed(2) : '—';
     setTextLocal('arubPriceDisplay', priceOk ? `${priceShort} USDT` : '—');
@@ -553,7 +611,7 @@ async function updateGlobalStats() {
       } catch (_) {}
     }
     if (loading && priceOk) {
-      loading.textContent = 'Дані оновлено';
+      loading.textContent = t('data_updated');
     }
   } catch (e) {
     console.warn('[APP] updateGlobalStats failed:', e?.message || e);
@@ -980,7 +1038,7 @@ window.connectWalletUI = () => window.openWalletMenu?.();
 window.openWalletMenu = async () => {
   const dd = document.getElementById('walletDropdown') || document.getElementById('walletMenu');
   if (!dd) {
-    showNotification?.('Wallet menu not found in DOM', 'error');
+    showNotification?.(t('wallet_menu_not_found'), 'error');
     return;
   }
 
@@ -990,7 +1048,7 @@ window.openWalletMenu = async () => {
     const hasAny = (getAvailableWallets() || []).length > 0;
     if (!hasAny) {
       showNotification?.(
-        'Web3-гаманець не знайдено. Встановіть MetaMask/Trust/Phantom/Uniswap або відкрийте сайт у dApp-браузері.',
+        t('wallet_not_found'),
         'error'
       );
     }
@@ -1004,14 +1062,14 @@ window.addTokenToWallet = async (symbol) => {
   try {
     if (!window.walletState?.signer) {
       await window.openWalletMenu?.();
-      showNotification?.('Спочатку оберіть гаманець і підключіться.', 'info');
+      showNotification?.(t('select_wallet_first'), 'info');
       return;
     }
     // addTokenToWalletImpl должен быть определён в вашем проекте
     return await addTokenToWalletImpl(symbol);
   } catch (e) {
     console.error(e);
-    showNotification?.(e?.message || 'Add token failed', 'error');
+    showNotification?.(e?.message || t('add_token_failed'), 'error');
     throw e;
   }
 };
@@ -1086,7 +1144,7 @@ function renderTradingLocked() {
   box.innerHTML = `
     <div style="text-align:center; padding:50px;">
       <div style="font-size:3em; margin-bottom: 10px;">🔒</div>
-      <p>Підключіть гаманець для торгівлі</p>
+      <p>${t('trading_connect_wallet')}</p>
     </div>
   `;
 }
@@ -1103,11 +1161,15 @@ async function renderTradingUnlocked() {
     }
   }
 
-  if (!box.innerHTML || box.textContent.includes('Підключіть гаманець')) {
+  const placeholders = [
+    I18N.ru.trading_connect_wallet,
+    I18N.en.trading_connect_wallet,
+  ];
+  if (!box.innerHTML || placeholders.some((p) => box.textContent.includes(p))) {
     box.innerHTML = `
       <div style="text-align:center; padding:30px;">
         <div style="font-size:2em; margin-bottom:10px;">✅</div>
-        <p>Гаманець підключено. UI торгівлі має бути відрендерений trading.js.</p>
+        <p>${t('trading_connected_note')}</p>
       </div>
     `;
   }
@@ -1128,6 +1190,11 @@ function syncTradingLock(reason = 'sync') {
 }
 
 window.addEventListener('walletStateChanged', () => syncTradingLock('walletStateChanged'));
+window.addEventListener('langChanged', () => {
+  try { updateWalletUI?.('langChanged'); } catch (_) {}
+  try { updateGlobalStats?.(); } catch (_) {}
+  try { syncTradingLock?.('langChanged'); } catch (_) {}
+});
 
 async function refreshTradingBalancesSafe(reason = 'unknown') {
   try {
@@ -1284,7 +1351,7 @@ function applyWalletToUI(ws) {
       connectBtn.textContent = `${a.slice(0, 6)}…${a.slice(-4)}`;
       connectBtn.classList.add('connected');
     } else {
-      connectBtn.textContent = 'Підключити гаманець';
+      connectBtn.textContent = t('connect_wallet');
       connectBtn.classList.remove('connected');
     }
   }

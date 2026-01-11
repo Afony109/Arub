@@ -49,8 +49,112 @@ const MIN_LP_ARUB = '0.15';
 const MIN_LP_USDT = '10';
 const MIN_SELL_ARUB = '0.15';
 
+const I18N = {
+  ru: {
+    connect_liquidity: 'Подключите кошелек, чтобы добавить ликвидность.',
+    connect_trade: 'Подключите кошелек для торговли.',
+    switch_liquidity: 'Переключите сеть на Arbitrum One, чтобы добавить ликвидность.',
+    need_network: 'Нужна сеть Arbitrum One',
+    current_chain: 'Сейчас: chainId',
+    switch_to_arb: 'Переключить на Arbitrum One',
+    switch_hint: 'Если кошелек не позволяет автопереключение — переключитесь вручную в кошельке.',
+    buy_title: 'Покупка',
+    buy_instant: 'Купить ARUB (мгновенно)',
+    buy_bonus: 'Купить ARUB (с бонусом, депозит блокируется)',
+    bonus_now: 'Бонус сейчас:',
+    bonus_slots: 'Осталось мест:',
+    limits_prefix: 'Лимиты: минимум',
+    limits_per_tx: 'USDT за покупку',
+    limits_per_wallet: 'USDT на кошелек',
+    amount_usdt: 'Сумма USDT',
+    max_btn: 'МАКС',
+    buy_btn: 'Купить ARUB',
+    balance_usdt: 'Баланс USDT:',
+    lock_status: 'Статус блокировки',
+    locked_principal: 'Заблокированный основной:',
+    locked_bonus: 'Заблокированный бонус:',
+    unlock_date: 'Дата разблокировки:',
+    remaining: 'Осталось:',
+    unlock_btn: 'Разблокировать',
+    sell_title: 'Продажа',
+    amount_arub: 'Сумма ARUB',
+    sell_btn: 'Продать ARUB',
+    sell_fee: 'Комиссия при продаже:',
+    fee_active_until: 'действует до',
+    fee_remaining: 'осталось',
+    fee_after: 'После этого —',
+    fee_from: 'с',
+    fee_then: 'далее —',
+    bonus_lock_active: 'Активный лок бонусной покупки:',
+    sell_free_allowed: 'Продажа свободных ARUB:',
+    allowed: 'разрешено',
+    balance_arub: 'Баланс ARUB:',
+    presale_loading: 'Ожидается загрузка данных:',
+    presale_purchased: 'Куплено на пресейле:',
+    presale_bonus: 'В том числе бонусом:',
+    presale_paid: 'Оплачено:',
+    presale_avg_price: 'Средняя цена покупки:',
+    presale_avg_bonus: 'Средний бонус:',
+    presale_scan: 'Сканируем историю покупок…',
+    lock_warning: 'Внимание: у вас активный лок. Если контракт блокирует redeem во время лока — транзакция может быть отклонена.',
+  },
+  en: {
+    connect_liquidity: 'Connect a wallet to add liquidity.',
+    connect_trade: 'Connect a wallet to trade.',
+    switch_liquidity: 'Switch to Arbitrum One to add liquidity.',
+    need_network: 'Arbitrum One network required',
+    current_chain: 'Current: chainId',
+    switch_to_arb: 'Switch to Arbitrum One',
+    switch_hint: 'If your wallet does not allow auto-switching, switch manually in your wallet.',
+    buy_title: 'Buy',
+    buy_instant: 'Buy ARUB (instant)',
+    buy_bonus: 'Buy ARUB (with bonus, deposit locked)',
+    bonus_now: 'Bonus now:',
+    bonus_slots: 'Slots left:',
+    limits_prefix: 'Limits: minimum',
+    limits_per_tx: 'USDT per purchase',
+    limits_per_wallet: 'USDT per wallet',
+    amount_usdt: 'USDT amount',
+    max_btn: 'MAX',
+    buy_btn: 'Buy ARUB',
+    balance_usdt: 'USDT balance:',
+    lock_status: 'Lock status',
+    locked_principal: 'Locked principal:',
+    locked_bonus: 'Locked bonus:',
+    unlock_date: 'Unlock date:',
+    remaining: 'Remaining:',
+    unlock_btn: 'Unlock',
+    sell_title: 'Sell',
+    amount_arub: 'ARUB amount',
+    sell_btn: 'Sell ARUB',
+    sell_fee: 'Sell fee:',
+    fee_active_until: 'active until',
+    fee_remaining: 'remaining',
+    fee_after: 'After that —',
+    fee_from: 'from',
+    fee_then: 'then —',
+    bonus_lock_active: 'Bonus purchase lock active:',
+    sell_free_allowed: 'Selling free ARUB:',
+    allowed: 'allowed',
+    balance_arub: 'ARUB balance:',
+    presale_loading: 'Loading data:',
+    presale_purchased: 'Purchased in presale:',
+    presale_bonus: 'Including bonus:',
+    presale_paid: 'Paid:',
+    presale_avg_price: 'Average buy price:',
+    presale_avg_bonus: 'Average bonus:',
+    presale_scan: 'Scanning purchase history…',
+    lock_warning: 'Warning: you have an active lock. If the contract blocks redeem during lock, the transaction may be rejected.',
+  },
+};
+
+function t(key) {
+  const lang = getUiLang();
+  return (I18N[lang] && I18N[lang][key]) || I18N.ru[key] || key;
+}
+
 const TERMS_NOTICE = {
-  ru: '??????? ??????, ?? ?????????????, ??? ???????????? ? ???????? ? ????????? ? ????????? ?????-?????????.',
+  ru: 'Нажимая кнопку, вы подтверждаете, что ознакомились и согласны с условиями и правилами смарт-контракта.',
   en: 'By clicking the button, you confirm that you have read and agree to the smart contract terms and rules.',
 };
 
@@ -228,43 +332,43 @@ function renderTrading() {
       lpHost.innerHTML = `
         <div style="text-align:center; padding:40px;">
           <div style="font-size:2.2em; margin-bottom:10px;">💧</div>
-          <p>Підключіть гаманець, щоб додати ліквідність.</p>
+          <p>${t('connect_liquidity')}</p>
         </div>
       `;
     }
     host.innerHTML = `
       <div style="text-align:center; padding:50px;">
         <div style="font-size:3em; margin-bottom:10px;">🔒</div>
-        <p>Підключіть гаманець для торгівлі</p>
+        <p>${t('connect_trade')}</p>
       </div>
     `;
     return;
   }
 
-  // 2) wrong network
+// 2) wrong network
   if (!onArbitrum) {
     const lpHost = getLiquidityHost();
     if (lpHost) {
       lpHost.innerHTML = `
         <div style="text-align:center; padding:40px;">
           <div style="font-size:2.2em; margin-bottom:10px;">⚠️</div>
-          <p>Перемкніть мережу на <b>Arbitrum One</b>, щоб додати ліквідність.</p>
+          <p>${t('switch_liquidity').replace('Arbitrum One', '<b>Arbitrum One</b>')}</p>
         </div>
       `;
     }
     host.innerHTML = `
       <div style="text-align:center; padding:50px;">
-        <div style="font-size:3em; margin-bottom:10px;">🌐</div>
-        <p style="margin:0 0 12px 0;">Потрібна мережа <b>Arbitrum One</b></p>
+        <div style="font-size:3em; margin-bottom:10px;">⛔</div>
+        <p style="margin:0 0 12px 0;">${t('need_network').replace('Arbitrum One', '<b>Arbitrum One</b>')}</p>
         <div style="font-size:13px; opacity:.8; margin-bottom:14px;">
-          Зараз: chainId <b>${Number.isFinite(chainId) ? chainId : '—'}</b>
+          ${t('current_chain')} <b>${Number.isFinite(chainId) ? chainId : '?'}</b>
         </div>
         <button id="switchToArbBtn" type="button"
           style="padding:10px 14px; border-radius:12px; border:0; cursor:pointer;">
-          Перемкнути на Arbitrum One
+          ${t('switch_to_arb')}
         </button>
         <div style="margin-top:12px; font-size:13px; opacity:.8;">
-          Якщо гаманець не дозволяє автоперемикання — перемкніться вручну у гаманці.
+          ${t('switch_hint')}
         </div>
       </div>
     `;
@@ -289,7 +393,7 @@ function renderTrading() {
     return;
   }
 
-  // 3) ok network => draw real trading UI
+// 3) ok network => draw real trading UI
   renderTradingUI();
 }
 

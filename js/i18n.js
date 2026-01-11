@@ -51,12 +51,19 @@ export function setLang(lang) {
   try {
     localStorage.setItem(STORAGE_KEY, normalized);
   } catch (_) {}
-  return applyLang(normalized);
+  const applied = applyLang(normalized);
+  try {
+    window.dispatchEvent(new CustomEvent('langChanged', { detail: { lang: applied } }));
+  } catch (_) {}
+  return applied;
 }
 
 export function initI18n() {
   const boot = () => {
-    applyLang(getStoredLang());
+    const applied = applyLang(getStoredLang());
+    try {
+      window.dispatchEvent(new CustomEvent('langChanged', { detail: { lang: applied } }));
+    } catch (_) {}
 
     document.querySelectorAll('.lang-btn[data-lang]').forEach((btn) => {
       if (btn.dataset.i18nBound === '1') return;
@@ -71,3 +78,10 @@ export function initI18n() {
     boot();
   }
 }
+
+// Expose a tiny bridge for inline scripts.
+try {
+  window.getStoredLang = getStoredLang;
+  window.setLang = setLang;
+  window.applyLang = applyLang;
+} catch (_) {}
