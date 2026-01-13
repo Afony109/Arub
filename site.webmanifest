@@ -1,0 +1,14 @@
+{
+  "name": "ANTI RUB",
+  "short_name": "ANTI RUB",
+  "icons": [
+    {
+      "src": "icon_180x180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#0f1628",
+  "background_color": "#0f1628",
+  "display": "standalone"
+}
