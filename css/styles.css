@@ -17,6 +17,7 @@
     flex: 1;
     justify-content: space-between;
     min-width: 0;
+    margin-right: var(--spacing-md);
 }
 
 .nav-link {
