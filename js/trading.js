@@ -229,6 +229,8 @@ const PRESALE_ABI_MIN = [
   'function isDiscountBuyer(address) view returns (bool)',
   'function getMySellFeeBps() view returns (uint256)',
   'function getUserSellFeeBps(address user) view returns (uint256)',
+  'function getCurrentSellFeeBps(address user) view returns (uint256)',
+  'function getNextFeeDropETA(address user) view returns (uint256 secondsToNext, uint256 nextFeeBps)',
   'function debtUsdtEquivalent(address) view returns (uint256)',
 ];
 
@@ -1401,6 +1403,15 @@ async function refreshSellFeeSchedule(currentFeeBps) {
   }
 }
 
+async function tryCallPresale(src, method, ...args) {
+  if (!src || typeof src[method] !== 'function') return null;
+  try {
+    return await src[method](...args);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function refreshSellFee() {
   try {
     if (!user.address) {
@@ -1410,17 +1421,20 @@ async function refreshSellFee() {
 
     let feeBps = null;
 
-    // 1) Prefer signer-based fee (cached)
     const presaleAsSigner = getPresaleAsSigner();
-    if (presaleAsSigner?.getMySellFeeBps) {
-      feeBps = await presaleAsSigner.getMySellFeeBps();
+    feeBps = await tryCallPresale(presaleAsSigner, 'getMySellFeeBps');
+    if (feeBps == null) {
+      feeBps = await tryCallPresale(presaleAsSigner, 'getCurrentSellFeeBps', user.address);
+    }
+    if (feeBps == null) {
+      feeBps = await tryCallPresale(presaleAsSigner, 'getUserSellFeeBps', user.address);
     }
 
-    // 2) Fallback to read-only presale
     if (feeBps == null) {
       const presaleRO = await getReadOnlyPresale();
-      if (presaleRO?.getUserSellFeeBps) {
-        feeBps = await presaleRO.getUserSellFeeBps(user.address);
+      feeBps = await tryCallPresale(presaleRO, 'getCurrentSellFeeBps', user.address);
+      if (feeBps == null) {
+        feeBps = await tryCallPresale(presaleRO, 'getUserSellFeeBps', user.address);
       }
     }
 
