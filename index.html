@@ -30,7 +30,7 @@
       --card-bg: rgba(255,255,255,0.03);
 
       /* ФЛАГ УКРА ЇНИ — правильні кольори */
-      --ukraine-blue: #4a90e2;
+      --ukraine-blue: #0057B7;
       --ukraine-yellow: #ffd700;
     }
 
@@ -706,11 +706,11 @@
 </div>
 <div class="nav-right">
 <div class="wallet-button-area">
-  <button type="button" class="connect-btn" id="connectBtn">Підключити гаманець</button>
+  <button type="button" class="connect-btn" id="connectBtn"><span data-lang="ru">Підключити гаманець</span><span data-lang="en">Connect wallet</span></button>
 
   <div class="wallet-connect-dropdown" id="walletDropdown">
     <div class="wallet-actions">
-      <button type="button" id="disconnectWalletBtn">Відключити гаманець</button>
+      <button type="button" id="disconnectWalletBtn"><span data-lang="ru">Відключити гаманець</span><span data-lang="en">Disconnect wallet</span></button>
     </div>
     <!-- Сюда renderWallets() вставит .wallet-list -->
   </div>
@@ -732,128 +732,139 @@
 <div class="dashboard-panel">
 <div class="dashboard-hero-ring"></div>
 <div class="dashboard-hero-pill">
-        🇺🇦 <span>On-chain дашборд без підключення гаманця</span>
+        🇺🇦 <span data-lang="ru">On-chain дашборд без підключення гаманця</span><span data-lang="en">On-chain dashboard without wallet connection</span>
 </div>
-<h1 class="dashboard-hero-title">ANTI RUB: on-chain дашборд (Arbitrum One)</h1>
+<h1 class="dashboard-hero-title"><span data-lang="ru">ANTI RUB: on-chain дашборд (Arbitrum One)</span><span data-lang="en">ANTI RUB: on-chain dashboard (Arbitrum One)</span></h1>
 <p class="dashboard-hero-sub">
-        Дашборд показує сумарний supply та поточну ціну ARUB у доларах.
-        Дані оновлюються напряму з мережі Arbitrum One.
+        <span data-lang="ru">Дашборд показує сумарний supply та поточну ціну ARUB у доларах.<br/>Дані оновлюються напряму з мережі Arbitrum One.</span>
+        <span data-lang="en">Dashboard shows total supply and the current ARUB price in USD.<br/>Data updates directly from the Arbitrum One network.</span>
       </p>
 <div class="dashboard-hero-metrics">
   <div class="dashboard-hero-metric">
-    <div class="dashboard-hero-label">Ціна ARUB</div>
+    <div class="dashboard-hero-label"><span data-lang="ru">Ціна ARUB</span><span data-lang="en">ARUB price</span></div>
     <div class="dashboard-hero-value">$<span id="arubPriceValue">-</span></div>
     <div class="dashboard-hero-note" id="arubDexPrice">DEX (Uniswap V2): -</div>
-    <div class="dashboard-hero-note" id="arubPriceSource">Джерело курсу: —</div>
+    <div class="dashboard-hero-note" id="arubPriceSource"><span data-lang="ru">Джерело курсу: —</span><span data-lang="en">Price source: —</span></div>
   </div>
   <div class="dashboard-hero-metric">
-    <div class="dashboard-hero-label">Частки Vault</div>
+    <div class="dashboard-hero-label"><span data-lang="ru">Частки Vault</span><span data-lang="en">Vault shares</span></div>
     <div class="dashboard-hero-value" id="dashHeroStakers">—</div>
   </div>
   <div class="dashboard-hero-metric">
-    <div class="dashboard-hero-label">Загальна ліквідність (TVL)</div>
+    <div class="dashboard-hero-label"><span data-lang="ru">Загальна ліквідність (TVL)</span><span data-lang="en">Total liquidity (TVL)</span></div>
     <div class="dashboard-hero-value" id="dashHeroTvl">—</div>
   </div>
   <div class="dashboard-hero-metric">
-    <div class="dashboard-hero-label">Статус / Мережа:</div>
+    <div class="dashboard-hero-label"><span data-lang="ru">Статус / Мережа:</span><span data-lang="en">Status / Network:</span></div>
     <div class="dashboard-hero-value" id="dashHeroTier">—</div>
   </div>
 </div>
 </div>
 <aside class="dashboard-panel dashboard-panel-alt">
-<h3>Мережа та перевірка контрактів</h3>
+<h3><span data-lang="ru">Мережа та перевірка контрактів</span><span data-lang="en">Network and contract verification</span></h3>
 <p>
-        Контракти ARUB працюють у мережі <b>Arbitrum One (Mainnet)</b>.
-        Ви завжди можете звірити всі числа напряму у блокчейні.
+        <span data-lang="ru">Контракти ARUB працюють у мережі <b>Arbitrum One (Mainnet)</b>.<br/>Ви завжди можете звірити всі числа напряму у блокчейні.</span>
+        <span data-lang="en">ARUB contracts run on <b>Arbitrum One (Mainnet)</b>.<br/>You can always verify all numbers directly on-chain.</span>
       </p>
 <div class="dashboard-chips">
 <button class="dashboard-chip" onclick="window.open('https://arbiscan.io/address/0x18D1d662371AD5732Ef996A054bd7672ab626368','_blank')" type="button">
-          🔗 <span>ARUB токен</span>
+          🔗 <span><span data-lang="ru">ARUB токен</span><span data-lang="en">ARUB token</span></span>
 </button>
 <button class="dashboard-chip" onclick="window.open('https://arbiscan.io/address/0x41983921104099F6e6E18b26120bf6B4037D199B','_blank')" type="button">
-          🏦 <span>Vault (проксі)</span>
+          🏦 <span><span data-lang="ru">Vault (проксі)</span><span data-lang="en">Vault (proxy)</span></span>
 </button>
 <button class="dashboard-chip" onclick="window.open('https://arbiscan.io/address/0x986833160f8E9636A6383BfAb5BeF35739edA1eC','_blank')" type="button">
-          🧾 <span>Presale (проксі)</span>
+          🧾 <span><span data-lang="ru">Presale (проксі)</span><span data-lang="en">Presale (proxy)</span></span>
 </button>
 </div>
 <div class="dashboard-chips">
 <div class="dashboard-pill-small">
-          ℹ️ <span>DEX-ліквідність та LP-функції будуть активовані пізніше.</span>
+          ℹ️ <span><span data-lang="ru">DEX-ліквідність та LP-функції будуть активовані пізніше.</span><span data-lang="en">DEX liquidity and LP features will be activated later.</span></span>
 </div>
 </div>
 </aside>
 </div>
 <div class="dashboard-loading">
 <div class="dashboard-pulse-dot"></div>
-<span id="dashLoadingText">Завантаження даних з блокчейну...</span>
+<span id="dashLoadingText"><span data-lang="ru">Завантаження даних з блокчейну...</span><span data-lang="en">Loading data from the blockchain...</span></span>
 </div>
 <div class="dashboard-stats-grid" id="stats">
 <article class="dashboard-stat-card">
-<div class="dashboard-stat-label">🚀 Випущено ARUB</div>
+<div class="dashboard-stat-label"><span data-lang="ru">🚀 Випущено ARUB</span><span data-lang="en">🚀 ARUB issued</span></div>
 <div class="dashboard-stat-value" id="arub-supply">—</div>
 <div class="dashboard-stat-sub" id="arub-supply-usd">—</div>
 <div class="dashboard-pill-small">
-        Десяткові: <strong style="font-weight:600;">6</strong>
+        <span data-lang="ru">Десяткові: <strong style="font-weight:600;">6</strong></span>
+        <span data-lang="en">Decimals: <strong style="font-weight:600;">6</strong></span>
 </div>
 </article>
 <article class="dashboard-stat-card">
-<div class="dashboard-stat-label">🏦 ARUB у Vault</div>
+<div class="dashboard-stat-label"><span data-lang="ru">🏦 ARUB у Vault</span><span data-lang="en">🏦 ARUB in Vault</span></div>
 <div class="dashboard-stat-value" id="arub-staked">—</div>
 <div class="dashboard-stat-sub" id="arub-staked-usd">—</div>
-<div class="dashboard-pill-small" id="apy-note">Vault (без стейкінгу)</div>
+<div class="dashboard-pill-small" id="apy-note"><span data-lang="ru">Vault (без стейкінгу)</span><span data-lang="en">Vault (no staking)</span></div>
 </article>
 <article class="dashboard-stat-card">
-<div class="dashboard-stat-label">🏦 USDT у Vault</div>
+<div class="dashboard-stat-label"><span data-lang="ru">🏦 USDT у Vault</span><span data-lang="en">🏦 USDT in Vault</span></div>
 <div class="dashboard-stat-value" id="usdt-staked">—</div>
 <div class="dashboard-stat-sub" id="usdt-staked-usd">—</div>
 <div class="dashboard-pill-small">
-        Значення може бути 0
+        <span data-lang="ru">Значення може бути 0</span>
+        <span data-lang="en">Value can be 0</span>
       </div>
 </article>
 </div>
 <div class="stats-row-equal">
 <section class="stats-card tvl-card">
 <div class="stats-card-header">
-<div class="stats-card-title">Огляд показників (скоро)</div>
-<div class="stats-card-subtitle">Дашборд буде розширено після запуску ліквідності</div>
+<div class="stats-card-title"><span data-lang="ru">Огляд показників (скоро)</span><span data-lang="en">Metrics overview (coming soon)</span></div>
+<div class="stats-card-subtitle"><span data-lang="ru">Дашборд буде розширено після запуску ліквідності</span><span data-lang="en">Dashboard will expand after liquidity launch</span></div>
 </div>
 <div class="stats-card-body">
 <canvas height="130" id="tvlChart"></canvas>
 <div style="margin-top: 18px; font-size: 14px; line-height: 1.35; color: #ffffffcc;">
-<b>Примітка:</b><br/>
-          Показники TVL/ліквідності будуть відображатися після запуску ліквідності та активації відповідних функцій.
+<b><span data-lang="ru">Примітка:</span><span data-lang="en">Note:</span></b><br/>
+          <span data-lang="ru">Показники TVL/ліквідності будуть відображатися після запуску ліквідності та активації відповідних функцій.</span>
+          <span data-lang="en">TVL/liquidity metrics will appear after liquidity launch and feature activation.</span>
         </div>
 </div>
 </section>
 <section class="stats-card usd-card">
-<div class="stats-card-title">📈 Курс USD/RUB</div>
-<div class="stats-card-subtitle">Історія та сценарій 2020–2030 (поточний: <span id="currentRateText">—</span>)</div>
+<div class="stats-card-title"><span data-lang="ru">📈 Курс USD/RUB</span><span data-lang="en">📈 USD/RUB rate</span></div>
+<div class="stats-card-subtitle">
+<span data-lang="ru">Історія та сценарій 2020–2030 (поточний: </span>
+<span data-lang="en">History and scenario 2020–2030 (current: </span>
+<span id="currentRateText">—</span>
+<span data-lang="ru">)</span>
+<span data-lang="en">)</span>
+</div>
 <canvas id="usdRubChart"></canvas>
 <div class="usd-rub-legend">
-<span class="legend-item"><span class="legend-line legend-line-solid"></span>Історичний курс</span>
-<span class="legend-item"><span class="legend-line legend-line-dashed"></span>Сценарій 2025–2030</span>
+<span class="legend-item"><span class="legend-line legend-line-solid"></span><span data-lang="ru">Історичний курс</span><span data-lang="en">Historical rate</span></span>
+<span class="legend-item"><span class="legend-line legend-line-dashed"></span><span data-lang="ru">Сценарій 2025–2030</span><span data-lang="en">Scenario 2025–2030</span></span>
 <span class="legend-item"><span class="legend-dot legend-dot-yellow"></span><span id="legendCurrentRateText">Поточний курс</span></span>
-<span class="legend-item"><span class="legend-dot legend-dot-red"></span>Пік 2022 року (140)</span>
+<span class="legend-item"><span class="legend-dot legend-dot-red"></span><span data-lang="ru">Пік 2022 року (140)</span><span data-lang="en">2022 peak (140)</span></span>
 </div>
 <!-- ✅ FIX: теперь элемент существует -->
 <div id="rateSourceIndicator"></div>
 <div class="dashboard-pill-small" style="margin-top: 10px;">
-        Частина графіка після поточної дати — умовний сценарій, не є інвестиційною порадою.
+        <span data-lang="ru">Частина графіка після поточної дати — умовний сценарій, не є інвестиційною порадою.</span>
+        <span data-lang="en">The portion after the current date is a hypothetical scenario, not investment advice.</span>
       </div>
 </section>
 </div>
 <div class="dashboard-pill-small" style="margin-top: 14px;">
-    Дані оновлюються кожні 30 секунд. Якщо DexScreener недоступний, використовується курс USD/RUB (1 ARUB = USD/RUB).
+    <span data-lang="ru">Дані оновлюються кожні 30 секунд. Якщо DexScreener недоступний, використовується курс USD/RUB (1 ARUB = USD/RUB).</span>
+    <span data-lang="en">Data updates every 30 seconds. If DexScreener is unavailable, USD/RUB rate is used (1 ARUB = USD/RUB).</span>
   </div>
 </section>
 <!-- ADD TOKEN GUIDE -->
 <section class="page-section" id="add-token-guide">
   <div class="page-panel">
-    <div class="page-pill">📋 <span>Додайте токени</span></div>
+    <div class="page-pill">📋 <span data-lang="ru">Додайте токени</span><span data-lang="en">Add tokens</span></div>
 
-    <h2 class="page-section-title">Додайте ARUB та USDT</h2>
-    <p class="page-section-subtitle">Щоб бачити токени у вашому гаманці (MetaMask)</p>
+    <h2 class="page-section-title"><span data-lang="ru">Додайте ARUB та USDT</span><span data-lang="en">Add ARUB and USDT</span></h2>
+    <p class="page-section-subtitle"><span data-lang="ru">Щоб бачити токени у вашому гаманці (MetaMask)</span><span data-lang="en">To see tokens in your wallet (MetaMask)</span></p>
 
     <div class="page-panel-grid">
 
@@ -866,7 +877,8 @@
               ARUB Token <span class="pool-badge arub">ARUB</span>
             </div>
             <div class="page-card-text">
-              Антируб — токен, прив’язаний до курсу USD/RUB
+              <span data-lang="ru">Антируб — токен, прив’язаний до курсу USD/RUB</span>
+              <span data-lang="en">AntiRUB is a token pegged to the USD/RUB rate</span>
             </div>
           </div>
         </div>
@@ -876,7 +888,7 @@
           type="button"
           onclick="addTokenToWallet('ARUB')">
           <span class="icon-flip">₽</span>
-          Додати ARUB
+          <span data-lang="ru">Додати ARUB</span><span data-lang="en">Add ARUB</span>
           <span class="icon-flip">₽</span>
         </button>
       </div>
@@ -890,7 +902,8 @@
               USDT <span class="pool-badge usdt">Arbitrum</span>
             </div>
             <div class="page-card-text">
-              Офіційний USDT у мережі Arbitrum One
+              <span data-lang="ru">Офіційний USDT у мережі Arbitrum One</span>
+              <span data-lang="en">Official USDT on Arbitrum One</span>
             </div>
           </div>
         </div>
@@ -900,7 +913,7 @@
           type="button"
           onclick="addTokenToWallet('USDT')">
           <span class="icon-usdt">$</span>
-          Додати USDT
+          <span data-lang="ru">Додати USDT</span><span data-lang="en">Add USDT</span>
           <span class="icon-usdt">$</span>
         </button>
       </div>
@@ -914,7 +927,7 @@
 <div class="page-card" id="liquidityInterface">
 <div style="text-align:center; padding:40px;">
 <div style="font-size:2.2em; margin-bottom:10px;">💧</div>
-<p>Підключіть гаманець, щоб додати ліквідність.</p>
+<p><span data-lang="ru">Підключіть гаманець, щоб додати ліквідність.</span><span data-lang="en">Connect a wallet to add liquidity.</span></p>
 </div>
 </div>
 </div>
@@ -922,13 +935,13 @@
 <!-- TRADING -->
 <section class="page-section" id="trading">
 <div class="page-panel">
-<div class="page-pill">💰 <span>Торгівля</span></div>
-<h2 class="page-section-title">Торгівля ARUB</h2>
-<p class="page-section-subtitle">Купуйте та продавайте токени ARUB</p>
+<div class="page-pill">💰 <span data-lang="ru">Торгівля</span><span data-lang="en">Trading</span></div>
+<h2 class="page-section-title"><span data-lang="ru">Торгівля ARUB</span><span data-lang="en">ARUB Trading</span></h2>
+<p class="page-section-subtitle"><span data-lang="ru">Купуйте та продавайте токени ARUB</span><span data-lang="en">Buy and sell ARUB tokens</span></p>
 <div class="page-card" id="tradingInterface">
 <div style="text-align:center; padding:50px;">
 <div style="font-size:3em; margin-bottom: 10px;">🔒</div>
-<p>Підключіть гаманець для торгівлі</p>
+<p><span data-lang="ru">Підключіть гаманець для торгівлі</span><span data-lang="en">Connect a wallet to trade</span></p>
 </div>
 </div>
 </div>
@@ -1061,28 +1074,32 @@
 <!-- FAQ -->
 <section class="page-section" id="faq">
 <div class="page-panel page-panel-alt">
-<div class="page-pill">❓ <span>Питання</span></div>
-<h2 class="page-section-title">Часті запитання (FAQ)</h2>
+<div class="page-pill">❓ <span data-lang="ru">Питання</span><span data-lang="en">Questions</span></div>
+<h2 class="page-section-title"><span data-lang="ru">Часті запитання (FAQ)</span><span data-lang="en">Frequently Asked Questions (FAQ)</span></h2>
 <p class="page-section-subtitle">
-      Якщо ви тільки знайомитеся з ANTI RUB, почніть з цих питань.
+      <span data-lang="ru">Якщо ви тільки знайомитеся з ANTI RUB, почніть з цих питань.</span>
+      <span data-lang="en">If you're new to ANTI RUB, start with these questions.</span>
     </p>
 <div style="display:flex; flex-direction:column; gap:12px;">
 <div class="page-card">
-<div class="page-card-title">Що таке ANTI RUB (ARUB)?</div>
+<div class="page-card-title"><span data-lang="ru">Що таке ANTI RUB (ARUB)?</span><span data-lang="en">What is ANTI RUB (ARUB)?</span></div>
 <div class="page-card-text">
-          Це токен, прив'язаний до ідеї «заробляти на падінні рубля». Ви можете купувати ARUB та взаємодіяти з контрактами в Arbitrum One.
+          <span data-lang="ru">Це токен, прив'язаний до ідеї «заробляти на падінні рубля». Ви можете купувати ARUB та взаємодіяти з контрактами в Arbitrum One.</span>
+          <span data-lang="en">A token tied to the idea of profiting from the ruble's decline. You can buy ARUB and interact with contracts on Arbitrum One.</span>
         </div>
 </div>
 <div class="page-card">
-<div class="page-card-title">Чи потрібні реальні кошти?</div>
+<div class="page-card-title"><span data-lang="ru">Чи потрібні реальні кошти?</span><span data-lang="en">Do I need real funds?</span></div>
 <div class="page-card-text">
-          Так. Це mainnet-версія. Для транзакцій потрібен невеликий баланс ETH в Arbitrum One на газ. Рекомендуємо починати з невеликих сум.
+          <span data-lang="ru">Так. Це mainnet-версія. Для транзакцій потрібен невеликий баланс ETH в Arbitrum One на газ. Рекомендуємо починати з невеликих сум.</span>
+          <span data-lang="en">Yes. This is mainnet. Transactions require a small ETH balance on Arbitrum One for gas. We recommend starting with small amounts.</span>
         </div>
 </div>
 <div class="page-card">
-<div class="page-card-title">Чи можна втратити гроші?</div>
+<div class="page-card-title"><span data-lang="ru">Чи можна втратити гроші?</span><span data-lang="en">Can I lose money?</span></div>
 <div class="page-card-text">
-          Так. Волатильність, ризики смарт-контрактів та інші технічні ризики. У разі дефіциту USDT викуп може бути частковим, а залишок оформлюється як борг (IOU/debt token). Використовуйте тільки ту суму, яку готові втратити.
+          <span data-lang="ru">Так. Волатильність, ризики смарт-контрактів та інші технічні ризики. У разі дефіциту USDT викуп може бути частковим, а залишок оформлюється як борг (IOU/debt token). Використовуйте тільки ту суму, яку готові втратити.</span>
+          <span data-lang="en">Yes. Volatility, smart-contract risks, and other technical risks. If USDT is insufficient, redemption may be partial and the remainder is recorded as debt (IOU/debt token). Use only what you're prepared to lose.</span>
         </div>
 </div>
 </div>
@@ -1092,28 +1109,29 @@
 <div class="footer-content">
 <div class="footer-section">
 <h4>ANTI RUB</h4>
-<p>Проєкт проти падіння російського рубля 🇺🇦</p>
+<p><span data-lang="ru">Проєкт проти падіння російського рубля 🇺🇦</span><span data-lang="en">Project against the fall of the Russian ruble 🇺🇦</span></p>
 </div>
 <div class="footer-section">
-<h4>Навігація</h4>
+<h4><span data-lang="ru">Навігація</span><span data-lang="en">Navigation</span></h4>
 <ul class="footer-links">
-<li><a href="#hero">Головна</a></li>
-<li><a href="#trading">Торгівля</a></li>
-<li><a href="#docs">Документація</a></li>
-<li><a href="#faq">Питання</a></li>
+<li><a href="#hero"><span data-lang="ru">Головна</span><span data-lang="en">Home</span></a></li>
+<li><a href="#trading"><span data-lang="ru">Торгівля</span><span data-lang="en">Trading</span></a></li>
+<li><a href="#docs"><span data-lang="ru">Документація</span><span data-lang="en">Docs</span></a></li>
+<li><a href="#faq"><span data-lang="ru">Питання</span><span data-lang="en">FAQ</span></a></li>
 </ul>
 </div>
 <div class="footer-section">
-<h4>Контракти (Arbitrum One)</h4>
+<h4><span data-lang="ru">Контракти (Arbitrum One)</span><span data-lang="en">Contracts (Arbitrum One)</span></h4>
 <ul class="footer-links">
 <li><a href="https://arbiscan.io/address/0x18D1d662371AD5732Ef996A054bd7672ab626368" target="_blank">ARUB Token</a></li>
-<li><a href="https://arbiscan.io/address/0xE5dB8Bc105775EDa8A68B5B0aA17f91F492f102B" target="_blank">Vault (проксі)</a></li>
-<li><a href="https://arbiscan.io/address/0x44960eDa62860Fb54C143f742122619c25a129d1" target="_blank">Presale (проксі)</a></li>
+<li><a href="https://arbiscan.io/address/0xE5dB8Bc105775EDa8A68B5B0aA17f91F492f102B" target="_blank"><span data-lang="ru">Vault (проксі)</span><span data-lang="en">Vault (proxy)</span></a></li>
+<li><a href="https://arbiscan.io/address/0x44960eDa62860Fb54C143f742122619c25a129d1" target="_blank"><span data-lang="ru">Presale (проксі)</span><span data-lang="en">Presale (proxy)</span></a></li>
 </ul>
 </div>
 </div>
 <div class="footer-bottom">
-    🇺🇦 Slava Ukraini! • Arbitrum One Mainnet • Vault-only • v2.1
+    <span data-lang="ru">🇺🇦 Слава Україні! • Arbitrum One Mainnet • Vault-only • v2.1</span>
+    <span data-lang="en">🇺🇦 Slava Ukraini! • Arbitrum One Mainnet • Vault-only • v2.1</span>
   </div>
 </footer>
 <!-- Wallet dropdown behavior -->
@@ -1162,7 +1180,8 @@
   window.onWalletDisconnected = function(meta) {
     try { prevOnWalletDisconnected?.(meta); } catch (_) {}
     walletConnected = false;
-    connectBtn.textContent = "Підключити гаманець";
+    const lang = (window.getStoredLang?.() || 'ru');
+    connectBtn.textContent = lang.startsWith('en') ? 'Connect wallet' : 'Підключити гаманець';
     connectBtn.classList.remove("connected");
     dropdown.classList.remove("show");
   };
@@ -1202,8 +1221,35 @@
 <script>
   let currentRate = null;
   let usdRubChart = null;
+  let lastRateSourceLabel = 'oracle';
 
   const years = ['2020','2021','2022','2023','2024','2025','2026','2027','2028','2029','2030'];
+  const CHART_I18N = {
+    ru: {
+      history_label: 'Історичний курс',
+      scenario_label: 'Сценарій 2025–2030',
+      current_rate_label: 'Поточний курс',
+      peak_label: 'Пік 2022 року (140)',
+      source_prefix: 'Джерело даних: ',
+    },
+    en: {
+      history_label: 'Historical rate',
+      scenario_label: 'Scenario 2025–2030',
+      current_rate_label: 'Current rate',
+      peak_label: '2022 peak (140)',
+      source_prefix: 'Data source: ',
+    },
+  };
+
+  function getChartLang() {
+    const lang = (window.getStoredLang?.() || 'ru');
+    return lang.startsWith('en') ? 'en' : 'ru';
+  }
+
+  function chartText(key) {
+    const lang = getChartLang();
+    return (CHART_I18N[lang] && CHART_I18N[lang][key]) || CHART_I18N.ru[key] || key;
+  }
 
   function buildUsdRubDatasets(rate) {
     const historyData = [72.3, 73.7, 140, 110, 92.8, rate, null, null, null, null, null];
@@ -1220,6 +1266,7 @@
   }
 
   function updateChartAndLabels(sourceLabel) {
+    lastRateSourceLabel = sourceLabel || lastRateSourceLabel || 'oracle';
     // ВАЖНО: arubPriceValue НЕ ТРОГАЕМ — его обновляет app.js по oracle
     const shown = formatShownRate(currentRate);
 
@@ -1227,16 +1274,16 @@
     if (currentRateSpan) currentRateSpan.textContent = shown;
 
     const legendCurrentRateText = document.getElementById('legendCurrentRateText');
-    if (legendCurrentRateText) legendCurrentRateText.textContent = `Поточний курс (${shown})`;
+    if (legendCurrentRateText) legendCurrentRateText.textContent = `${chartText('current_rate_label')} (${shown})`;
 
     const sourceEl = document.getElementById('rateSourceIndicator');
-    if (sourceEl) sourceEl.textContent = 'Джерело даних: ' + (sourceLabel || 'oracle');
+    if (sourceEl) sourceEl.textContent = chartText('source_prefix') + (sourceLabel || 'oracle');
 
     if (usdRubChart && Number.isFinite(currentRate)) {
       usdRubChart.data.datasets[0].data[5] = currentRate;
       usdRubChart.data.datasets[1].data[5] = currentRate;
       usdRubChart.data.datasets[2].data[5] = currentRate;
-      usdRubChart.data.datasets[2].label = `Поточний курс (${shown})`;
+      usdRubChart.data.datasets[2].label = `${chartText('current_rate_label')} (${shown})`;
       usdRubChart.update();
     }
   }
@@ -1254,10 +1301,10 @@
       data: {
         labels: years,
         datasets: [
-          { label: 'Історичний курс', data: historyData, tension: 0.45, borderWidth: 2, borderColor: '#4ba3ff', fill: false, pointRadius: 0, pointHoverRadius: 0 },
-          { label: 'Сценарій 2025–2030', data: scenarioData, tension: 0.35, borderWidth: 2, borderColor: '#4ba3ff', borderDash: [6, 4], fill: false, spanGaps: false, pointRadius: 0, pointHoverRadius: 0 },
-          { label: `Поточний курс (${formatShownRate(seed)})`, data: currentPointData, borderWidth: 0, pointRadius: 6, pointHoverRadius: 8, pointBackgroundColor: '#ffd54a', pointBorderColor: '#ffd54a', pointStyle: 'circle' },
-          { label: 'Пік 2022 року (140)', data: peak2022, borderWidth: 0, pointRadius: 7, pointHoverRadius: 9, pointBackgroundColor: '#ff4b4b', pointBorderColor: '#ff4b4b', pointStyle: 'circle' }
+          { label: chartText('history_label'), data: historyData, tension: 0.45, borderWidth: 2, borderColor: '#4ba3ff', fill: false, pointRadius: 0, pointHoverRadius: 0 },
+          { label: chartText('scenario_label'), data: scenarioData, tension: 0.35, borderWidth: 2, borderColor: '#4ba3ff', borderDash: [6, 4], fill: false, spanGaps: false, pointRadius: 0, pointHoverRadius: 0 },
+          { label: `${chartText('current_rate_label')} (${formatShownRate(seed)})`, data: currentPointData, borderWidth: 0, pointRadius: 6, pointHoverRadius: 8, pointBackgroundColor: '#ffd54a', pointBorderColor: '#ffd54a', pointStyle: 'circle' },
+          { label: chartText('peak_label'), data: peak2022, borderWidth: 0, pointRadius: 7, pointHoverRadius: 9, pointBackgroundColor: '#ff4b4b', pointBorderColor: '#ff4b4b', pointStyle: 'circle' }
         ]
       },
       options: {
@@ -1287,6 +1334,11 @@
 
     currentRate = d.price;
     updateChartAndLabels(d.sourceLabel || 'oracle');
+  });
+
+  window.addEventListener('langChanged', () => {
+    if (!usdRubChart) return;
+    updateChartAndLabels(lastRateSourceLabel);
   });
 
   window.addEventListener('load', () => {

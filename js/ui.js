@@ -4,6 +4,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { getStoredLang } from './i18n.js';
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 
 // -----------------------------
@@ -119,13 +120,17 @@ export async function copyToClipboard(text) {
 // -----------------------------
 // Loading helper
 // -----------------------------
-export function showLoading(element, message = 'Завантаження...') {
+export function showLoading(element, message) {
   if (!element) return;
+
+  const lang = (getStoredLang?.() || 'ru');
+  const fallback = lang.startsWith('en') ? 'Loading...' : 'Завантаження...';
+  const text = message || fallback;
 
   element.innerHTML = `
     <div style="text-align: center; padding: 60px; color: var(--gray);">
       <div class="loading" style="width: 40px; height: 40px; margin: 0 auto 20px;"></div>
-      <p style="font-size: 1.2em;">${message}</p>
+      <p style="font-size: 1.2em;">${text}</p>
     </div>
   `;
 }

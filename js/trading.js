@@ -51,52 +51,65 @@ const MIN_SELL_ARUB = '0.15';
 
 const I18N = {
   ru: {
-    connect_liquidity: 'Подключите кошелек, чтобы добавить ликвидность.',
-    connect_trade: 'Подключите кошелек для торговли.',
-    switch_liquidity: 'Переключите сеть на Arbitrum One, чтобы добавить ликвидность.',
-    need_network: 'Нужна сеть Arbitrum One',
-    current_chain: 'Сейчас: chainId',
-    switch_to_arb: 'Переключить на Arbitrum One',
-    switch_hint: 'Если кошелек не позволяет автопереключение — переключитесь вручную в кошельке.',
-    buy_title: 'Покупка',
-    buy_instant: 'Купить ARUB (мгновенно)',
-    buy_bonus: 'Купить ARUB (с бонусом, депозит блокируется)',
-    bonus_now: 'Бонус сейчас:',
-    bonus_slots: 'Осталось мест:',
-    limits_prefix: 'Лимиты: минимум',
+    connect_liquidity: 'Підключіть гаманець, щоб додати ліквідність.',
+    connect_trade: 'Підключіть гаманець для торгівлі.',
+    switch_liquidity: 'Перемкніть мережу на Arbitrum One, щоб додати ліквідність.',
+    need_network: 'Потрібна мережа Arbitrum One',
+    current_chain: 'Зараз: chainId',
+    switch_to_arb: 'Перемкнути на Arbitrum One',
+    switch_hint: 'Якщо гаманець не дозволяє автоперемикання — перемкніть вручну в гаманці.',
+    buy_title: 'Купівля',
+    buy_instant: 'Купити ARUB (миттєво)',
+    buy_bonus: 'Купити ARUB (з бонусом, депозит блокується)',
+    bonus_now: 'Бонус зараз:',
+    bonus_slots: 'Залишилось місць:',
+    limits_prefix: 'Ліміти: мінімум',
+    limits_max: 'максимум',
     limits_per_tx: 'USDT за покупку',
-    limits_per_wallet: 'USDT на кошелек',
-    amount_usdt: 'Сумма USDT',
+    limits_per_wallet: 'USDT на гаманець',
+    amount_usdt: 'Сума USDT',
     max_btn: 'МАКС',
-    buy_btn: 'Купить ARUB',
+    buy_btn: 'Купити ARUB',
     balance_usdt: 'Баланс USDT:',
-    lock_status: 'Статус блокировки',
-    locked_principal: 'Заблокированный основной:',
-    locked_bonus: 'Заблокированный бонус:',
-    unlock_date: 'Дата разблокировки:',
-    remaining: 'Осталось:',
-    unlock_btn: 'Разблокировать',
-    sell_title: 'Продажа',
-    amount_arub: 'Сумма ARUB',
-    sell_btn: 'Продать ARUB',
-    sell_fee: 'Комиссия при продаже:',
-    fee_active_until: 'действует до',
-    fee_remaining: 'осталось',
-    fee_after: 'После этого —',
-    fee_from: 'с',
-    fee_then: 'далее —',
-    bonus_lock_active: 'Активный лок бонусной покупки:',
-    sell_free_allowed: 'Продажа свободных ARUB:',
-    allowed: 'разрешено',
+    lock_status: 'Статус блокування',
+    locked_principal: 'Заблокований основний:',
+    locked_bonus: 'Заблокований бонус:',
+    unlock_date: 'Дата розблокування:',
+    remaining: 'Залишилось:',
+    unlock_btn: 'Розблокувати',
+    sell_title: 'Продаж',
+    amount_arub: 'Сума ARUB',
+    sell_btn: 'Продати ARUB',
+    sell_fee: 'Комісія при продажу:',
+    fee_active_until: 'діє до',
+    fee_remaining: 'залишилось',
+    fee_after: 'Після цього —',
+    fee_from: 'з',
+    fee_then: 'далі —',
+    bonus_lock_active: 'Активний лок бонусної покупки:',
+    sell_free_allowed: 'Продаж вільних ARUB:',
+    allowed: 'дозволено',
     balance_arub: 'Баланс ARUB:',
-    presale_loading: 'Ожидается загрузка данных:',
-    presale_purchased: 'Куплено на пресейле:',
-    presale_bonus: 'В том числе бонусом:',
-    presale_paid: 'Оплачено:',
-    presale_avg_price: 'Средняя цена покупки:',
-    presale_avg_bonus: 'Средний бонус:',
-    presale_scan: 'Сканируем историю покупок…',
-    lock_warning: 'Внимание: у вас активный лок. Если контракт блокирует redeem во время лока — транзакция может быть отклонена.',
+    presale_loading: 'Очікується завантаження даних:',
+    presale_purchased: 'Куплено на пресейлі:',
+    presale_bonus: 'У тому числі бонусом:',
+    presale_paid: 'Сплачено:',
+    presale_avg_price: 'Середня ціна купівлі:',
+    presale_avg_bonus: 'Середній бонус:',
+    presale_scan: 'Скануємо історію покупок…',
+    lock_warning: 'Увага: у вас активний лок. Якщо контракт блокує redeem під час лока — транзакція може бути відхилена.',
+    lp_title: 'Пул ліквідності (Vault)',
+    lp_subtitle: 'Збір коштів до запуску DEX.',
+    lp_amount_arub: 'Сума ARUB',
+    lp_amount_usdt: 'Сума USDT',
+    lp_collected_arub: 'Накопичено ARUB:',
+    lp_collected_usdt: 'Накопичено USDT:',
+    lp_target: 'Поріг запуску DEX:',
+    lp_send_arub: 'Надіслати у Vault (ARUB)',
+    lp_send_usdt: 'Надіслати у Vault (USDT)',
+    lp_min_deposit: 'Мін. внесок: 0.15 ARUB / 10 USDT.',
+    lp_oracle_note: 'ARUB буде додано при запуску DEX за курсом оракула.',
+    min_buy_note: 'Мінімум $10',
   },
   en: {
     connect_liquidity: 'Connect a wallet to add liquidity.',
@@ -112,6 +125,7 @@ const I18N = {
     bonus_now: 'Bonus now:',
     bonus_slots: 'Slots left:',
     limits_prefix: 'Limits: minimum',
+    limits_max: 'maximum',
     limits_per_tx: 'USDT per purchase',
     limits_per_wallet: 'USDT per wallet',
     amount_usdt: 'USDT amount',
@@ -145,6 +159,18 @@ const I18N = {
     presale_avg_bonus: 'Average bonus:',
     presale_scan: 'Scanning purchase history…',
     lock_warning: 'Warning: you have an active lock. If the contract blocks redeem during lock, the transaction may be rejected.',
+    lp_title: 'Liquidity pool (Vault)',
+    lp_subtitle: 'Fundraising before DEX launch.',
+    lp_amount_arub: 'ARUB amount',
+    lp_amount_usdt: 'USDT amount',
+    lp_collected_arub: 'ARUB collected:',
+    lp_collected_usdt: 'USDT collected:',
+    lp_target: 'DEX launch threshold:',
+    lp_send_arub: 'Send to Vault (ARUB)',
+    lp_send_usdt: 'Send to Vault (USDT)',
+    lp_min_deposit: 'Min deposit: 0.15 ARUB / 10 USDT.',
+    lp_oracle_note: 'ARUB will be added at DEX launch at the oracle rate.',
+    min_buy_note: 'Minimum $10',
   },
 };
 
@@ -154,7 +180,7 @@ function t(key) {
 }
 
 const TERMS_NOTICE = {
-  ru: 'Нажимая кнопку, вы подтверждаете, что ознакомились и согласны с условиями и правилами смарт-контракта.',
+  ru: 'Натискаючи кнопку, ви підтверджуєте, що ознайомилися та погоджуєтеся з умовами і правилами смарт-контракту.',
   en: 'By clicking the button, you confirm that you have read and agree to the smart contract terms and rules.',
 };
 
@@ -417,6 +443,15 @@ export function initTradingModule() {
   }
   _tradingBound = true;
 
+  if (!window.__tradingLangBound) {
+    window.__tradingLangBound = true;
+    window.addEventListener('langChanged', () => {
+      try { renderTrading(); } catch (e) {
+        console.warn('[TRADING] renderTrading failed (langChanged):', e?.message || e);
+      }
+    });
+  }
+
   // Read-only RPC/contracts for balances and limits
   try { initReadOnly(); } catch (e) {
     console.warn('[TRADING] initReadOnly failed:', e?.message || e);
@@ -585,6 +620,9 @@ function formatRemaining(sec) {
   const h = Math.floor(sec / 3600);
   sec -= h * 3600;
   const m = Math.floor(sec / 60);
+  if (getUiLang() === 'en') {
+    return `${d ? d + 'd ' : ''}${h ? h + 'h ' : ''}${m}m`;
+  }
   return `${d ? d + ' д ' : ''}${h ? h + ' год ' : ''}${m} хв`;
 }
 
@@ -619,7 +657,7 @@ function renderLocked() {
     lpHost.innerHTML = `
       <div style="text-align:center; padding:40px;">
         <div style="font-size:2.2em; margin-bottom:10px;">💧</div>
-        <p>Підключіть гаманець, щоб надіслати токени у Vault.</p>
+        <p>${t('connect_liquidity')}</p>
       </div>
     `;
   }
@@ -628,7 +666,7 @@ function renderLocked() {
   host.innerHTML = `
     <div style="text-align:center; padding:50px;">
       <div style="font-size:3em; margin-bottom: 10px;">🔒</div>
-      <p>Підключіть гаманець для торгівлі</p>
+      <p>${t('connect_trade')}</p>
     </div>
   `;
 }
@@ -640,17 +678,17 @@ function renderTradingUI() {
       const liquidityHtml = `
     <div id="lpCard" class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <h3 style=\"margin:0;\">\u041f\u0443\u043b \u043b\u0456\u043a\u0432\u0456\u0434\u043d\u043e\u0441\u0442\u0456 (Vault)</h3>
+        <h3 style=\"margin:0;\">${t('lp_title')}</h3>
         <div style="font-size:12px; opacity:0.7;">Vault - ARUB / USDT</div>
       </div>
 
       <div style="margin-top:6px; font-size:12px; opacity:0.75;">
-        \u0417\u0431\u0456\u0440 \u043a\u043e\u0448\u0442\u0456\u0432 \u0434\u043e \u0437\u0430\u043f\u0443\u0441\u043a\u0443 DEX.
+        ${t('lp_subtitle')}
       </div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
         <div>
-          <div style=\"font-size:13px; opacity:0.8; margin-bottom:6px;\">\u0421\u0443\u043c\u0430 ARUB</div>
+          <div style=\"font-size:13px; opacity:0.8; margin-bottom:6px;\">${t('lp_amount_arub')}</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="lpArubAmount" type="number" inputmode="decimal" placeholder="0.0"
                    style="flex:1; padding:12px; border-radius:12px;
@@ -659,13 +697,13 @@ function renderTradingUI() {
             <button id="lpMaxArubBtn" type="button"
                     style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
                            background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-              \u041c\u0410\u041a\u0421
+              ${t('max_btn')}
             </button>
           </div>
         </div>
 
         <div>
-          <div style=\"font-size:13px; opacity:0.8; margin-bottom:6px;\">\u0421\u0443\u043c\u0430 USDT</div>
+          <div style=\"font-size:13px; opacity:0.8; margin-bottom:6px;\">${t('lp_amount_usdt')}</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="lpUsdtAmount" type="number" inputmode="decimal" placeholder="0.0"
                    style="flex:1; padding:12px; border-radius:12px;
@@ -674,19 +712,19 @@ function renderTradingUI() {
             <button id="lpMaxUsdtBtn" type="button"
                     style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12);
                            background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-              \u041c\u0410\u041a\u0421
+              ${t('max_btn')}
             </button>
           </div>
         </div>
       </div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
-        <div style=\"font-size:13px; opacity:0.85;\">\u041d\u0430\u043a\u043e\u043f\u0438\u0447\u0435\u043d\u043e ARUB: <span id=\"lpVaultArubTotal\">-</span></div>
-        <div style=\"font-size:13px; opacity:0.85;\">\u041d\u0430\u043a\u043e\u043f\u0438\u0447\u0435\u043d\u043e USDT: <span id=\"lpVaultUsdtTotal\">-</span></div>
+        <div style=\"font-size:13px; opacity:0.85;\">${t('lp_collected_arub')} <span id=\"lpVaultArubTotal\">-</span></div>
+        <div style=\"font-size:13px; opacity:0.85;\">${t('lp_collected_usdt')} <span id=\"lpVaultUsdtTotal\">-</span></div>
       </div>
 
       <div style="margin-top:6px; font-size:12px; opacity:0.75;">
-        \u041f\u043e\u0440\u0456\u0433 \u0437\u0430\u043f\u0443\u0441\u043a\u0443 DEX: <span id=\"lpVaultTargetUsdt\">50 000 USDT</span>
+        ${t('lp_target')} <span id=\"lpVaultTargetUsdt\">50 000 USDT</span>
         (<span id="lpVaultUsdtProgress">0%</span>)
       </div>
       <div style="margin-top:6px; height:6px; background: rgba(255,255,255,0.12); border-radius:999px; overflow:hidden;">
@@ -696,19 +734,19 @@ function renderTradingUI() {
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
         <button id="lpAddArubBtn" type="button"
                 style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
-          \u041d\u0430\u0434\u0456\u0441\u043b\u0430\u0442\u0438 \u0443 Vault (ARUB)
+          ${t('lp_send_arub')}
         </button>
         <button id="lpAddUsdtBtn" type="button"
                 style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
-          \u041d\u0430\u0434\u0456\u0441\u043b\u0430\u0442\u0438 \u0443 Vault (USDT)
+          ${t('lp_send_usdt')}
         </button>
       </div>
 
       <div style="margin-top:8px; font-size:12px; opacity:0.75;">
-        \u041c\u0456\u043d. \u0432\u043d\u0435\u0441\u043e\u043a: 0.15 ARUB / 10 USDT.
+        ${t('lp_min_deposit')}
       </div>
       <div style="margin-top:6px; font-size:12px; opacity:0.75;">
-        ARUB \u0431\u0443\u0434\u0435 \u0434\u043e\u0434\u0430\u043d\u043e \u043f\u0440\u0438 \u0437\u0430\u043f\u0443\u0441\u043a\u0443 DEX \u0437\u0430 \u043a\u0443\u0440\u0441\u043e\u043c \u043e\u0440\u0430\u043a\u0443\u043b\u0430.
+        ${t('lp_oracle_note')}
       </div>
     </div>
   `;
@@ -716,18 +754,18 @@ function renderTradingUI() {
   host.innerHTML = `
   <div class="trade-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
     <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
-      <h3 style="margin:0 0 10px 0;">Купівля</h3>
+      <h3 style="margin:0 0 10px 0;">${t('buy_title')}</h3>
 
       <!-- BUY MODE -->
       <div style="display:flex; flex-direction:column; gap:6px; margin:8px 0 10px 0; font-size:14px; opacity:0.95;">
         <label style="display:flex; gap:8px; align-items:center;">
           <input type="radio" name="buyMode" value="instant" checked>
-          <span>Купити ARUB (миттєво)</span>
+          <span>${t('buy_instant')}</span>
         </label>
 
         <label style="display:flex; gap:8px; align-items:center;">
           <input type="radio" name="buyMode" value="discount">
-          <span>Купити ARUB (з бонусом, депозит блокується)</span>
+          <span>${t('buy_bonus')}</span>
         </label>
       </div>
 
@@ -738,23 +776,23 @@ function renderTradingUI() {
                   font-size:13px; opacity:0.95;">
         <div style="display:flex; justify-content:space-between; gap:12px;">
           <div>
-            Бонус зараз: <span id="buyBonusPct">—</span>
+            ${t('bonus_now')} <span id="buyBonusPct">—</span>
           </div>
           <div style="opacity:0.85;">
-            Залишилось місць: <span id="buyBonusSlots">—</span>
+            ${t('bonus_slots')} <span id="buyBonusSlots">—</span>
           </div>
         </div>
 
         <div id="buyBonusNote" style="margin-top:6px; opacity:0.85; display:none;">
-          Ліміти: мінімум <span id="minBuy">10</span> USDT ·
-          максимум <span id="maxPerTx">—</span> USDT за покупку ·
-          <span id="maxPerWallet">—</span> USDT на гаманець
+          ${t('limits_prefix')} <span id="minBuy">10</span> USDT ·
+          ${t('limits_max')} <span id="maxPerTx">—</span> ${t('limits_per_tx')} ·
+          <span id="maxPerWallet">—</span> ${t('limits_per_wallet')}
         </div>
       </div>
 
       <!-- AMOUNT -->
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-        <input id="buyAmount" type="number" inputmode="decimal" placeholder="Сума USDT"
+        <input id="buyAmount" type="number" inputmode="decimal" placeholder="${t('amount_usdt')}"
                style="flex:1; padding:12px; border-radius:12px;
                       border:1px solid rgba(255,255,255,0.12);
                       background: rgba(0,0,0,0.25); color:#fff;">
@@ -762,60 +800,60 @@ function renderTradingUI() {
                 style="padding:12px 14px; border-radius:12px;
                        border:1px solid rgba(255,255,255,0.12);
                        background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-          МАКС
+          ${t('max_btn')}
         </button>
       </div>
 
       <button id="buyBtn" type="button"
               style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
-        Купити ARUB
+        ${t('buy_btn')}
       </button>
 
       <div style="margin-top:6px; font-size:12px; opacity:0.75; text-align:center;">
-        Minimum $10
+        ${t('min_buy_note')}
       </div>
 
       <div style="margin-top:10px; font-size:14px; opacity:0.9;">
-        Баланс USDT: <span id="usdtBalance">—</span>
+        ${t('balance_usdt')} <span id="usdtBalance">—</span>
       </div>
 
       <div id="lockPanel" style="display:none; margin-top:12px; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.18); font-size:14px;">
-        <div style="font-weight:600; margin-bottom:6px;">Статус блокування</div>
-        <div>Заблокований основний: <span id="lockedPrincipal">—</span> ARUB</div>
-        <div>Заблокований бонус: <span id="lockedBonus">—</span> ARUB</div>
-        <div>Дата розблокування: <span id="unlockDate">—</span></div>
-        <div>Залишилось: <span id="unlockRemaining">—</span></div>
-        <button id="unlockBtn" type="button" style="display:none; margin-top:10px; width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer;">Розблокувати</button>
+        <div style="font-weight:600; margin-bottom:6px;">${t('lock_status')}</div>
+        <div>${t('locked_principal')} <span id="lockedPrincipal">—</span> ARUB</div>
+        <div>${t('locked_bonus')} <span id="lockedBonus">—</span> ARUB</div>
+        <div>${t('unlock_date')} <span id="unlockDate">—</span></div>
+        <div>${t('remaining')} <span id="unlockRemaining">—</span></div>
+        <button id="unlockBtn" type="button" style="display:none; margin-top:10px; width:100%; padding:10px; border-radius:10px; border:0; cursor:pointer;">${t('unlock_btn')}</button>
       </div>
     </div>
 
     <div class="trade-box" style="padding:16px; border-radius:16px; background: rgba(255,255,255,0.04);">
-      <h3 style="margin:0 0 10px 0;">Продаж</h3>
+      <h3 style="margin:0 0 10px 0;">${t('sell_title')}</h3>
 
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-        <input id="sellAmount" type="number" inputmode="decimal" placeholder="Сума ARUB" min="${MIN_SELL_ARUB}" step="0.000001"
+        <input id="sellAmount" type="number" inputmode="decimal" placeholder="${t('amount_arub')}" min="${MIN_SELL_ARUB}" step="0.000001"
                style="flex:1; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff;">
         <button id="maxSellBtn" type="button"
                 style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25); color:#fff; cursor:pointer;">
-          МАКС
+          ${t('max_btn')}
         </button>
       </div>
 
       <button id="sellBtn" type="button"
               style="width:66%; padding:12px; border-radius:12px; border:0; cursor:pointer; margin:0 auto; display:block;">
-        Продати ARUB
+        ${t('sell_btn')}
       </button>
 
       <div style="margin-top:10px; font-size:13px; opacity:0.9;">
-        Комісія при продажу: <span id="sellFee">—</span>
+        ${t('sell_fee')} <span id="sellFee">—</span>
         <div style="margin-top:4px; line-height:1.45; opacity:0.85;">
-          <span id="sellFeeCurrentPct">—</span> діє до <span id="sellFeeUntil">—</span> (залишилось: <span id="sellFeeLeft">—</span>).<br>
-          Після цього — <span id="sellFeeNextPct">—</span> з <span id="sellFeeNextAt">—</span>, далі — <span id="sellFeeFinalPct">1%</span>.
+          <span id="sellFeeCurrentPct">—</span> ${t('fee_active_until')} <span id="sellFeeUntil">—</span> (${t('fee_remaining')}: <span id="sellFeeLeft">—</span>).<br>
+          ${t('fee_after')} <span id="sellFeeNextPct">—</span> ${t('fee_from')} <span id="sellFeeNextAt">—</span>, ${t('fee_then')} <span id="sellFeeFinalPct">1%</span>.
         </div>
       </div>
 
       <div id="sellLockHint" style="display:none; margin-top:6px; font-size:13px; opacity:0.85;">
-        Активний лок бонусної покупки: <span id="sellBonusLocked">—</span> ARUB. Продаж вільних ARUB: <span id="sellFreeAllowed">—</span> дозволено. Залишилось: <span id="sellLockLeft">—</span>
+        ${t('bonus_lock_active')} <span id="sellBonusLocked">—</span> ARUB. ${t('sell_free_allowed')} <span id="sellFreeAllowed">—</span> ${t('allowed')}. ${t('remaining')} <span id="sellLockLeft">—</span>
       </div>
 
       <!-- Progress bar for wallet stats scan (uses existing setPresaleScanVisible/Progress) -->
@@ -827,7 +865,7 @@ function renderTradingUI() {
       </div>
 
       <div style="margin-top:10px; font-size:14px; opacity:0.9;">
-        Баланс ARUB: <span id="arubBalance">—</span>
+        ${t('balance_arub')} <span id="arubBalance">—</span>
       </div>
     </div>
   </div>
@@ -982,16 +1020,16 @@ function ensurePresaleUI() {
   box.style.fontFamily = 'inherit';
   box.style.opacity = '0.9';
   box.innerHTML = `
-  <div id="presaleLoadingNote" style="font-size:13px; opacity:0.75; margin-bottom:6px;">Очікується завантаження даних:</div>
-  <div>Куплено на пресейлі: <span id="presalePurchased">—</span> ARUB</div>
-  <div>У тому числі бонусом: <span id="presaleBonusAmount">—</span> ARUB</div>
-  <div>Сплачено: <span id="presalePaid">—</span> USDT</div>
-  <div>Середня ціна купівлі: <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
-  <div>Середній бонус: <span id="presaleBonusPct">—</span></div>
+  <div id="presaleLoadingNote" style="font-size:13px; opacity:0.75; margin-bottom:6px;">${t('presale_loading')}</div>
+  <div>${t('presale_purchased')} <span id="presalePurchased">—</span> ARUB</div>
+  <div>${t('presale_bonus')} <span id="presaleBonusAmount">—</span> ARUB</div>
+  <div>${t('presale_paid')} <span id="presalePaid">—</span> USDT</div>
+  <div>${t('presale_avg_price')} <span id="presaleAvgPrice">—</span> USDT/ARUB</div>
+  <div>${t('presale_avg_bonus')} <span id="presaleBonusPct">—</span></div>
 
   <div id="presaleScanWrap" style="display:none; margin-top:10px;">
     <div style="display:flex; justify-content:space-between; font-size:12px; opacity:.85;">
-      <span>Скануємо історію покупок…</span>
+      <span>${t('presale_scan')}</span>
       <span id="presaleScanPct">0%</span>
     </div>
     <div style="height:8px; background:rgba(255,255,255,.12); border-radius:999px; overflow:hidden; margin-top:6px;">
@@ -2138,7 +2176,7 @@ export async function sellTokens(arubAmount) {
     const info = await loadMyLockInfo();
     if (info && Number(info.remaining) > 0) {
       showNotification?.(
-        'Увага: у вас активний лок. Якщо контракт блокує redeem під час лока — транзакція може бути відхилена.',
+        t('lock_warning'),
         'info'
       );
     }

@@ -11,6 +11,32 @@
 
 import { ethers } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';
 import { CONFIG } from './config.js';
+import { getStoredLang } from './i18n.js';
+
+const WALLET_I18N = {
+  ru: {
+    switch_failed: 'Перемкніть мережу на Arbitrum One у гаманці та повторіть дію.',
+    wallet_connected: 'Гаманець підключено: {{address}}',
+    wallet_disconnected: 'Гаманець відключено',
+  },
+  en: {
+    switch_failed: 'Switch to Arbitrum One in your wallet and try again.',
+    wallet_connected: 'Wallet connected: {{address}}',
+    wallet_disconnected: 'Wallet disconnected',
+  },
+};
+
+function wt(key, vars) {
+  const lang = (getStoredLang?.() || 'ru');
+  const dict = WALLET_I18N[lang] || WALLET_I18N.ru;
+  let out = dict[key] || key;
+  if (vars) {
+    Object.keys(vars).forEach((k) => {
+      out = out.replace(new RegExp(`{{${k}}}`, 'g'), String(vars[k]));
+    });
+  }
+  return out;
+}
 
 // -----------------------------
 // State
@@ -405,10 +431,7 @@ export async function connectWallet({ walletId = null } = {}) {
         if (ok) await publishGlobals();
         else {
           try {
-            window.showNotification?.(
-              'Переключіть мережу на Arbitrum One у гаманці та повторіть дію.',
-              'warning'
-            );
+            window.showNotification?.(wt('switch_failed'), 'warning');
           } catch (_) {}
         }
       }
@@ -416,7 +439,7 @@ export async function connectWallet({ walletId = null } = {}) {
       console.warn('[wallet] auto switch failed:', e?.message || e);
     }
 
-    try { window.showNotification?.(`Wallet connected: ${currentAddress}`, 'success'); } catch (_) {}
+    try { window.showNotification?.(wt('wallet_connected', { address: currentAddress }), 'success'); } catch (_) {}
 
     emit('wallet:connected', window.walletState);
     // legacy
@@ -450,7 +473,7 @@ export async function disconnectWallet() {
 
   await publishGlobals();
 
-  try { window.showNotification?.('Wallet disconnected', 'info'); } catch (_) {}
+  try { window.showNotification?.(wt('wallet_disconnected'), 'info'); } catch (_) {}
 
   emit('wallet:disconnected', window.walletState);
   // legacy

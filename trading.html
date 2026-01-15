@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Торгівля - ANTI RUB 🇺🇦</title>
+<title>Trading - ANTI RUB 🇺🇦</title>
 <!-- Favicon -->
 <link href="/favicon.ico" rel="icon" type="image/x-icon" sizes="any"/>
 <link href="/favicon.svg" rel="icon" type="image/svg+xml"/>
@@ -44,7 +44,7 @@
 <div class="ukraine-banner" id="ukraine-banner">
 <div class="ukraine-banner-text">
 <span class="ukraine-flag">🇺🇦</span>
-<span>Ми за мир у вільній та цілісній Україні!</span>
+<span data-lang="ru">Ми за мир у вільній та цілісній Україні!</span><span data-lang="en">We stand for peace in a free and whole Ukraine!</span>
 <span class="ukraine-flag">🇺🇦</span>
 </div>
 </div>
@@ -63,12 +63,12 @@
 </div>
 <div class="nav-right">
 <div class="wallet-dropdown">
-<button class="connect-btn" id="connectBtn">Підключити гаманець</button>
+<button class="connect-btn" id="connectBtn"><span data-lang="ru">Підключити гаманець</span><span data-lang="en">Connect wallet</span></button>
 <button class="wallet-avatar-btn" hidden="" id="walletMenuToggle">🧑‍💻</button>
 <div class="wallet-menu" id="walletMenu">
 <div class="wallet-menu-address" id="walletMenuAddress">—</div>
-<button class="wallet-menu-item" id="walletViewOnExplorer">🔗 Відкрити в Arbiscan</button>
-<button class="wallet-menu-item wallet-menu-item-danger" id="walletDisconnect">🚪 Відключити гаманець</button>
+<button class="wallet-menu-item" id="walletViewOnExplorer">🔗 <span data-lang="ru">Відкрити в Arbiscan</span><span data-lang="en">Open in Arbiscan</span></button>
+<button class="wallet-menu-item wallet-menu-item-danger" id="walletDisconnect">🚪 <span data-lang="ru">Відключити гаманець</span><span data-lang="en">Disconnect wallet</span></button>
 </div>
 </div>
 <div class="lang-switcher">
@@ -80,10 +80,10 @@
 <!-- Page Header -->
 <section class="page-header">
 <div class="container">
-<h1 class="page-title">💰 Купівля та продаж ARUB</h1>
+<h1 class="page-title"><span data-lang="ru">💰 Купівля та продаж ARUB</span><span data-lang="en">💰 Buy and sell ARUB</span></h1>
 <p class="page-subtitle">
-            Торгуйте токенами <strong>ANTI RUB (ARUB)</strong> за поточним курсом USD/RUB!<br/>
-            Чим слабший рубль, тим дорожчий токен ARUB. Заробляйте на падінні російської валюти 📉
+            <span data-lang="ru">Торгуйте токенами <strong>ANTI RUB (ARUB)</strong> за поточним курсом USD/RUB!<br/>Чим слабший рубль, тим дорожчий токен ARUB. Заробляйте на падінні російської валюти 📉</span>
+            <span data-lang="en">Trade <strong>ANTI RUB (ARUB)</strong> tokens at the current USD/RUB rate!<br/>The weaker the ruble, the more expensive ARUB becomes. Profit from the decline of the Russian currency 📉</span>
         </p>
 </div>
 </section>
@@ -94,22 +94,22 @@
 <div class="stat-icon">💵</div>
 <div class="stat-value" id="arubPriceDisplay">81.22 USDT</div>
 <div id="arubDexPrice" style="font-size:12px; opacity:0.7; margin-top:6px;">DEX (Uniswap V2): -</div>
-<div class="stat-label">Ціна ARUB</div>
+<div class="stat-label"><span data-lang="ru">Ціна ARUB</span><span data-lang="en">ARUB price</span></div>
 </div>
 <div class="stat-card">
 <div class="stat-icon">📊</div>
 <div class="stat-value" id="usdRubRate">~81.22</div>
-<div class="stat-label">Курс USD/RUB</div>
+<div class="stat-label"><span data-lang="ru">Курс USD/RUB</span><span data-lang="en">USD/RUB rate</span></div>
 </div>
 <div class="stat-card">
 <div class="stat-icon">📈</div>
 <div class="stat-value" id="buyFeeDisplay">0.5%</div>
-<div class="stat-label">Комісія купівлі</div>
+<div class="stat-label"><span data-lang="ru">Комісія купівлі</span><span data-lang="en">Buy fee</span></div>
 </div>
 <div class="stat-card">
 <div class="stat-icon">📉</div>
 <div class="stat-value" id="sellFeeDisplay">1%</div>
-<div class="stat-label">Комісія продажу</div>
+<div class="stat-label"><span data-lang="ru">Комісія продажу</span><span data-lang="en">Sell fee</span></div>
 </div>
 </div>
 </section>
@@ -118,24 +118,24 @@
 <div class="info-card">
 <div class="info-card-header">
 <div class="info-card-icon">💡</div>
-<h3>Як працює ціноутворення?</h3>
+<h3><span data-lang="ru">Як працює ціноутворення?</span><span data-lang="en">How does pricing work?</span></h3>
 </div>
 <div class="info-card-body">
 <p style="color: var(--gray); margin-bottom: 20px; line-height: 1.8;">
-                Ціна токена ARUB прив'язана до курсу <strong style="color: white;">USD/RUB</strong>.
-                Коли російський рубль падає відносно долара, ціна ARUB автоматично зростає!
+                <span data-lang="ru">Ціна токена ARUB прив'язана до курсу <strong style="color: white;">USD/RUB</strong>. Коли російський рубль падає відносно долара, ціна ARUB автоматично зростає!</span>
+                <span data-lang="en">ARUB price is tied to the <strong style="color: white;">USD/RUB</strong> rate. When the Russian ruble falls against the dollar, ARUB price automatically rises!</span>
             </p>
 <div class="info-row">
-<span class="info-label">Механізм:</span>
-<span class="info-value">1 ARUB ≈ USD/RUB курс</span>
+<span class="info-label"><span data-lang="ru">Механізм:</span><span data-lang="en">Mechanism:</span></span>
+<span class="info-value"><span data-lang="ru">1 ARUB ≈ USD/RUB курс</span><span data-lang="en">1 ARUB ≈ USD/RUB rate</span></span>
 </div>
 <div class="info-row">
-<span class="info-label">Купівля:</span>
-<span class="info-value">Використовує функцію mint() з комісією 0.5%</span>
+<span class="info-label"><span data-lang="ru">Купівля:</span><span data-lang="en">Buy:</span></span>
+<span class="info-value"><span data-lang="ru">Використовує функцію mint() з комісією 0.5%</span><span data-lang="en">Uses mint() with a 0.5% fee</span></span>
 </div>
 <div class="info-row">
-<span class="info-label">Продаж:</span>
-<span class="info-value">Використовує функцію burn() з комісією 1%</span>
+<span class="info-label"><span data-lang="ru">Продаж:</span><span data-lang="en">Sell:</span></span>
+<span class="info-value"><span data-lang="ru">Використовує функцію burn() з комісією 1%</span><span data-lang="en">Uses burn() with a 1% fee</span></span>
 </div>
 </div>
 </div>
@@ -170,18 +170,19 @@
     <div class="page-card fade-in-up" id="liquidityInterface">
       <div style="text-align:center; padding:40px;">
         <div style="font-size:2.2em; margin-bottom:10px;">💧</div>
-        <p>Підключіть гаманець, щоб додати ліквідність.</p>
+        <p><span data-lang="ru">Підключіть гаманець, щоб додати ліквідність.</span><span data-lang="en">Connect a wallet to add liquidity.</span></p>
       </div>
     </div>
   </div>
   <div class="page-section">
     <div class="page-pill">
-      💱 <span>Торгівля</span>
+      💱 <span data-lang="ru">Торгівля</span><span data-lang="en">Trading</span>
     </div>
 
-    <h2 class="page-section-title">Торгівля токенами</h2>
+    <h2 class="page-section-title"><span data-lang="ru">Торгівля токенами</span><span data-lang="en">Token trading</span></h2>
     <p class="page-section-subtitle">
-      Купуйте та продавайте токени ARUB за поточним курсом
+      <span data-lang="ru">Купуйте та продавайте токени ARUB за поточним курсом</span>
+      <span data-lang="en">Buy and sell ARUB tokens at the current rate</span>
     </p>
 
     <!-- JS renders everything here -->
@@ -193,55 +194,55 @@
 <div class="warning-banner" style="background: linear-gradient(135deg, rgba(0,87,183,0.15), rgba(255,215,0,0.1)); border-color: var(--ukraine-yellow);">
 <div class="warning-icon">⚠️</div>
 <div class="warning-content">
-<h3 class="warning-title" style="color: var(--ukraine-yellow);">Важлива інформація про комісії</h3>
+<h3 class="warning-title" style="color: var(--ukraine-yellow);"><span data-lang="ru">Важлива інформація про комісії</span><span data-lang="en">Important fee information</span></h3>
 <ul style="margin-top: 15px; padding-left: 20px; line-height: 2; color: white;">
-<li><strong>Комісія купівлі (0.5%)</strong> — віднімається з суми USDT перед покупкою ARUB</li>
-<li><strong>Комісія продажу (1%)</strong> — віднімається з суми USDT після продажу ARUB</li>
-<li><strong>Gas fees</strong> — потрібен Arbitrum One ETH для оплати транзакцій</li>
-<li><strong>Мінімальна сума</strong> — рекомендуємо торгувати від 10 USDT для оптимізації gas</li>
-<li><strong>Ціна динамічна</strong> — змінюється разом із курсом USD/RUB</li>
+<li><strong><span data-lang="ru">Комісія купівлі (0.5%)</span><span data-lang="en">Buy fee (0.5%)</span></strong> — <span data-lang="ru">віднімається з суми USDT перед покупкою ARUB</span><span data-lang="en">deducted from USDT before buying ARUB</span></li>
+<li><strong><span data-lang="ru">Комісія продажу (1%)</span><span data-lang="en">Sell fee (1%)</span></strong> — <span data-lang="ru">віднімається з суми USDT після продажу ARUB</span><span data-lang="en">deducted from USDT after selling ARUB</span></li>
+<li><strong>Gas fees</strong> — <span data-lang="ru">потрібен Arbitrum One ETH для оплати транзакцій</span><span data-lang="en">Arbitrum One ETH is required to pay transaction fees</span></li>
+<li><strong><span data-lang="ru">Мінімальна сума</span><span data-lang="en">Minimum amount</span></strong> — <span data-lang="ru">рекомендуємо торгувати від 10 USDT для оптимізації gas</span><span data-lang="en">we recommend trading from 10 USDT to optimize gas</span></li>
+<li><strong><span data-lang="ru">Ціна динамічна</span><span data-lang="en">Dynamic price</span></strong> — <span data-lang="ru">змінюється разом із курсом USD/RUB</span><span data-lang="en">changes with the USD/RUB rate</span></li>
 </ul>
 </div>
 </div>
 </section>
 <!-- How to Trade -->
 <section class="container" style="margin: 60px auto;">
-<h2 class="section-title">❓ Як торгувати?</h2>
+<h2 class="section-title"><span data-lang="ru">❓ Як торгувати?</span><span data-lang="en">❓ How to trade?</span></h2>
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 40px; margin-top: 40px;">
 <!-- Buy Instructions -->
 <div class="info-card">
 <div class="info-card-header">
 <div class="info-card-icon">💰</div>
-<h3 style="color: #10b981;">Купівля ARUB</h3>
+<h3 style="color: #10b981;"><span data-lang="ru">Купівля ARUB</span><span data-lang="en">Buy ARUB</span></h3>
 </div>
 <div class="info-card-body">
 <div class="instruction-steps">
 <div class="instruction-step">
 <div class="step-number" style="background: linear-gradient(135deg, #10b981, #059669);">1</div>
 <div class="step-content">
-<h4>Підключіть гаманець</h4>
-<p>Переконайтеся, що у вас є USDT та Arbitrum One ETH для gas.</p>
+<h4><span data-lang="ru">Підключіть гаманець</span><span data-lang="en">Connect a wallet</span></h4>
+<p><span data-lang="ru">Переконайтеся, що у вас є USDT та Arbitrum One ETH для gas.</span><span data-lang="en">Make sure you have USDT and Arbitrum One ETH for gas.</span></p>
 </div>
 </div>
 <div class="instruction-step">
 <div class="step-number" style="background: linear-gradient(135deg, #10b981, #059669);">2</div>
 <div class="step-content">
-<h4>Введіть суму USDT</h4>
-<p>Виберіть, скільки USDT хочете обміняти на ARUB.</p>
+<h4><span data-lang="ru">Введіть суму USDT</span><span data-lang="en">Enter USDT amount</span></h4>
+<p><span data-lang="ru">Виберіть, скільки USDT хочете обміняти на ARUB.</span><span data-lang="en">Choose how much USDT you want to swap for ARUB.</span></p>
 </div>
 </div>
 <div class="instruction-step">
 <div class="step-number" style="background: linear-gradient(135deg, #10b981, #059669);">3</div>
 <div class="step-content">
-<h4>Перевірте розрахунок</h4>
-<p>Система покаже, скільки ARUB ви отримаєте після комісії 0.5%.</p>
+<h4><span data-lang="ru">Перевірте розрахунок</span><span data-lang="en">Review the calculation</span></h4>
+<p><span data-lang="ru">Система покаже, скільки ARUB ви отримаєте після комісії 0.5%.</span><span data-lang="en">The system will show how much ARUB you receive after the 0.5% fee.</span></p>
 </div>
 </div>
 <div class="instruction-step">
 <div class="step-number" style="background: linear-gradient(135deg, #10b981, #059669);">4</div>
 <div class="step-content">
-<h4>Підтвердіть транзакцію</h4>
-<p>Approve USDT (перший раз) та підтвердіть купівлю в гаманці.</p>
+<h4><span data-lang="ru">Підтвердіть транзакцію</span><span data-lang="en">Confirm the transaction</span></h4>
+<p><span data-lang="ru">Approve USDT (перший раз) та підтвердіть купівлю в гаманці.</span><span data-lang="en">Approve USDT (first time) and confirm the purchase in your wallet.</span></p>
 </div>
 </div>
 </div>
@@ -251,36 +252,36 @@
 <div class="info-card">
 <div class="info-card-header">
 <div class="info-card-icon">💸</div>
-<h3 style="color: #ef4444;">Продаж ARUB</h3>
+<h3 style="color: #ef4444;"><span data-lang="ru">Продаж ARUB</span><span data-lang="en">Sell ARUB</span></h3>
 </div>
 <div class="info-card-body">
 <div class="instruction-steps">
 <div class="instruction-step">
 <div class="step-number" style="background: linear-gradient(135deg, #ef4444, #dc2626);">1</div>
 <div class="step-content">
-<h4>Підключіть гаманець</h4>
-<p>Переконайтеся, що у вас є ARUB та Arbitrum One ETH для gas.</p>
+<h4><span data-lang="ru">Підключіть гаманець</span><span data-lang="en">Connect a wallet</span></h4>
+<p><span data-lang="ru">Переконайтеся, що у вас є ARUB та Arbitrum One ETH для gas.</span><span data-lang="en">Make sure you have ARUB and Arbitrum One ETH for gas.</span></p>
 </div>
 </div>
 <div class="instruction-step">
 <div class="step-number" style="background: linear-gradient(135deg, #ef4444, #dc2626);">2</div>
 <div class="step-content">
-<h4>Введіть суму ARUB</h4>
-<p>Виберіть, скільки ARUB хочете обміняти на USDT.</p>
+<h4><span data-lang="ru">Введіть суму ARUB</span><span data-lang="en">Enter ARUB amount</span></h4>
+<p><span data-lang="ru">Виберіть, скільки ARUB хочете обміняти на USDT.</span><span data-lang="en">Choose how much ARUB you want to swap for USDT.</span></p>
 </div>
 </div>
 <div class="instruction-step">
 <div class="step-number" style="background: linear-gradient(135deg, #ef4444, #dc2626);">3</div>
 <div class="step-content">
-<h4>Перевірте розрахунок</h4>
-<p>Система покаже, скільки USDT ви отримаєте після комісії 1%.</p>
+<h4><span data-lang="ru">Перевірте розрахунок</span><span data-lang="en">Review the calculation</span></h4>
+<p><span data-lang="ru">Система покаже, скільки USDT ви отримаєте після комісії 1%.</span><span data-lang="en">The system will show how much USDT you receive after the 1% fee.</span></p>
 </div>
 </div>
 <div class="instruction-step">
 <div class="step-number" style="background: linear-gradient(135deg, #ef4444, #dc2626);">4</div>
 <div class="step-content">
-<h4>Підтвердіть транзакцію</h4>
-<p>Approve ARUB (перший раз) та підтвердіть продаж у гаманці.</p>
+<h4><span data-lang="ru">Підтвердіть транзакцію</span><span data-lang="en">Confirm the transaction</span></h4>
+<p><span data-lang="ru">Approve ARUB (перший раз) та підтвердіть продаж у гаманці.</span><span data-lang="en">Approve ARUB (first time) and confirm the sale in your wallet.</span></p>
 </div>
 </div>
 </div>
@@ -290,87 +291,90 @@
 </section>
 <!-- Example Calculations -->
 <section class="container" style="margin: 60px auto 100px;">
-<h2 class="section-title">🧮 Приклади розрахунків</h2>
+<h2 class="section-title"><span data-lang="ru">🧮 Приклади розрахунків</span><span data-lang="en">🧮 Calculation examples</span></h2>
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin-top: 40px;">
 <!-- Buy Example -->
 <div class="next-step-card" style="background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(5,150,105,0.05)); border-color: #10b981;">
 <div class="next-step-icon">💰</div>
-<h3 style="color: #10b981;">Приклад купівлі</h3>
+<h3 style="color: #10b981;"><span data-lang="ru">Приклад купівлі</span><span data-lang="en">Buy example</span></h3>
 <div style="text-align: left; margin-top: 20px;">
 <div class="info-row">
-<span class="info-label">Ви витрачаєте:</span>
+<span class="info-label"><span data-lang="ru">Ви витрачаєте:</span><span data-lang="en">You spend:</span></span>
 <span class="info-value">1,000 USDT</span>
 </div>
 <div class="info-row">
-<span class="info-label">Комісія (0.5%):</span>
+<span class="info-label"><span data-lang="ru">Комісія (0.5%):</span><span data-lang="en">Fee (0.5%):</span></span>
 <span class="info-value">-5 USDT</span>
 </div>
 <div class="info-row">
-<span class="info-label">До обміну:</span>
+<span class="info-label"><span data-lang="ru">До обміну:</span><span data-lang="en">Before swap:</span></span>
 <span class="info-value">995 USDT</span>
 </div>
 <div class="info-row" style="border-top: 2px solid #10b981; margin-top: 10px; padding-top: 10px;">
-<span class="info-label" style="font-weight: 700;">Ви отримаєте:</span>
+<span class="info-label" style="font-weight: 700;"><span data-lang="ru">Ви отримаєте:</span><span data-lang="en">You receive:</span></span>
 <span class="info-value" style="font-size: 1.2em; color: #10b981;">~12.25 ARUB</span>
 </div>
 <p style="color: var(--gray); font-size: 0.9em; margin-top: 10px; text-align: center;">
-                    *При ціні 81.22 USDT за ARUB
+                    <span data-lang="ru">*При ціні 81.22 USDT за ARUB</span>
+                    <span data-lang="en">*At a price of 81.22 USDT per ARUB</span>
                 </p>
 </div>
 </div>
 <!-- Sell Example -->
 <div class="next-step-card" style="background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(220,38,38,0.05)); border-color: #ef4444;">
 <div class="next-step-icon">💸</div>
-<h3 style="color: #ef4444;">Приклад продажу</h3>
+<h3 style="color: #ef4444;"><span data-lang="ru">Приклад продажу</span><span data-lang="en">Sell example</span></h3>
 <div style="text-align: left; margin-top: 20px;">
 <div class="info-row">
-<span class="info-label">Ви продаєте:</span>
+<span class="info-label"><span data-lang="ru">Ви продаєте:</span><span data-lang="en">You sell:</span></span>
 <span class="info-value">10 ARUB</span>
 </div>
 <div class="info-row">
-<span class="info-label">Ціна за ARUB:</span>
+<span class="info-label"><span data-lang="ru">Ціна за ARUB:</span><span data-lang="en">Price per ARUB:</span></span>
 <span class="info-value">81.22 USDT</span>
 </div>
 <div class="info-row">
-<span class="info-label">До комісії:</span>
+<span class="info-label"><span data-lang="ru">До комісії:</span><span data-lang="en">Before fee:</span></span>
 <span class="info-value">812.2 USDT</span>
 </div>
 <div class="info-row">
-<span class="info-label">Комісія (1%):</span>
+<span class="info-label"><span data-lang="ru">Комісія (1%):</span><span data-lang="en">Fee (1%):</span></span>
 <span class="info-value">-8.12 USDT</span>
 </div>
 <div class="info-row" style="border-top: 2px solid #ef4444; margin-top: 10px; padding-top: 10px;">
-<span class="info-label" style="font-weight: 700;">Ви отримаєте:</span>
+<span class="info-label" style="font-weight: 700;"><span data-lang="ru">Ви отримаєте:</span><span data-lang="en">You receive:</span></span>
 <span class="info-value" style="font-size: 1.2em; color: #ef4444;">~804.08 USDT</span>
 </div>
 <p style="color: var(--gray); font-size: 0.9em; margin-top: 10px; text-align: center;">
-                    *При ціні 81.22 USDT за ARUB
+                    <span data-lang="ru">*При ціні 81.22 USDT за ARUB</span>
+                    <span data-lang="en">*At a price of 81.22 USDT per ARUB</span>
                 </p>
 </div>
 </div>
 <!-- Profit Example -->
 <div class="next-step-card" style="background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(0,87,183,0.05)); border-color: var(--ukraine-yellow);">
 <div class="next-step-icon">📈</div>
-<h3 style="color: var(--ukraine-yellow);">Потенційний прибуток</h3>
+<h3 style="color: var(--ukraine-yellow);"><span data-lang="ru">Потенційний прибуток</span><span data-lang="en">Potential profit</span></h3>
 <div style="text-align: left; margin-top: 20px;">
 <div class="info-row">
-<span class="info-label">Купили по:</span>
+<span class="info-label"><span data-lang="ru">Купили по:</span><span data-lang="en">Bought at:</span></span>
 <span class="info-value">80 USDT/ARUB</span>
 </div>
 <div class="info-row">
-<span class="info-label">Курс зріс до:</span>
+<span class="info-label"><span data-lang="ru">Курс зріс до:</span><span data-lang="en">Rate rose to:</span></span>
 <span class="info-value" style="color: #10b981;">90 USDT/ARUB</span>
 </div>
 <div class="info-row">
-<span class="info-label">Зростання:</span>
+<span class="info-label"><span data-lang="ru">Зростання:</span><span data-lang="en">Increase:</span></span>
 <span class="info-value" style="color: #10b981;">+12.5%</span>
 </div>
 <div class="info-row" style="border-top: 2px solid var(--ukraine-yellow); margin-top: 10px; padding-top: 10px;">
-<span class="info-label" style="font-weight: 700;">Ваш прибуток:</span>
+<span class="info-label" style="font-weight: 700;"><span data-lang="ru">Ваш прибуток:</span><span data-lang="en">Your profit:</span></span>
 <span class="info-value" style="font-size: 1.2em; color: #10b981;">+100 USDT</span>
 </div>
 <p style="color: var(--gray); font-size: 0.9em; margin-top: 10px; text-align: center;">
-                    *З врахуванням комісій на 10 ARUB
+                    <span data-lang="ru">*З врахуванням комісій на 10 ARUB</span>
+                    <span data-lang="en">*Including fees for 10 ARUB</span>
                 </p>
 </div>
 </div>
@@ -381,19 +385,19 @@
 <div class="footer-content">
 <div class="footer-section">
 <h4>ANTI RUB</h4>
-<p>Заробляємо на падінні рубля 🇺🇦</p>
+<p><span data-lang="ru">Заробляємо на падінні рубля 🇺🇦</span><span data-lang="en">Profit from the ruble's decline 🇺🇦</span></p>
 </div>
 <div class="footer-section">
-<h4>Посилання</h4>
+<h4><span data-lang="ru">Посилання</span><span data-lang="en">Links</span></h4>
 <ul class="footer-links">
-<li><a href="index-new.html">Головна</a></li>
-<li><a href="trading.html">Торгівля</a></li>
-<li><a href="staking.html">Стейкінг</a></li>
+<li><a href="index-new.html"><span data-lang="ru">Головна</span><span data-lang="en">Home</span></a></li>
+<li><a href="trading.html"><span data-lang="ru">Торгівля</span><span data-lang="en">Trading</span></a></li>
+<li><a href="staking.html"><span data-lang="ru">Стейкінг</span><span data-lang="en">Staking</span></a></li>
 <li><a href="faucet.html">Faucet</a></li>
 </ul>
 </div>
 <div class="footer-section">
-<h4>Контракти</h4>
+<h4><span data-lang="ru">Контракти</span><span data-lang="en">Contracts</span></h4>
 <ul class="footer-links">
 <li><a href="https://arbiscan.io/address/0x161296CD7F742220f727e1B4Ccc02cAEc71Ed2C6" target="_blank">ARUB Token ↗</a></li>
 <li><a href="https://arbiscan.io/address/0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9" target="_blank">USDT Contract ↗</a></li>
@@ -401,7 +405,8 @@
 </div>
 </div>
 <div class="footer-bottom">
-        🇺🇦 Slava Ukraini! • Arbitrum One Mainnet Mainnet • Version 2.0
+    <span data-lang="ru">🇺🇦 Слава Україні! • Arbitrum One Mainnet • Version 2.0</span>
+    <span data-lang="en">🇺🇦 Slava Ukraini! • Arbitrum One Mainnet • Version 2.0</span>
     </div>
 </footer>
 <!-- JavaScript Module -->
