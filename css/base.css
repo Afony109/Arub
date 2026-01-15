@@ -104,12 +104,26 @@ nav {
     height: 50px;
     background: linear-gradient(135deg, var(--ukraine-blue), var(--ukraine-yellow));
     border-radius: var(--radius-md);
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.8em;
     font-weight: bold;
     box-shadow: var(--shadow-md);
+    transform: rotate(180deg);
+}
+.logo-icon::after {
+    content: '';
+    position: absolute;
+    width: 12.5%;
+    height: 8%;
+    left: 60%;
+    bottom: 19%;
+    background: #000;
+    border-radius: 2px;
+    pointer-events: none;
 }
 
 /* убиваем старый градиент, который перекрывал цвета */
