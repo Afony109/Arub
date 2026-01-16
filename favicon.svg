@@ -13,6 +13,6 @@
     <text x="128" y="128" text-anchor="middle" dominant-baseline="central"
           font-family="Inter, 'Segoe UI', Arial, sans-serif"
           font-size="169" font-weight="800" fill="#000000">&#8381;</text>
-    <rect x="110" y="184" width="36" height="20" rx="3" fill="#000000"/>
+    <rect x="114" y="184" width="36" height="20" rx="3" fill="#000000"/>
   </g>
 </svg>
