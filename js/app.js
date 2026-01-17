@@ -15,7 +15,6 @@ import {
   initReadOnlyContracts,
   getReadOnlyProviderAsync,
   getArubPrice,
-  getArubPoolPrice,
   getTotalSupplyArub,
 } from './contracts.js';
 
@@ -29,7 +28,6 @@ const I18N = {
     wallets_bad_format: 'Некоректний формат списку гаманців (walletId/id відсутній).',
     choose_wallet: 'Оберіть гаманець',
     connect_wallet: 'Підключити гаманець',
-    price_source_pool: 'Пул ліквідності (Uniswap V2)',
     price_source_oracle: 'Ончейн оракул',
     price_source_oracle_fallback: 'Резервний оракул',
     price_source_fallback: 'Резервні дані',
@@ -49,7 +47,6 @@ const I18N = {
     wallets_bad_format: 'Invalid wallet list format (walletId/id missing).',
     choose_wallet: 'Choose a wallet',
     connect_wallet: 'Connect wallet',
-    price_source_pool: 'Liquidity pool (Uniswap V2)',
     price_source_oracle: 'On-chain oracle',
     price_source_oracle_fallback: 'Fallback oracle',
     price_source_fallback: 'Fallback data',
@@ -536,7 +533,6 @@ function setupWalletMenu() {
 }
 
 function getPriceSourceLabel(info) {
-  if (info?.source === 'pool') return t('price_source_pool');
   if (info?.source === 'oracle') return info?.isFallback ? t('price_source_oracle_fallback') : t('price_source_oracle');
   if (info?.isFallback) return t('price_source_fallback');
   return '—';
@@ -546,17 +542,13 @@ function getPriceSourceLabel(info) {
 // -----------------------------
 async function updateGlobalStats() {
   try {
-    const [poolPriceInfo, oraclePriceInfo, totalSupply] = await Promise.all([
-      getArubPoolPrice().catch(() => null),
+    const [oraclePriceInfo, totalSupply] = await Promise.all([
       getArubPrice().catch(() => null),
       getTotalSupplyArub()
     ]);
 
     const oracleOk = oraclePriceInfo && Number.isFinite(oraclePriceInfo.price);
-    const poolOk = poolPriceInfo && Number.isFinite(poolPriceInfo.price);
-    const priceInfo = oracleOk
-      ? oraclePriceInfo
-      : (poolOk ? { ...poolPriceInfo, isFallback: true } : null);
+    const priceInfo = oracleOk ? oraclePriceInfo : null;
 
     const arubPrice = priceInfo?.price;
     const priceSource = getPriceSourceLabel(priceInfo);
@@ -577,12 +569,6 @@ async function updateGlobalStats() {
     setTextLocal('arubPriceDisplay', priceOk ? `${priceShort} USDT` : '—');
     setTextLocal('usdRubRate', priceShort);
 
-    const dexPrice = poolOk ? poolPriceInfo.price : null;
-    const dexText = Number.isFinite(dexPrice)
-      ? `DEX (Uniswap V2): ${dexPrice.toFixed(6)}`
-      : 'DEX (Uniswap V2): -';
-    setTextLocal('arubDexPrice', dexText);
-
     const supplyHuman = formatTokenAmount(totalSupply) + ' ARUB';
     const supplyUsd = priceOk ? `$${(Number(ethers.utils.formatUnits(totalSupply, 6)) * arubPrice).toFixed(2)}` : '—';
 
@@ -600,13 +586,10 @@ async function updateGlobalStats() {
     } catch (e) {
       console.warn('[APP] updateVaultStats failed:', e?.message || e);
     }
-    const chartInfo = oracleOk
-      ? oraclePriceInfo
-      : (poolOk ? { ...poolPriceInfo, isFallback: true } : null);
-    if (chartInfo && Number.isFinite(chartInfo.price)) {
+    if (oracleOk) {
       try {
         window.dispatchEvent(new CustomEvent('oraclePriceUpdated', {
-          detail: { price: chartInfo.price, sourceLabel: getPriceSourceLabel(chartInfo) }
+          detail: { price: oraclePriceInfo.price, sourceLabel: getPriceSourceLabel(oraclePriceInfo) }
         }));
       } catch (_) {}
     }

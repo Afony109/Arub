@@ -117,29 +117,6 @@ export const VAULT_ABI = [
 ];
 
 // --------------------------------------------------
-// Uniswap V2 Router (addLiquidity only)
-// --------------------------------------------------
-export const UNISWAP_V2_ROUTER_ABI = [
-  "function addLiquidity(address tokenA,address tokenB,uint amountADesired,uint amountBDesired,uint amountAMin,uint amountBMin,address to,uint deadline) returns (uint amountA,uint amountB,uint liquidity)",
-];
-
-// --------------------------------------------------
-// Uniswap V2 Factory (pair lookup)
-// --------------------------------------------------
-export const UNISWAP_V2_FACTORY_ABI = [
-  "function getPair(address tokenA, address tokenB) view returns (address pair)",
-];
-
-// --------------------------------------------------
-// Uniswap V2 Pair (reserves)
-// --------------------------------------------------
-export const UNISWAP_V2_PAIR_ABI = [
-  "function token0() view returns (address)",
-  "function token1() view returns (address)",
-  "function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
-];
-
-// --------------------------------------------------
 // Presale READ ABI (ARUBPresale.sol, UUPS)
 // ВАЖНО: redeem лимитируется redeemableBalance(user)
 // --------------------------------------------------
